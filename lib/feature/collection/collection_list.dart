@@ -7,7 +7,6 @@ import 'package:ionicons/ionicons.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/media/media_route_tile.dart';
 import 'package:animeshin/util/theming.dart';
-import 'package:animeshin/util/debounce.dart';
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/input/note_label.dart';
@@ -131,8 +130,7 @@ class _TileMobile extends StatefulWidget {
 
 class _TileMobileState extends State<_TileMobile> with SingleTickerProviderStateMixin {
   late final SlidableController _slidableController;
-  bool _leftActionTriggered = false;
-  bool _rightActionTriggered = false;
+  bool _actionInProgress = false;
 
   @override
   void initState() {
@@ -141,31 +139,32 @@ class _TileMobileState extends State<_TileMobile> with SingleTickerProviderState
 
     _slidableController.animation.addListener(() {
       final ratio = _slidableController.ratio;
-      if (ratio <= -0.25 && !_leftActionTriggered) {
-        _leftActionTriggered = true;
-        if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
-          widget.entry.progress++;
-          widget.onProgressUpdated!(widget.entry, false);
-          setState(() {});
-        }
-        _slidableController.close();
-        Future.delayed(const Duration(milliseconds: 350), () {
-          _leftActionTriggered = false;
-        });
-      }
-      if (ratio >= 0.25 && !_rightActionTriggered) {
-        _rightActionTriggered = true;
+      // Swipe left to the end (increase progress)
+      if (ratio <= -1.0 && !_actionInProgress) {
+        _actionInProgress = true;
         if (widget.onProgressUpdated != null &&
             (widget.entry.progressMax == null ||
                 widget.entry.progress < widget.entry.progressMax!)) {
-          widget.entry.progress--;
+          setState(() => widget.entry.progress++);
           widget.onProgressUpdated!(widget.entry, false);
-          setState(() {});
         }
         _slidableController.close();
-        Future.delayed(const Duration(milliseconds: 350), () {
-          _rightActionTriggered = false;
-        });
+      }
+      // Swipe right to the end (decrease progress)
+      if (ratio >= 1.0 && !_actionInProgress) {
+        _actionInProgress = true;
+        if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
+          setState(() => widget.entry.progress--);
+          widget.onProgressUpdated!(widget.entry, false);
+        }
+        _slidableController.close();
+      }
+    });
+
+    // Reset the action lock when the slidable animation is fully closed
+    _slidableController.animation.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed) {
+        _actionInProgress = false;
       }
     });
   }
@@ -185,40 +184,16 @@ class _TileMobileState extends State<_TileMobile> with SingleTickerProviderState
         controller: _slidableController,
         startActionPane: ActionPane(
           motion: const DrawerMotion(),
-          extentRatio: 0.25,
+          extentRatio: 1.0, // swipe to full left edge
           children: [
-            CustomSlidableAction(
-              onPressed: (_) {
-                if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
-                  setState(() => widget.entry.progress--);
-                  widget.onProgressUpdated!(widget.entry, false);
-                }
-              },
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              borderRadius: Theming.borderRadiusSmall,
-              child: const Icon(Icons.remove),
-            ),
+            // You can add an icon for visualization if you want
           ],
         ),
         endActionPane: ActionPane(
           motion: const DrawerMotion(),
-          extentRatio: 0.25,
+          extentRatio: 1.0, // swipe to full right edge
           children: [
-            CustomSlidableAction(
-              onPressed: (_) {
-                if (widget.onProgressUpdated != null &&
-                    (widget.entry.progressMax == null ||
-                        widget.entry.progress < widget.entry.progressMax!)) {
-                  setState(() => widget.entry.progress++);
-                  widget.onProgressUpdated!(widget.entry, false);
-                }
-              },
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              borderRadius: Theming.borderRadiusSmall,
-              child: const Icon(Icons.add),
-            ),
+            // You can add an icon for visualization if you want
           ],
         ),
         child: SizedBox(
@@ -249,7 +224,7 @@ class _TileMobileState extends State<_TileMobile> with SingleTickerProviderState
                     child: Padding(
                       padding: Theming.paddingAll,
                       child: _TileContent(
-                          widget.entry, widget.scoreFormat, widget.onProgressUpdated),
+                        widget.entry, widget.scoreFormat, widget.onProgressUpdated),
                     ),
                   ),
                 ],
