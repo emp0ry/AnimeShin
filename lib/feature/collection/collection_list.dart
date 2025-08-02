@@ -222,9 +222,9 @@ class _TileMobileState extends State<_TileMobile> with SingleTickerProviderState
           ],
         ),
         child: SizedBox(
-          height: _tileHeight, // <--- высота фиксирована
+          height: _tileHeight,
           child: Card(
-            margin: EdgeInsets.zero, // <--- убираем внутренний отступ
+            margin: EdgeInsets.zero,
             child: MediaRouteTile(
               key: ValueKey(widget.entry.mediaId),
               id: widget.entry.mediaId,
@@ -262,32 +262,6 @@ class _TileMobileState extends State<_TileMobile> with SingleTickerProviderState
   }
 }
 
-class _SwipeActionBackground extends StatelessWidget {
-  const _SwipeActionBackground({
-    required this.color,
-    required this.icon,
-    required this.alignment,
-  });
-
-  final Color color;
-  final IconData icon;
-  final Alignment alignment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: color,
-      alignment: alignment,
-      child: Padding(
-        padding: alignment == Alignment.centerLeft
-            ? const EdgeInsets.only(left: 32)
-            : const EdgeInsets.only(right: 32),
-        child: Icon(icon, color: Colors.white, size: 28),
-      ),
-    );
-  }
-}
-
 class _TileContent extends StatefulWidget {
   const _TileContent(this.item, this.scoreFormat, this.onProgressUpdated);
 
@@ -300,9 +274,6 @@ class _TileContent extends StatefulWidget {
 }
 
 class __TileContentState extends State<_TileContent> {
-  final _debounce = Debounce();
-  int? _lastProgress;
-
   @override
   Widget build(BuildContext context) {
     final item = widget.item;

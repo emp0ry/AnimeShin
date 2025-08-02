@@ -1,0 +1,327 @@
+[33me271eff0[m[33m ([m[1;36mHEAD[m[33m)[m v1.0.0
+[33mf0a546eb[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fixed entry status alignment of recommendations (#199)
+[33mdc918cb7[m v.1.9.0 (#198)
+[33me0276fc9[m v.1.8.0 (#194)
+[33m4cdc2153[m v.1.7.0 (#188)
+[33m8b19a544[m fix scoring not working (#187)
+[33m7b9d0177[m v.1.6.3 (#186)
+[33mb91757df[m v.1.6.2 (#185)
+[33mfcd98e37[m v.1.6.1 (#184)
+[33m03414625[m v.1.6.0 (#178)
+[33m9480a2a8[m v.1.5.3 (#170)
+[33m703dd4e4[m v.1.5.2 (#168)
+[33m857dc4d0[m v.1.5.1 (#167)
+[33m07dce5d5[m v.1.5.0 (#165)
+[33mb62f6b1f[m v.1.4.3 (#157)
+[33m82bd4dd0[m v.1.4.2 (#156)
+[33m1700eb86[m v.1.4.1 (#153)
+[33mbfcd8782[m v.1.3.2 (#141)
+[33mc1ab50fc[m Update build script and changelog
+[33m1da15c79[m Format the full description better
+[33m49c7a1e1[m v.1.2.8+2 (#138)
+[33mb1c7235c[m v.1.2.8+1 (#136)
+[33mc7c60aca[m v.1.2.8 (#135)
+[33m296557eb[m v.1.2.7+2 (#125)
+[33m7ac2ef60[m v.1.2.7+1 (#124)
+[33m26e28e57[m v.1.2.7 (#123)
+[33m2ecb9602[m v.1.2.6+1 (#104)
+[33m87d3fc4b[m v.1.2.5 (#99)
+[33m24a6ff97[m Merge pull request #80 from lotusgate/dev
+[33mdf8993ed[m Flavors fix
+[33md4e858a1[m Versioning
+[33m2fa49e95[m Bug fixes
+[33m9b3ce7db[m Version fix
+[33md7c5f493[m ios cleanup and version upgrade
+[33m280850ee[m ios configuration and minor rounding improvements
+[33m9a7f00af[m File cleanup and auth view fixes
+[33m471d5b8c[m Visual fixes and providers cleanup
+[33m2c400677[m Added followed people on the media page
+[33m91371656[m Tapping the same media tab will scroll to top
+[33mcb93548e[m Fixed repeating activities and cleanup
+[33m64aed984[m Cleanup
+[33m6f96345e[m Fixed search toggling on the home page
+[33mf0fbe77a[m Merge pull request #78 from KaloyanStoyanov06/master
+[33m9932a6f4[m Change the dev icon
+[33m3b20b34e[m Formatted again ;-;
+[33mdea88ff1[m Forgot to add monochrome tag
+[33m02a57950[m Revert to old ic_launcher.png
+[33mf94ead1f[m Fixed an error made during formatting
+[33m6a67ff99[m Merge branch 'dev' into master
+[33md588fe9b[m Fixed android icons to be the correct color and to be the correct shape
+[33maf57a5b1[m Formatted everything to be at 80
+[33m75207d67[m Merge branch 'master' of https://github.com/KaloyanStoyanov06/otraku
+[33md7f10f77[m Changed the navigation bar to be transparent and to not be contrasted
+[33m920cfb77[m Changed home provider to support the navigation bar to be fully transparent
+[33m8adae720[m changed the icons of android to support the new themed icons
+[33mf410f0dd[m Removed DirectPageView and simplified home page code
+[33m1e3a9751[m Upgraded to new flutter and dart
+[33mb5d7351f[m Cleanup
+[33m8ba94362[m Improved review header
+[33mbf4c7cb0[m Restructured project
+[33mf1a307e5[m Reorganised sheets
+[33mb69b539c[m Viewer activities in the main feed can be toggled
+[33ma4d3de68[m Dependencies and notifications cleanup
+[33ma86f66db[m Visual improvements
+[33m98c05bdf[m Visual improvements for media/user headers
+[33mb9bdb7d5[m Improved media/user header design
+[33me12f20f7[m Switched to a tab view for the media page
+[33me57c28df[m StateNotifier is used for all pagination
+[33me9bd07b2[m Fixed search field not clearing properly
+[33m8c187d0a[m Cleanup
+[33m9ae33ab3[m Notifications now use StateNotifier
+[33mff70d85f[m Cleanup
+[33m6c26530e[m Renaming
+[33m79b800bb[m Cleanup
+[33m2b4f7267[m Renaming
+[33mbb150e30[m Following/followers now uses state notifier
+[33m710b0b45[m Favorites now use state notifier
+[33ma0094741[m Made pagination more flexible
+[33m3ef7d5f7[m Renamed some media sort variants
+[33m5ef64069[m Text in text dialogs can be selected
+[33m921f320a[m Fixed image popup overlay colour
+[33mc98711ce[m Improved user page redirects
+[33m9817547e[m Simplified friends access
+[33mb1615610[m Cosmetic changes.
+[33m6f18c920[m Updated icon on the about tab.
+[33m418101da[m Design fixes.
+[33mcd1ad6d1[m Typo.
+[33m57acf8fe[m Merge pull request #75 from lotusgate/dev
+[33m39bc6698[m Android build stuff.
+[33mc5319354[m Ios project file stuff
+[33m66f06896[m Fixed padding on large screens.
+[33md83d9e9e[m ios adjustments.
+[33m92b4491f[m Fixed gradient sheet colours.
+[33m13b19501[m Updated versioning.
+[33mc3431261[m Fixed tag clearing not working.
+[33m2a02b552[m Increased image count cache limit.
+[33m7e437eae[m Images are now cached.
+[33md5b81142[m Styling change.
+[33mb9848e9f[m Code is now not shared between user/media header as it didn't make things simpler.
+[33md5bafa52[m Updated dependencies.
+[33me6107853[m Fixed review rating.
+[33mae5b76e5[m Added missing padding around grids.
+[33m1500d346[m Updated design of floating bar items.
+[33mb2efbe2b[m Removed the expanded action button.
+[33m26b669a1[m SliverRefreshControl now has additional padding.
+[33mb1b5642b[m Fixed padding in user reviews and simplified the page.
+[33mb15b8c3a[m Made the status bar transparent.
+[33m9a55ccf0[m Replaced the custom notification badge with the default one.
+[33mcaaf97ee[m Notification count was disappearing on refresh.
+[33m188b7f3e[m Changed scaffolding system for pages.
+[33m683122d9[m Removed TODO.
+[33m5feb0a02[m Rearranged the activity providers/notifiers.
+[33m597e8ac8[m Activity pages are tracked by creation date to avoid duplicates.
+[33m433f7ebd[m Sort discover results by match when searching.
+[33m755b7f64[m Added average score sorting in collections.
+[33m0bf7672c[m Updated dependencies and android configurations.
+[33m4214dd8a[m Updated text themes to the m3 spec.
+[33m8b68b32a[m Small fixes.
+[33mf09cd576[m Simplified PageLayout and fixed padding inconsistencies.
+[33m285faf6d[m Simplified usage of TopBar.
+[33m251dfcc4[m Moved TopBar in a separate file.
+[33m1df55edd[m The media page couldn't load all reviews.
+[33m1eb16787[m Added review rating.
+[33m31b5398c[m Changed review tile rating icon.
+[33mb3da6172[m Simplified grid view selection.
+[33m323a8fc5[m You can choose between grids/lists in collections and discover.
+[33m33dae1ee[m Made preview cards more flexible.
+[33m8c243886[m Simplified the collection grid.
+[33maa4270f4[m Removed an unnecessary use of a filter.
+[33m3029e0a3[m Added comments and simplified some enums.
+[33mf501ce7f[m Current user's activities are filtered out of feed.
+[33m60cf6896[m Added release year filtering in collections.
+[33m4bcb217d[m Updated dependencies.
+[33m241a6218[m Added replies filter for notifications.
+[33mc8528dd6[m Fixed birthday filter.
+[33m414c4d48[m Merge branch 'dev'
+[33mf425e7c4[m Fixed ios builds.
+[33mcb215e36[m Merge branch 'dev'
+[33m86db4068[m Updated versioning.
+[33me787ede7[m Fixed year range picker
+[33m8ced8d13[m Returned all entry sort options and update sort filter.
+[33m87ae6a32[m Made the ChipSelector widget layout public.
+[33m4a7de8c8[m Updated versioning.
+[33m295c52cb[m Fixed slowed collection image updating.
+[33ma9aa35e9[m Removed an unnecessary entry field.
+[33me8180ed1[m Removed and reordered some entry sort options.
+[33m93124cf4[m Fix for year selector segments.
+[33m652531b4[m Minor visual tweak of dividers.
+[33m9fae87ee[m Added "Mustard" theme.
+[33md34880a1[m Updated dependencies.
+[33m52d671c4[m Removed unnecessary widgets.
+[33m83e3f0fb[m Improved media sorting.
+[33m376a1068[m Improved entry sorting.
+[33mcf2c35ac[m Fixed collection preview not sorting manga correctly.
+[33m1f821f36[m ChipSelector may force an option to be selected.
+[33md0df901c[m Improved image viewer.
+[33m29c1b6cb[m Reverted page layout change.
+[33m9719c1ed[m Fixed awkward top padding when in landscape mode.
+[33m6f9bbee6[m Removed an import.
+[33m8c52d3c3[m Floating button in collections won't appear if there's 1 list.
+[33me4d2223b[m Notification options are a list, instead of a grid.
+[33m5385eb6a[m floating action buttons don't float with the keyboard now.
+[33m1329cc9b[m Made card design more consistent in the media page.
+[33m5c8586da[m Fixed unnecessary provider rebuilds.
+[33m1e487120[m Unified discover filter, birthday and type providers.
+[33md2e193a5[m Made tags more compact on the media page.
+[33m6249cd39[m Cleaned up some error messages.
+[33mafa6d288[m Dependency updates.
+[33m0e72e4b6[m Less error-prone settings loading.
+[33mff8d0e40[m Anime collection preview can be sorted exclusively by airing time.
+[33m3de2ede1[m Icon button cleanup.
+[33mbdf98267[m Updated dependencies.
+[33m97ff7239[m Collection previews can be disabled.
+[33md3e54da3[m Improved collection preview view.
+[33maf587abd[m Reworked edit providers.
+[33mf42f6487[m Collections were fetching unnecessary data.
+[33m0b78bf23[m Updated dependencies.
+[33m5d276e00[m Better error message on http timeout.
+[33m2b699b39[m Collections will first load only previews.
+[33m6a5bb7c2[m Fixed feed/discover lazy-loading.
+[33m6979783f[m The discover and feed tab are lazy-loaded.
+[33m8b45c252[m Updated dependencies.
+[33mf7b5a55d[m Notifications about threads redirect you properly.
+[33mb4313244[m "Age Restriction" filter in Discover.
+[33mab241c80[m Refreshing home feed refetches the notification count.
+[33mbc2f9008[m Fixed "List Presence" filter for staff.
+[33m1e34b309[m Upgraded Flutter and the workmanager package.
+[33ma6ab0c55[m Merge pull request #55 from lotusgate/dev
+[33m45cc00a9[m Staff roles have an anime/manga filter.
+[33m89444ae1[m Cleanup.
+[33m44e03825[m Fixed settings not being saved.
+[33ma108e86c[m Merge pull request #51 from lotusgate/dev
+[33m1751b200[m Fixed the app crashing, because of an empty collection.
+[33ma56c32f6[m Merge pull request #50 from lotusgate/dev
+[33meaf36211[m Updated improper settings loading.
+[33m765e63c8[m Fixed year range not filtering properly.
+[33m0b219cca[m Filtering fixes.
+[33m670fe459[m Updated versioning.
+[33m2d2c51fb[m Fixed search field not able to be cancelled.
+[33m157d575c[m Fixed image quality and tile bugs.
+[33me4de9ce5[m Fixed a bug with loading image quality option.
+[33m6d4b2077[m Fixes and ui improvements.
+[33m3b4da821[m Bug fixes.
+[33m331007fe[m Bug fixes and an option to use the old media discover grid.
+[33m5f07178b[m Updated versioning.
+[33m7be34492[m Ios meta adjustments.
+[33m2002721b[m Visual adjustments.
+[33m19c622f2[m More discover filters and wider use of chips.
+[33mceb10a54[m Added year filter.
+[33m9b46ac97[m Merge branch 'master' into dev
+[33m8dddc97e[m Finished folder cleanup and added season filters.
+[33m9963bad0[m Merge pull request #49 from rollingmoai/patch-1
+[33m2cfdf0e0[m Add IzzyOnDroid link in readme
+[33med88aabd[m Clean up.
+[33m95110ba9[m Fetch less data for an entry.
+[33m20f424f1[m Finished transition to riverpod with media rewrite.
+[33m43940edd[m Fixed a bug with setting dates as empty.
+[33m1eed7238[m Merged notification options in one list.
+[33mfd7d1a63[m Media on the discover tab contains more info now.
+[33m00c55f67[m TextRail is used more widely now.
+[33mc650f82c[m Minor dependency update.
+[33md0fe9653[m Fixed notification page tiles.
+[33ma360867c[m Media titles info is more compact.
+[33madae272f[m Clean up.
+[33m82ca41d3[m Migrated progress sub tab to riverpod.
+[33mdb8d4c95[m Removed comment.
+[33m6713bed1[m Updated local notifications handling.
+[33mb142522a[m Theming improvements and file reordering.
+[33m03634bd7[m Revamped theming.
+[33m8c32b01f[m Dependency updates.
+[33mb554338b[m Updated flutter.
+[33m1d430119[m Implemented flutter_lints.
+[33m10ca57bd[m Minor cleanup.
+[33me6fa398f[m Moved collections to riverpod.
+[33m38cdb273[m Visual fix.
+[33m30ccd80a[m Naming changes and version updates.
+[33mdb27eaeb[m Home controls use riverpod now.
+[33m21a632d2[m Changed theme mode toggle.
+[33m5d0b9454[m Redirect to browser for forum thread notifications.
+[33ma8057116[m Cleanup.
+[33mc34c48d2[m Common widget for paginated providers.
+[33m84a23b94[m Made some helper classes/widgets more flexible.
+[33mdb3cc4a2[m The discover tab now uses riverpod.
+[33m314ed22d[m Renamed everything about "explore" to "discover".
+[33m0c51c5cb[m Compositing bug fixes.
+[33mf1cfd10a[m Fixes.
+[33mfda043c5[m Merge pull request #48 from lotusgate/dev
+[33m8fa151dc[m Changed ios target again.
+[33mf4cb994c[m Downgraded dependency.
+[33mfe8cba24[m Small bug fix and updated dependencies.
+[33mdf16acaa[m Merge pull request #47 from lotusgate/dev
+[33m9ac2694d[m Versioning update.
+[33m5c4cbcd6[m Changed minimum deployment target for ios.
+[33mdfc36208[m Bug fixes.
+[33m7f170a92[m Merge pull request #46 from lotusgate/dev
+[33m14108105[m Versioning update.
+[33m39b0b733[m Alignment fix of the floating bar.
+[33m6e18a0ad[m Unicode text is now parsed and emojis automatically work.
+[33mfee0e6f2[m Fixes.
+[33m3225f00e[m Updated versioning.
+[33mdeee3600[m Added center formatting and better layout.
+[33m861c0388[m ios config changes.
+[33m5a9d42ad[m Moved files.
+[33m2f8d4e7a[m Better filters management.
+[33m1e55ea1d[m Tag collection is migrated to riverpod.
+[33m48715681[m Minor improvements.
+[33m22301a72[m Better focus management and scrolling.
+[33m1c47b113[m More formatting options when composing messages.
+[33mc96b545e[m Minor visual adjustments in the theme preview.
+[33mcad78154[m Merge pull request #44 from Curstantine/settings
+[33m3add37c3[m chore: Change requests.
+[33m5e383401[m chore: active theme to use primary color of the theme in context.
+[33mc2f1494b[m feat: Previews for themes in settings page.
+[33md81242ca[m Error handling and other tweaks.
+[33me7d93c20[m The paragraph html tags get filtered when editing.
+[33mda06126e[m Cleanup and selection toolbar tweaks.
+[33m107f2fb1[m Improved controls when composing.
+[33m7ae0011c[m Added initial formatting support in post creation.
+[33mfdcd5fd8[m Improved colours and splashes.
+[33m61e1118d[m Fixed "priavte" toggle.
+[33mda7d9900[m You can create/edit activities/replies.
+[33m21c1da92[m Minor adjustments.
+[33mfa36e083[m The "pin" button shouldn't appear on other people's activities.
+[33m7ef00b52[m File reordering and design improvements.
+[33m4ab3c370[m Improved bottom bars and removed unnecessary code.
+[33m5c0b7e8b[m Revamped and migrated the studio page to riverpod.
+[33m0369940f[m Adjustments and cleanup.
+[33meb46b180[m Minor spacing adjustments.
+[33ma35ab830[m Versioning update.
+[33me658c009[m Migrated the staff page to riverpod with a new design.
+[33m48ee9773[m Reordered files.
+[33mb4e46715[m Finished with character page revamp.
+[33m9bf8c943[m Started transitioning character towards riverpod.
+[33ma1b93e4b[m Small fixes.
+[33m1ea92cb4[m Fixes.
+[33mb7d582c1[m Fixes for the edit view.
+[33me798148b[m Updated package versions.
+[33m569df341[m Merge pull request #42 from winstriker/master
+[33m6e1ae896[m Made "Lavender" theme fit the other ones
+[33m2dd65202[m Added "Lavender" theme
+[33mda568709[m Merge pull request #40 from lotusgate/dev
+[33med95bafe[m Bug fixing.
+[33m9330e511[m Merge pull request #38 from lotusgate/dev
+[33mf939b9ac[m Versioning.
+[33m1cd10c78[m A lot of bug fixes.
+[33m67061df6[m Centered floating menus.
+[33mc9a97296[m Merge pull request #37 from lotusgate/dev
+[33m480ae884[m Fixed a few things on ios.
+[33m7b9c2461[m More info on the media page.
+[33mb286e9b7[m Updated versioning.
+[33mbb973287[m Migrated the media page to PageLayout.
+[33m866246c6[m Added support for disabling certain list activity creations.
+[33mf1f60ef3[m Added settings "Restrict messages to following".
+[33m21087273[m Simplified user header info.
+[33m85aaa4cb[m Full pinned activity management.
+[33m7240ddfe[m Added support for pinned activities.
+[33m7a11885c[m Bugfixes + riverpod migration of user stuff.
+[33m8467c01a[m Changed how floating buttons are handled on the home screen.
+[33maab8578a[m Spoiler tags button design fix.
+[33m4baaea8b[m Improved button styling.
+[33m16743175[m Fixes and improvements.
+[33mfe01ef00[m Home view improvements; cleanup and more.
+[33mb270c214[m Better tab swiping for most pages.
+[33m74a68b72[m Moved favorites to riverpod and other changes.
+[33m186a7117[m Versioning.
+[33m2acd0058[m Merge pull request #35 from lotusgate/riverpod
+[33m2d27080e[m Converted following/followers and other improvements.
