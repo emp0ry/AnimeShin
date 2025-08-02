@@ -10,8 +10,10 @@ workflows:
       - name: Generate secrets.dart
         script: |
           echo "const clientSecret = '\$ANILIST_CLIENT_SECRET';" > lib/secrets.dart
-      - flutter pub get
-      - flutter build ios --no-codesign
+      - name: 'Flutter pub get'
+        script: flutter pub get
+      - name: 'Build iOS'
+        script: flutter build ios --no-codesign
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/iphoneos/*.app
