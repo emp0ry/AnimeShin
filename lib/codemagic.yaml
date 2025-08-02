@@ -1,0 +1,17 @@
+workflows:
+  build-ios:
+    name: Build iOS
+    environment:
+      flutter: stable
+      xcode: latest
+      groups:
+        - secrets
+    scripts:
+      - name: Generate secrets.dart
+        script: |
+          echo "const clientSecret = '\$ANILIST_CLIENT_SECRET';" > lib/secrets.dart
+      - flutter pub get
+      - flutter build ios --profile --no-codesign
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/iphoneos/*.app
