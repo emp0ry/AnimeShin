@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/shadowed_overflow_list.dart';
-import 'package:otraku/feature/media/media_models.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/shadowed_overflow_list.dart';
+import 'package:animeshin/feature/media/media_models.dart';
 
 /// A horizontal list of chips, where only one can be selected at a time.
 class ChipSelector<T> extends StatefulWidget {

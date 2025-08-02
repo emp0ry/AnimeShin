@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/util/graphql.dart';
-import 'package:otraku/feature/tag/tag_model.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/graphql.dart';
+import 'package:animeshin/feature/tag/tag_model.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
 
 final tagsProvider = FutureProvider(
   (ref) async => TagCollection(

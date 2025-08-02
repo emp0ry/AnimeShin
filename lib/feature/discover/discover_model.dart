@@ -1,13 +1,13 @@
-import 'package:otraku/extension/string_extension.dart';
-import 'package:otraku/feature/character/character_item_model.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/staff/staff_item_model.dart';
-import 'package:otraku/feature/studio/studio_item_model.dart';
-import 'package:otraku/feature/user/user_item_model.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/util/paged.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/review/review_models.dart';
+import 'package:animeshin/extension/string_extension.dart';
+import 'package:animeshin/feature/character/character_item_model.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/staff/staff_item_model.dart';
+import 'package:animeshin/feature/studio/studio_item_model.dart';
+import 'package:animeshin/feature/user/user_item_model.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/util/paged.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/review/review_models.dart';
 
 enum DiscoverType {
   anime('Anime'),

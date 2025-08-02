@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/extension/enum_extension.dart';
-import 'package:otraku/feature/activity/activities_filter_model.dart';
-import 'package:otraku/feature/calendar/calendar_models.dart';
-import 'package:otraku/feature/collection/collection_filter_model.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/feature/home/home_model.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/extension/enum_extension.dart';
+import 'package:animeshin/feature/activity/activities_filter_model.dart';
+import 'package:animeshin/feature/calendar/calendar_models.dart';
+import 'package:animeshin/feature/collection/collection_filter_model.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/home/home_model.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/util/theming.dart';
 
-const appVersion = '1.9.1';
+const appVersion = '1.0.0';
 
 class Persistence {
   const Persistence({

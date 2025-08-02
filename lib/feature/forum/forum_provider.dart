@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/forum/forum_filter_model.dart';
-import 'package:otraku/feature/forum/forum_filter_provider.dart';
-import 'package:otraku/feature/forum/forum_model.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/graphql.dart';
-import 'package:otraku/util/paged.dart';
+import 'package:animeshin/feature/forum/forum_filter_model.dart';
+import 'package:animeshin/feature/forum/forum_filter_provider.dart';
+import 'package:animeshin/feature/forum/forum_model.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/graphql.dart';
+import 'package:animeshin/util/paged.dart';
 
 final forumProvider =
     AsyncNotifierProvider.autoDispose<ForumNotifier, Paged<ThreadItem>>(

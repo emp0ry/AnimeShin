@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/input/chip_selector.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/input/chip_selector.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 Future<void> showRecommendationsFilterSheet({
   required BuildContext context,

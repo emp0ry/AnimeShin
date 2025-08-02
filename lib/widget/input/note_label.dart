@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/dialogs.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/dialogs.dart';
 
 class NotesLabel extends StatelessWidget {
   const NotesLabel(this.notes);

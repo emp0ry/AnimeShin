@@ -1,5 +1,5 @@
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/util/markdown.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/util/markdown.dart';
 
 class Comment {
   Comment._({

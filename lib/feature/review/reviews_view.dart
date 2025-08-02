@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/review/review_models.dart';
-import 'package:otraku/util/paged_controller.dart';
-import 'package:otraku/feature/review/review_grid.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/layout/adaptive_scaffold.dart';
-import 'package:otraku/widget/layout/hiding_floating_action_button.dart';
-import 'package:otraku/widget/layout/top_bar.dart';
-import 'package:otraku/widget/paged_view.dart';
-import 'package:otraku/feature/review/reviews_filter_sheet.dart';
-import 'package:otraku/feature/review/reviews_provider.dart';
-import 'package:otraku/feature/review/reviews_filter_provider.dart';
+import 'package:animeshin/feature/review/review_models.dart';
+import 'package:animeshin/util/paged_controller.dart';
+import 'package:animeshin/feature/review/review_grid.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/layout/adaptive_scaffold.dart';
+import 'package:animeshin/widget/layout/hiding_floating_action_button.dart';
+import 'package:animeshin/widget/layout/top_bar.dart';
+import 'package:animeshin/widget/paged_view.dart';
+import 'package:animeshin/feature/review/reviews_filter_sheet.dart';
+import 'package:animeshin/feature/review/reviews_provider.dart';
+import 'package:animeshin/feature/review/reviews_filter_provider.dart';
 
 class ReviewsView extends ConsumerStatefulWidget {
   const ReviewsView(this.id);

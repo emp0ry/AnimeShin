@@ -1,5 +1,5 @@
 import 'package:flutter/rendering.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/util/theming.dart';
 
 /// Places as many items on the cross axis as possible, without making them
 /// narrower than [minWidth]. The item height is fixed.

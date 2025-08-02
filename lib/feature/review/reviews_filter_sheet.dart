@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/sheets.dart';
-import 'package:otraku/widget/input/chip_selector.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/review/review_models.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/sheets.dart';
+import 'package:animeshin/widget/input/chip_selector.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/review/review_models.dart';
 
 Future<void> showReviewsFilterSheet({
   required BuildContext context,

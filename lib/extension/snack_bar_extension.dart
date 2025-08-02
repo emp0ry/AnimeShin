@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,11 +32,16 @@ extension SnackBarExtension on SnackBar {
   /// Launch [link] in the browser or show a snackbar if unsuccessful.
   static Future<bool> launch(BuildContext context, String link) async {
     try {
+      final launchMode =
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+              ? LaunchMode.externalApplication
+              : link.startsWith("https://anilist.co")
+                  ? LaunchMode.inAppBrowserView
+                  : LaunchMode.externalApplication;
+
       final ok = await launchUrl(
         Uri.parse(link),
-        mode: link.startsWith("https://anilist.co")
-            ? LaunchMode.inAppBrowserView
-            : LaunchMode.externalApplication,
+        mode: launchMode,
       );
 
       if (ok) return true;

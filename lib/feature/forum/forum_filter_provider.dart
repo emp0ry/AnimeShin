@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/forum/forum_filter_model.dart';
+import 'package:animeshin/feature/forum/forum_filter_model.dart';
 
 final forumFilterProvider =
     NotifierProvider.autoDispose<ForumFilterNotifier, ForumFilter>(

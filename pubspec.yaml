@@ -1,9 +1,9 @@
-name: otraku
-description: An unofficial AniList app.
+name: animeshin
+description: An unofficial AniList app integrated with AniLiberty.
 
 publish_to: 'none'
 
-version: 1.9.1+86
+version: 1.0.0
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -16,7 +16,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
 
   # Routing.
-  go_router: ^15.2.0
+  go_router: ^16.0.0
 
   # Data fetching.
   http: ^1.4.0
@@ -46,16 +46,18 @@ dependencies:
   dynamic_color: ^1.7.0
 
   # Background tasks for notification fetching.
-  workmanager: ^0.6.0
+  workmanager: ^0.9.0
 
   # Sending device notifications.
   flutter_local_notifications: ^19.2.1
 
   # Parsing html into flutter widgets.
-  flutter_widget_from_html_core: ^0.16.0
+  flutter_widget_from_html_core: ^0.17.0
 
   # An addition to the material icons.
   ionicons: ^0.2.2
+
+  flutter_slidable: ^4.0.0
 
 dev_dependencies:
   flutter_test:

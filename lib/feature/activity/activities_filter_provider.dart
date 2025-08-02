@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/activity/activities_filter_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/activity/activities_filter_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 
 final activitiesFilterProvider = NotifierProvider.autoDispose
     .family<ActivitiesFilterNotifier, ActivitiesFilter, int?>(

@@ -1,4 +1,4 @@
-Otraku aims to support most AniList features and it already covers:
+AnimeShin aims to support most AniList features and it already covers:
 
 - Tracking media and managing/filtering collections
 - Browsing/Filtering media/characters/staff/studios/users/reviews/recommendations

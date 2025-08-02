@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/util/tile_modelable.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/grid/sliver_grid_delegates.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/util/tile_modelable.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
 
 class DualRelationGrid extends StatelessWidget {
   const DualRelationGrid({

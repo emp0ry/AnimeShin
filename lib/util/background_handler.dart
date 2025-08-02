@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/feature/notification/notifications_model.dart';
-import 'package:otraku/util/graphql.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/feature/notification/notifications_model.dart';
+import 'package:animeshin/util/graphql.dart';
 import 'package:workmanager/workmanager.dart';
 
 final _notificationPlugin = FlutterLocalNotificationsPlugin();
@@ -21,6 +21,11 @@ class BackgroundHandler {
       const InitializationSettings(
         android: AndroidInitializationSettings('notification_icon'),
         iOS: DarwinInitializationSettings(),
+        windows: WindowsInitializationSettings(
+            appName: 'AnimeShin',
+            appUserModelId: 'com.animeshin',
+            guid: 'b9726c14-67c1-4b3d-bf27-d28a33ae824e',
+            iconPath: 'notification_icon'),
       ),
       onDidReceiveNotificationResponse: (response) {
         if (response.payload == null) return;
@@ -36,7 +41,9 @@ class BackgroundHandler {
       },
     );
 
-    await Workmanager().initialize(_fetch);
+    if (Platform.isAndroid || Platform.isIOS) {
+      await Workmanager().initialize(_fetch);
+    }
 
     if (Platform.isAndroid) {
       Workmanager().registerPeriodicTask(

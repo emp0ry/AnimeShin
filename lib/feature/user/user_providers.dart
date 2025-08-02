@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/future_extension.dart';
-import 'package:otraku/feature/user/user_model.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/graphql.dart';
+import 'package:animeshin/extension/future_extension.dart';
+import 'package:animeshin/feature/user/user_model.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/graphql.dart';
 
 typedef UserTag = ({int? id, String? name});
 

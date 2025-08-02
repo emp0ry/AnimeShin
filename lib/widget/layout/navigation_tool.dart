@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/util/theming.dart';
 
 class BottomNavigation extends StatefulWidget {
   const BottomNavigation({

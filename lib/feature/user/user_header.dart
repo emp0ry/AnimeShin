@@ -1,18 +1,100 @@
+import 'dart:io';
+import 'dart:convert';
+import 'dart:async';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/secrets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/feature/user/user_model.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/input/pill_selector.dart';
-import 'package:otraku/widget/layout/content_header.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/widget/text_rail.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/feature/user/user_model.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/input/pill_selector.dart';
+import 'package:animeshin/widget/layout/content_header.dart';
+import 'package:animeshin/widget/dialogs.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/widget/text_rail.dart';
+
+Future<String?> listenForCode({int port = 28371}) async {
+  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+  final completer = Completer<String?>();
+  server.listen((HttpRequest request) async {
+    final code = request.uri.queryParameters['code'];
+    request.response
+      ..headers.contentType = ContentType.html
+      ..write(
+          '<h3>Authorization complete!<br>You can close this window and return to the app.</h3>');
+    await request.response.close();
+    completer.complete(code);
+    await server.close();
+  });
+  return completer.future;
+}
+
+Future<String?> exchangeCodeForToken(String code) async {
+  const clientId = '29018';
+  const redirectUri = 'http://localhost:28371/callback';
+  final response = await http.post(
+    Uri.parse('https://anilist.co/api/v2/oauth/token'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'grant_type': 'authorization_code',
+      'client_id': clientId,
+      'client_secret': clientSecret,
+      'redirect_uri': redirectUri,
+      'code': code,
+    }),
+  );
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data['access_token'] as String?;
+  }
+  return null;
+}
+
+Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
+  final response = await http.post(
+    Uri.parse('https://graphql.anilist.co'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $accessToken',
+    },
+    body: jsonEncode({
+      'query': '''
+        query {
+          Viewer {
+            id
+            name
+            about
+            avatar { large }
+            bannerImage
+            siteUrl
+            isFollowing
+            isFollower
+            isBlocked
+            donatorTier
+            donatorBadge
+            moderatorRoles
+            statistics {
+              anime { count meanScore }
+              manga { count meanScore }
+            }
+          }
+        }
+      ''',
+    }),
+  );
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+    return data['data']['Viewer'];
+  }
+  return null;
+}
 
 class UserHeader extends StatelessWidget {
   const UserHeader({
@@ -36,7 +118,6 @@ class UserHeader extends StatelessWidget {
       if (user!.modRoles.isNotEmpty) textRailItems[user!.modRoles[0]] = false;
       if (user!.donatorTier > 0) textRailItems[user!.donatorBadge] = true;
     }
-
     return ContentHeader(
       imageUrl: user?.imageUrl ?? imageUrl,
       imageHeightToWidthRatio: 1,
@@ -93,8 +174,9 @@ class _AccountPicker extends StatefulWidget {
 }
 
 class __AccountPickerState extends State<_AccountPicker> {
-  static const _loginLink =
-      'https://anilist.co/api/v2/oauth/authorize?client_id=3535&response_type=token';
+  static final _loginLink = Platform.isAndroid || Platform.isIOS
+      ? 'https://anilist.co/api/v2/oauth/authorize?client_id=29017&response_type=token' // &redirect_uri=animeshin://callback'
+      : 'https://anilist.co/api/v2/oauth/authorize?client_id=29018&response_type=code'; //&redirect_uri=http://localhost:28371/callback';
 
   static const _imageSize = 55.0;
 
@@ -105,7 +187,6 @@ class __AccountPickerState extends State<_AccountPicker> {
       child: VerticalDivider(width: 10, thickness: 1),
     );
     const imagePadding = EdgeInsets.symmetric(horizontal: 5);
-
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(
         vertical: 24,
@@ -117,7 +198,6 @@ class __AccountPickerState extends State<_AccountPicker> {
             persistenceProvider.select((s) => s.accountGroup),
           );
           final accounts = accountGroup.accounts;
-
           final items = <Widget>[];
           for (int i = 0; i < accounts.length; i++) {
             items.add(SizedBox(
@@ -168,7 +248,6 @@ class __AccountPickerState extends State<_AccountPicker> {
                               .read(persistenceProvider.notifier)
                               .switchAccount(null);
                         }
-
                         ref
                             .read(persistenceProvider.notifier)
                             .removeAccount(i)
@@ -180,7 +259,6 @@ class __AccountPickerState extends State<_AccountPicker> {
               ),
             ));
           }
-
           items.add(SizedBox(
             height: 60,
             child: Row(
@@ -194,12 +272,11 @@ class __AccountPickerState extends State<_AccountPicker> {
                 IconButton(
                   tooltip: 'Add Account',
                   icon: const Icon(Icons.add_rounded),
-                  onPressed: () => _addAccount(accounts.isEmpty),
+                  onPressed: () => _addAccount(ref, accounts.isEmpty),
                 ),
               ],
             ),
           ));
-
           return PillSelector(
             maxWidth: 380,
             shrinkWrap: true,
@@ -211,13 +288,11 @@ class __AccountPickerState extends State<_AccountPicker> {
                 Navigator.pop(context);
                 return;
               }
-
               if (DateTime.now().isBefore(accounts[i].expiration)) {
                 ref.read(persistenceProvider.notifier).switchAccount(i);
                 Navigator.pop(context);
                 return;
               }
-
               var ok = false;
               await ConfirmationDialog.show(
                 context,
@@ -227,8 +302,7 @@ class __AccountPickerState extends State<_AccountPicker> {
                 secondaryAction: 'No',
                 onConfirm: () => ok = true,
               );
-
-              if (ok) _addAccount(accounts.isEmpty);
+              if (ok) _addAccount(ref, accounts.isEmpty);
             },
           );
         },
@@ -236,12 +310,38 @@ class __AccountPickerState extends State<_AccountPicker> {
     );
   }
 
-  void _addAccount(bool isAccountListEmpty) {
+  Future<void> _addAccount(WidgetRef ref, bool isAccountListEmpty) async {
     if (isAccountListEmpty) {
-      SnackBarExtension.launch(context, _loginLink);
-      return;
-    }
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        final futureCode = listenForCode(port: 28371);
+        await SnackBarExtension.launch(context, _loginLink);
+        final code = await futureCode;
+        if (code != null) {
+          final accessToken = await exchangeCodeForToken(code);
+          if (accessToken != null) {
+            final profile = await fetchAniListProfile(accessToken);
+            if (profile != null) {
+              final now = DateTime.now();
+              final expiration = now.add(const Duration(days: 365));
 
+              final account = Account(
+                id: profile['id'],
+                name: profile['name'],
+                avatarUrl: profile['avatar']['large'],
+                expiration: expiration,
+                accessToken: accessToken,
+              );
+
+              await ref.read(persistenceProvider.notifier).addAccount(account);
+            }
+          }
+        }
+        return;
+      } else {
+        SnackBarExtension.launch(context, _loginLink);
+        return;
+      }
+    }
     ConfirmationDialog.show(
       context,
       title: 'Add an Account',
@@ -272,7 +372,6 @@ class __FollowButtonState extends State<_FollowButton> {
   @override
   Widget build(BuildContext context) {
     final user = widget.user;
-
     return Padding(
       padding: const EdgeInsets.all(Theming.offset),
       child: ElevatedButton.icon(
@@ -294,12 +393,9 @@ class __FollowButtonState extends State<_FollowButton> {
         onPressed: () {
           final isFollowed = user.isFollowed;
           setState(() => user.isFollowed = !isFollowed);
-
           widget.toggleFollow().then((err) {
             if (err == null) return;
-
             setState(() => user.isFollowed = isFollowed);
-
             if (context.mounted) {
               SnackBarExtension.show(context, err.toString());
             }

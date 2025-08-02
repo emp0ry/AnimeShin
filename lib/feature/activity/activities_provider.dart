@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/future_extension.dart';
-import 'package:otraku/feature/activity/activities_filter_model.dart';
-import 'package:otraku/feature/activity/activities_filter_provider.dart';
-import 'package:otraku/feature/activity/activity_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/paged.dart';
-import 'package:otraku/util/graphql.dart';
+import 'package:animeshin/extension/future_extension.dart';
+import 'package:animeshin/feature/activity/activities_filter_model.dart';
+import 'package:animeshin/feature/activity/activities_filter_provider.dart';
+import 'package:animeshin/feature/activity/activity_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/paged.dart';
+import 'package:animeshin/util/graphql.dart';
 
 final activitiesProvider = AsyncNotifierProvider.autoDispose
     .family<ActivitiesNotifier, Paged<Activity>, int?>(

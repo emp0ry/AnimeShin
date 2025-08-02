@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
 
 class SettingsAboutSubview extends StatelessWidget {
   const SettingsAboutSubview(this.scrollCtrl);
@@ -43,13 +43,13 @@ class SettingsAboutSubview extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Text(
-                  'Otraku - v.$appVersion',
+                  'AnimeShin - v.$appVersion',
                   textAlign: TextAlign.center,
                   style: TextTheme.of(context).titleMedium,
                 ),
               ),
               const Text(
-                'An unofficial AniList app',
+                'An unofficial AniList app integrated with AniLiberty',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
@@ -57,26 +57,26 @@ class SettingsAboutSubview extends StatelessWidget {
                 leading: const Icon(Ionicons.logo_discord),
                 title: const Text('Discord'),
                 onTap: () => SnackBarExtension.launch(
-                    context, 'https://discord.gg/YN2QWVbFef'),
+                    context, 'https://discord.gg/MuDyaVuA9E'),
               ),
               ListTile(
                 leading: const Icon(Ionicons.logo_github),
                 title: const Text('Source Code'),
                 onTap: () => SnackBarExtension.launch(
-                    context, 'https://github.com/lotusprey/otraku'),
+                    context, 'https://github.com/emp0ry/AnimeShin'),
               ),
               ListTile(
                 leading: const Icon(Ionicons.cash_outline),
                 title: const Text('Donate'),
                 onTap: () => SnackBarExtension.launch(
-                    context, 'https://ko-fi.com/lotusgate'),
+                    context, 'https://buymeacoffee.com/emp0ry'),
               ),
               ListTile(
                 leading: const Icon(Ionicons.finger_print),
                 title: const Text('Privacy Policy'),
                 onTap: () => SnackBarExtension.launch(
                   context,
-                  'https://sites.google.com/view/otraku/privacy-policy',
+                  'https://youtu.be/dQw4w9WgXcQ?si=9srQZl2pMumjxJiW',
                 ),
               ),
               const ListTile(

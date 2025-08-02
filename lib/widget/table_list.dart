@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
 
 class TableList extends StatelessWidget {
   const TableList(this.items);

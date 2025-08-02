@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:otraku/feature/user/user_item_model.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/grid/sliver_grid_delegates.dart';
+import 'package:animeshin/feature/user/user_item_model.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
 
 class UserItemGrid extends StatelessWidget {
   const UserItemGrid(this.items);

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/feature/staff/staff_model.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/layout/content_header.dart';
-import 'package:otraku/widget/table_list.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/feature/staff/staff_model.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/layout/content_header.dart';
+import 'package:animeshin/widget/table_list.dart';
 
 class StaffHeader extends StatelessWidget {
   const StaffHeader.withTabBar({

@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/future_extension.dart';
-import 'package:otraku/feature/collection/collection_provider.dart';
-import 'package:otraku/feature/edit/edit_model.dart';
-import 'package:otraku/feature/media/media_provider.dart';
-import 'package:otraku/feature/settings/settings_provider.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/graphql.dart';
+import 'package:animeshin/extension/future_extension.dart';
+import 'package:animeshin/feature/collection/collection_provider.dart';
+import 'package:animeshin/feature/edit/edit_model.dart';
+import 'package:animeshin/feature/media/media_provider.dart';
+import 'package:animeshin/feature/settings/settings_provider.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/graphql.dart';
 
 final entryEditProvider = AsyncNotifierProvider.autoDispose
     .family<EntryEditNotifier, EntryEdit, EditTag>(

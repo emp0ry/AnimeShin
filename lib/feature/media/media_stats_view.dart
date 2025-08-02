@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/grid/sliver_grid_delegates.dart';
-import 'package:otraku/widget/layout/constrained_view.dart';
-import 'package:otraku/widget/loaders.dart';
-import 'package:otraku/feature/discover/discover_filter_provider.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/feature/home/home_model.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/statistics/charts.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
+import 'package:animeshin/widget/layout/constrained_view.dart';
+import 'package:animeshin/widget/loaders.dart';
+import 'package:animeshin/feature/discover/discover_filter_provider.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/home/home_model.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/statistics/charts.dart';
 
 class MediaStatsSubview extends StatelessWidget {
   const MediaStatsSubview({

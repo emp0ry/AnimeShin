@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:otraku/extension/iterable_extension.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
 
 class Tag {
   final String name;

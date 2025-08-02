@@ -1,18 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/future_extension.dart';
-import 'package:otraku/feature/character/character_item_model.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/feature/staff/staff_item_model.dart';
-import 'package:otraku/feature/studio/studio_item_model.dart';
-import 'package:otraku/feature/user/user_item_model.dart';
-import 'package:otraku/feature/discover/discover_filter_provider.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/feature/review/review_models.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/graphql.dart';
+import 'package:animeshin/extension/future_extension.dart';
+import 'package:animeshin/feature/character/character_item_model.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/feature/staff/staff_item_model.dart';
+import 'package:animeshin/feature/studio/studio_item_model.dart';
+import 'package:animeshin/feature/user/user_item_model.dart';
+import 'package:animeshin/feature/discover/discover_filter_provider.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/review/review_models.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/graphql.dart';
 
 final discoverProvider = AsyncNotifierProvider<DiscoverNotifier, DiscoverItems>(
   DiscoverNotifier.new,

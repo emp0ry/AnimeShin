@@ -1,7 +1,7 @@
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/extension/iterable_extension.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/feature/media/media_models.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/media/media_models.dart';
 
 typedef CollectionTag = ({int userId, bool ofAnime});
 
@@ -423,6 +423,8 @@ class Entry {
   Entry._({
     required this.mediaId,
     required this.titles,
+    required this.ruTitle,
+    required this.ruLastEpisode,
     required this.imageUrl,
     required this.format,
     required this.releaseStatus,
@@ -448,6 +450,7 @@ class Entry {
 
   factory Entry(Map<String, dynamic> map, ImageQuality imageQuality) {
     final titles = <String>[map['media']['title']['userPreferred']];
+    String ruTitle = '';
     if (map['media']['title']['english'] != null) {
       titles.add(map['media']['title']['english']);
     }
@@ -457,15 +460,24 @@ class Entry {
     if (map['media']['title']['native'] != null) {
       titles.add(map['media']['title']['native']);
     }
+    if (map['media']['title']['russian'] != null) {
+      ruTitle = map['media']['title']['russian'].toString();
+    }
 
     final tagIds = <int>[];
     for (final t in map['media']['tags']) {
       tagIds.add(t['id']);
     }
 
+    final int? ruLastEpisode = map['media']?['anilibriaLastEpisode'] is int
+        ? map['media']['anilibriaLastEpisode'] as int
+        : null;
+
     return Entry._(
       mediaId: map['media']['id'],
       titles: titles,
+      ruTitle: ruTitle,
+      ruLastEpisode: ruLastEpisode,
       imageUrl: map['media']['coverImage'][imageQuality.value],
       format: MediaFormat.from(map['media']['format']),
       releaseStatus: ReleaseStatus.from(map['media']['status']),
@@ -494,6 +506,8 @@ class Entry {
 
   final int mediaId;
   final List<String> titles;
+  final String? ruTitle;
+  final int? ruLastEpisode;
   final String imageUrl;
   final MediaFormat? format;
   final ReleaseStatus? releaseStatus;

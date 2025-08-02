@@ -31,7 +31,7 @@ class TextRail extends StatelessWidget {
               text: items.keys.elementAt(i),
               style: items.values.elementAt(i) ? highlightStyle : null,
             ),
-            spacing,
+            if (!items.keys.elementAt(i).contains('\n')) spacing,
           ],
           TextSpan(
             text: items.keys.last,

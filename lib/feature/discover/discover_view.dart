@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/character/character_item_grid.dart';
-import 'package:otraku/feature/discover/discover_filter_provider.dart';
-import 'package:otraku/feature/discover/discover_media_grid.dart';
-import 'package:otraku/feature/discover/discover_media_simple_grid.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/feature/discover/discover_provider.dart';
-import 'package:otraku/feature/discover/discover_recommendations_grid.dart';
-import 'package:otraku/feature/staff/staff_item_grid.dart';
-import 'package:otraku/feature/studio/studio_item_grid.dart';
-import 'package:otraku/feature/user/user_item_grid.dart';
-import 'package:otraku/feature/review/review_grid.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/input/pill_selector.dart';
-import 'package:otraku/widget/paged_view.dart';
+import 'package:animeshin/feature/character/character_item_grid.dart';
+import 'package:animeshin/feature/discover/discover_filter_provider.dart';
+import 'package:animeshin/feature/discover/discover_media_grid.dart';
+import 'package:animeshin/feature/discover/discover_media_simple_grid.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/discover/discover_provider.dart';
+import 'package:animeshin/feature/discover/discover_recommendations_grid.dart';
+import 'package:animeshin/feature/staff/staff_item_grid.dart';
+import 'package:animeshin/feature/studio/studio_item_grid.dart';
+import 'package:animeshin/feature/user/user_item_grid.dart';
+import 'package:animeshin/feature/review/review_grid.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/input/pill_selector.dart';
+import 'package:animeshin/widget/paged_view.dart';
 
 class DiscoverSubview extends StatelessWidget {
   const DiscoverSubview(this.scrollCtrl, this.formFactor);

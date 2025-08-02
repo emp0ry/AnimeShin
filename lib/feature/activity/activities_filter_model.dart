@@ -1,4 +1,4 @@
-import 'package:otraku/extension/enum_extension.dart';
+import 'package:animeshin/extension/enum_extension.dart';
 
 sealed class ActivitiesFilter {
   const ActivitiesFilter(this.typeIn);

@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
-import 'package:otraku/feature/forum/thread_item_list.dart';
-import 'package:otraku/feature/media/media_provider.dart';
-import 'package:otraku/widget/paged_view.dart';
+import 'package:animeshin/feature/forum/thread_item_list.dart';
+import 'package:animeshin/feature/media/media_provider.dart';
+import 'package:animeshin/widget/paged_view.dart';
 
 class MediaThreadsSubview extends StatelessWidget {
   const MediaThreadsSubview({

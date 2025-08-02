@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:otraku/feature/forum/forum_model.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/text_rail.dart';
-import 'package:otraku/widget/timestamp.dart';
+import 'package:animeshin/feature/forum/forum_model.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/text_rail.dart';
+import 'package:animeshin/widget/timestamp.dart';
 
 class ThreadItemList extends StatelessWidget {
   const ThreadItemList(this.items, this.analogClock);

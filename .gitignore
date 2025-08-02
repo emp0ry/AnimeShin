@@ -1,48 +1,98 @@
-# Miscellaneous
+# =====================
+# Miscellaneous (general for any project)
+# =====================
 *.class
 *.log
 *.pyc
 *.swp
 .DS_Store
 .atom/
-.build/
-.buildlog/
 .history
 .svn/
-.swiftpm/
 migrate_working_dir/
+*.tmp
+*.bak
 
-# IntelliJ related
+# =====================
+# IDE/Editor Files
+# =====================
 *.iml
 *.ipr
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code
+.vscode/*
+!.vscode/launch.json
 
+
+# Android Studio
+*.jks
+
+# =====================
 # Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# =====================
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.pub-cache/
+.packages
 .pub/
-/build/
-
-# Web related
+.pub-cache/
+build/
+buildlog/
+**/doc/api/
+**/ios/Flutter/.last_build_id
 lib/generated_plugin_registrant.dart
 
-# Symbolication related
-app.*.symbols
+# iOS/Android generated
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+macos/Flutter/Flutter-Debug.xcconfig
+macos/Flutter/Flutter-Release.xcconfig
+macos/Flutter/Flutter-Profile.xcconfig
+macos/Flutter/GeneratedPluginRegistrant.swift
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+web/.dart_tool/
 
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
+# Android Studio build artifacts
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# =====================
+# Web related
+# =====================
+lib/generated_plugin_registrant.dart
+
+# =====================
+# Symbolication & Obfuscation
+# =====================
+app.*.symbols
+app.*.map.json
+
+# =====================
+# Secret keys (DO NOT ADD TO GIT!)
+# =====================
+.env
+.env.*
+secrets.dart
+lib/secrets.dart
+android/key.properties
+
+# =====================
+# Binaries / Release builds
+# =====================
+*.apk
+*.ipa
+*.aab
+*.app
+
+# =====================
+# Others
+# =====================
+/buildlog/
+/.build/
+.swiftpm/

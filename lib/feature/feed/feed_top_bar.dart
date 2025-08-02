@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/feature/activity/activity_filter_sheet.dart';
-import 'package:otraku/feature/settings/settings_provider.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/routes.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/feature/activity/activity_filter_sheet.dart';
+import 'package:animeshin/feature/settings/settings_provider.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/routes.dart';
 
 class FeedTopBarTrailingContent extends StatelessWidget {
   const FeedTopBarTrailingContent();

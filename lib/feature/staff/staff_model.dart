@@ -1,9 +1,9 @@
-import 'package:otraku/extension/string_extension.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/util/paged.dart';
-import 'package:otraku/util/markdown.dart';
-import 'package:otraku/feature/settings/settings_model.dart';
-import 'package:otraku/util/tile_modelable.dart';
+import 'package:animeshin/extension/string_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/util/paged.dart';
+import 'package:animeshin/util/markdown.dart';
+import 'package:animeshin/feature/settings/settings_model.dart';
+import 'package:animeshin/util/tile_modelable.dart';
 
 class Staff {
   Staff._({

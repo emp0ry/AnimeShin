@@ -1,5 +1,5 @@
-import 'package:otraku/extension/string_extension.dart';
-import 'package:otraku/feature/media/media_models.dart';
+import 'package:animeshin/extension/string_extension.dart';
+import 'package:animeshin/feature/media/media_models.dart';
 
 class Statistics {
   Statistics._({

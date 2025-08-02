@@ -1,4 +1,4 @@
-import 'package:otraku/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
 
 class MediaItem {
   const MediaItem._({

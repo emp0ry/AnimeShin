@@ -1,14 +1,14 @@
 import 'package:flutter/widgets.dart';
-import 'package:otraku/extension/color_extension.dart';
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/extension/iterable_extension.dart';
-import 'package:otraku/extension/string_extension.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/util/paged.dart';
-import 'package:otraku/feature/edit/edit_model.dart';
-import 'package:otraku/feature/tag/tag_model.dart';
-import 'package:otraku/util/tile_modelable.dart';
+import 'package:animeshin/extension/color_extension.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
+import 'package:animeshin/extension/string_extension.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/util/paged.dart';
+import 'package:animeshin/feature/edit/edit_model.dart';
+import 'package:animeshin/feature/tag/tag_model.dart';
+import 'package:animeshin/util/tile_modelable.dart';
 
 class Media {
   Media(this.entryEdit, this.info, this.stats, this.related);

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/util/theming.dart';
 
 /// Two panes side by side, the left with capped width.
 /// There's a tab bar over the right one.

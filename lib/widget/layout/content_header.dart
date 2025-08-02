@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/extension/build_context_extension.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/extension/build_context_extension.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/dialogs.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 class CustomContentHeader extends StatelessWidget {
   const CustomContentHeader({

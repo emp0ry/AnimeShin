@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/collection/collection_filter_model.dart';
-import 'package:otraku/feature/collection/collection_filter_provider.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/collection/collection_provider.dart';
-import 'package:otraku/feature/tag/tag_model.dart';
-import 'package:otraku/feature/tag/tag_provider.dart';
+import 'package:animeshin/feature/collection/collection_filter_model.dart';
+import 'package:animeshin/feature/collection/collection_filter_provider.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/collection/collection_provider.dart';
+import 'package:animeshin/feature/tag/tag_model.dart';
+import 'package:animeshin/feature/tag/tag_provider.dart';
 
 final collectionEntriesProvider =
     Provider.autoDispose.family<List<Entry>, CollectionTag>(

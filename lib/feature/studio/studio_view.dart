@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/feature/media/media_route_tile.dart';
-import 'package:otraku/feature/studio/studio_floating_actions.dart';
-import 'package:otraku/feature/studio/studio_header.dart';
-import 'package:otraku/feature/studio/studio_model.dart';
-import 'package:otraku/feature/studio/studio_provider.dart';
-import 'package:otraku/util/paged_controller.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/grid/sliver_grid_delegates.dart';
-import 'package:otraku/widget/layout/adaptive_scaffold.dart';
-import 'package:otraku/widget/layout/constrained_view.dart';
-import 'package:otraku/widget/layout/hiding_floating_action_button.dart';
-import 'package:otraku/widget/loaders.dart';
-import 'package:otraku/widget/text_rail.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/feature/media/media_route_tile.dart';
+import 'package:animeshin/feature/studio/studio_floating_actions.dart';
+import 'package:animeshin/feature/studio/studio_header.dart';
+import 'package:animeshin/feature/studio/studio_model.dart';
+import 'package:animeshin/feature/studio/studio_provider.dart';
+import 'package:animeshin/util/paged_controller.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
+import 'package:animeshin/widget/layout/adaptive_scaffold.dart';
+import 'package:animeshin/widget/layout/constrained_view.dart';
+import 'package:animeshin/widget/layout/hiding_floating_action_button.dart';
+import 'package:animeshin/widget/loaders.dart';
+import 'package:animeshin/widget/text_rail.dart';
 
 class StudioView extends ConsumerStatefulWidget {
   const StudioView(this.id, this.name);

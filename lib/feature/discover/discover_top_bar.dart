@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/feature/discover/discover_filter_provider.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/feature/discover/discover_media_filter_view.dart';
-import 'package:otraku/feature/discover/discover_recommendations_filter_sheet.dart';
-import 'package:otraku/feature/review/reviews_filter_sheet.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/util/debounce.dart';
-import 'package:otraku/widget/input/search_field.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/feature/discover/discover_filter_provider.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/discover/discover_media_filter_view.dart';
+import 'package:animeshin/feature/discover/discover_recommendations_filter_sheet.dart';
+import 'package:animeshin/feature/review/reviews_filter_sheet.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/util/debounce.dart';
+import 'package:animeshin/widget/input/search_field.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 class DiscoverTopBarTrailingContent extends StatelessWidget {
   const DiscoverTopBarTrailingContent(this.focusNode);

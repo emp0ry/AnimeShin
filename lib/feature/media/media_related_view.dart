@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/feature/media/media_route_tile.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/grid/sliver_grid_delegates.dart';
-import 'package:otraku/widget/layout/constrained_view.dart';
-import 'package:otraku/widget/loaders.dart';
-import 'package:otraku/widget/text_rail.dart';
-import 'package:otraku/feature/media/media_models.dart';
+import 'package:animeshin/feature/media/media_route_tile.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
+import 'package:animeshin/widget/layout/constrained_view.dart';
+import 'package:animeshin/widget/loaders.dart';
+import 'package:animeshin/widget/text_rail.dart';
+import 'package:animeshin/feature/media/media_models.dart';
 
 class MediaRelatedSubview extends StatelessWidget {
   const MediaRelatedSubview({

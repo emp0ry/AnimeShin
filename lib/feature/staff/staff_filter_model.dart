@@ -1,4 +1,4 @@
-import 'package:otraku/feature/media/media_models.dart';
+import 'package:animeshin/feature/media/media_models.dart';
 
 class StaffFilter {
   StaffFilter({

@@ -1,19 +1,19 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/feature/media/media_route_tile.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/util/debounce.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/edit/edit_view.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/widget/input/note_label.dart';
-import 'package:otraku/widget/input/score_label.dart';
-import 'package:otraku/widget/sheets.dart';
-import 'package:otraku/widget/text_rail.dart';
-import 'package:otraku/feature/media/media_models.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/feature/media/media_route_tile.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/util/debounce.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/input/note_label.dart';
+import 'package:animeshin/widget/input/score_label.dart';
+import 'package:animeshin/widget/text_rail.dart';
+import 'package:animeshin/feature/media/media_models.dart';
 
 const _tileHeight = 140.0;
 
@@ -35,10 +35,14 @@ class CollectionList extends StatelessWidget {
         (_, i) => _Tile(items[i], scoreFormat, onProgressUpdated),
         childCount: items.length,
       ),
-      // The added pixels are for the bottom margin.
       itemExtent: _tileHeight + Theming.offset,
     );
   }
+}
+
+bool isDesktop() {
+  if (kIsWeb) return true;
+  return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 }
 
 class _Tile extends StatelessWidget {
@@ -50,43 +54,240 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: Theming.offset),
-      child: MediaRouteTile(
-        key: ValueKey(entry.mediaId),
-        id: entry.mediaId,
-        imageUrl: entry.imageUrl,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    if (isDesktop()) {
+      // Desktop — show + and - buttons
+      return Card(
+        margin: const EdgeInsets.only(bottom: Theming.offset),
+        child: MediaRouteTile(
+          key: ValueKey(entry.mediaId),
+          id: entry.mediaId,
+          imageUrl: entry.imageUrl,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Hero(
+                tag: entry.mediaId,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.horizontal(
+                    left: Theming.radiusSmall,
+                  ),
+                  child: Container(
+                    width: _tileHeight / Theming.coverHtoWRatio,
+                    color: ColorScheme.of(context).surfaceContainerHighest,
+                    child: CachedImage(entry.imageUrl),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: Theming.paddingAll,
+                  child: _TileContent(entry, scoreFormat, onProgressUpdated),
+                ),
+              ),
+              // Buttons on the right
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove, color: Colors.red),
+                    onPressed: entry.progress > 0
+                        ? () {
+                            entry.progress--;
+                            onProgressUpdated?.call(entry, false);
+                          }
+                        : null,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add, color: Colors.green),
+                    onPressed: (entry.progressMax == null || entry.progress < entry.progressMax!)
+                        ? () {
+                            entry.progress++;
+                            onProgressUpdated?.call(entry, false);
+                          }
+                        : null,
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      );
+    } else {
+      return _TileMobile(entry, scoreFormat, onProgressUpdated);
+    }
+  }
+}
+
+class _TileMobile extends StatefulWidget {
+  const _TileMobile(this.entry, this.scoreFormat, this.onProgressUpdated);
+
+  final Entry entry;
+  final ScoreFormat scoreFormat;
+  final Future<String?> Function(Entry, bool)? onProgressUpdated;
+
+  @override
+  State<_TileMobile> createState() => _TileMobileState();
+}
+
+class _TileMobileState extends State<_TileMobile> with SingleTickerProviderStateMixin {
+  late final SlidableController _slidableController;
+  bool _leftActionTriggered = false;
+  bool _rightActionTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _slidableController = SlidableController(this);
+
+    _slidableController.animation.addListener(() {
+      final ratio = _slidableController.ratio;
+      if (ratio <= -0.25 && !_leftActionTriggered) {
+        _leftActionTriggered = true;
+        if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
+          widget.entry.progress++;
+          widget.onProgressUpdated!(widget.entry, false);
+          setState(() {});
+        }
+        _slidableController.close();
+        Future.delayed(const Duration(milliseconds: 350), () {
+          _leftActionTriggered = false;
+        });
+      }
+      if (ratio >= 0.25 && !_rightActionTriggered) {
+        _rightActionTriggered = true;
+        if (widget.onProgressUpdated != null &&
+            (widget.entry.progressMax == null ||
+                widget.entry.progress < widget.entry.progressMax!)) {
+          widget.entry.progress--;
+          widget.onProgressUpdated!(widget.entry, false);
+          setState(() {});
+        }
+        _slidableController.close();
+        Future.delayed(const Duration(milliseconds: 350), () {
+          _rightActionTriggered = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _slidableController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Theming.offset),
+      child: Slidable(
+        key: ValueKey(widget.entry.mediaId),
+        controller: _slidableController,
+        startActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: 0.25,
           children: [
-            Hero(
-              tag: entry.mediaId,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.horizontal(
-                  left: Theming.radiusSmall,
-                ),
-                child: Container(
-                  width: _tileHeight / Theming.coverHtoWRatio,
-                  color: ColorScheme.of(context).surfaceContainerHighest,
-                  child: CachedImage(entry.imageUrl),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: Theming.paddingAll,
-                child: _TileContent(entry, scoreFormat, onProgressUpdated),
-              ),
+            CustomSlidableAction(
+              onPressed: (_) {
+                if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
+                  setState(() => widget.entry.progress--);
+                  widget.onProgressUpdated!(widget.entry, false);
+                }
+              },
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              borderRadius: Theming.borderRadiusSmall,
+              child: const Icon(Icons.remove),
             ),
           ],
+        ),
+        endActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: 0.25,
+          children: [
+            CustomSlidableAction(
+              onPressed: (_) {
+                if (widget.onProgressUpdated != null &&
+                    (widget.entry.progressMax == null ||
+                        widget.entry.progress < widget.entry.progressMax!)) {
+                  setState(() => widget.entry.progress++);
+                  widget.onProgressUpdated!(widget.entry, false);
+                }
+              },
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              borderRadius: Theming.borderRadiusSmall,
+              child: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        child: SizedBox(
+          height: _tileHeight, // <--- высота фиксирована
+          child: Card(
+            margin: EdgeInsets.zero, // <--- убираем внутренний отступ
+            child: MediaRouteTile(
+              key: ValueKey(widget.entry.mediaId),
+              id: widget.entry.mediaId,
+              imageUrl: widget.entry.imageUrl,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Hero(
+                    tag: widget.entry.mediaId,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.horizontal(
+                        left: Theming.radiusSmall,
+                      ),
+                      child: Container(
+                        width: _tileHeight / Theming.coverHtoWRatio,
+                        color: ColorScheme.of(context).surfaceContainerHighest,
+                        child: CachedImage(widget.entry.imageUrl),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: Theming.paddingAll,
+                      child: _TileContent(
+                          widget.entry, widget.scoreFormat, widget.onProgressUpdated),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// The content is a [StatefulWidget], as it
-/// needs to update when the progress increments.
+class _SwipeActionBackground extends StatelessWidget {
+  const _SwipeActionBackground({
+    required this.color,
+    required this.icon,
+    required this.alignment,
+  });
+
+  final Color color;
+  final IconData icon;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: color,
+      alignment: alignment,
+      child: Padding(
+        padding: alignment == Alignment.centerLeft
+            ? const EdgeInsets.only(left: 32)
+            : const EdgeInsets.only(right: 32),
+        child: Icon(icon, color: Colors.white, size: 28),
+      ),
+    );
+  }
+}
+
 class _TileContent extends StatefulWidget {
   const _TileContent(this.item, this.scoreFormat, this.onProgressUpdated);
 
@@ -116,20 +317,27 @@ class __TileContentState extends State<_TileContent> {
     }
 
     final textRailItems = <String, bool>{};
+
+    if (widget.item.ruTitle != null) {
+      textRailItems['${widget.item.ruTitle}\n'] = false;
+    }
+
     if (widget.item.format != null) {
       textRailItems[widget.item.format!.label] = false;
     }
 
     if (widget.item.airingAt != null) {
-      final key =
-          'Ep ${widget.item.nextEpisode} in ${widget.item.airingAt!.timeUntil}';
+      final key = 'Ep ${widget.item.nextEpisode} in ${widget.item.airingAt!.timeUntil}';
       textRailItems[key] = false;
     }
 
-    if (widget.item.nextEpisode != null &&
-        widget.item.nextEpisode! - 1 > widget.item.progress) {
-      final key =
-          '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
+    if (widget.item.nextEpisode != null && widget.item.nextEpisode! - 1 > widget.item.progress) {
+      String key;
+      if (widget.item.ruLastEpisode != null && widget.item.ruLastEpisode! > widget.item.progress) {
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AniLiberty)';
+      } else {
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AniLiberty)';
+      }
       textRailItems[key] = true;
     }
 
@@ -191,102 +399,20 @@ class __TileContentState extends State<_TileContent> {
             else
               const SizedBox(),
             NotesLabel(item.notes),
-            _buildProgressButton(context),
+            Text(
+              widget.item.progress == widget.item.progressMax
+                  ? widget.item.progress.toString()
+                  : '${widget.item.progress}/${widget.item.progressMax ?? "?"}',
+              style: TextTheme.of(context).labelSmall?.copyWith(
+                color: (widget.item.nextEpisode != null &&
+                        widget.item.progress + 1 < widget.item.nextEpisode!)
+                    ? ColorScheme.of(context).error
+                    : ColorScheme.of(context).onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ],
     );
-  }
-
-  Widget _buildProgressButton(BuildContext context) {
-    final item = widget.item;
-    final foregroundColor =
-        item.nextEpisode != null && item.progress + 1 < item.nextEpisode!
-            ? ColorScheme.of(context).error
-            : ColorScheme.of(context).onSurfaceVariant;
-
-    final text = Text(
-      item.progress == item.progressMax
-          ? item.progress.toString()
-          : '${item.progress}/${item.progressMax ?? "?"}',
-      style: TextTheme.of(context).labelSmall?.copyWith(color: foregroundColor),
-    );
-
-    if (widget.onProgressUpdated == null || item.progress == item.progressMax) {
-      return Tooltip(message: 'Progress', child: text);
-    }
-
-    return TextButton(
-      style: TextButton.styleFrom(
-        minimumSize: const Size(0, 40),
-        padding: const EdgeInsets.only(left: 5),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        foregroundColor: foregroundColor,
-        iconColor: foregroundColor,
-      ),
-      onPressed: () {
-        _debounce.cancel();
-
-        if (item.progressMax != null &&
-            item.progress >= item.progressMax! - 1) {
-          _resetProgress();
-
-          showSheet(context, EditView((id: item.mediaId, setComplete: true)));
-          return;
-        }
-
-        _lastProgress ??= item.progress;
-        setState(() => item.progress++);
-
-        _debounce.run(_update);
-      },
-      child: Tooltip(
-        message: 'Increment Progress',
-        child: Row(
-          children: [
-            text,
-            const SizedBox(width: 3),
-            const Icon(Ionicons.add_outline, size: Theming.iconSmall),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _update() async {
-    final item = widget.item;
-    var updateStatus = false;
-
-    if (_lastProgress == 0 &&
-        (item.listStatus == ListStatus.planning ||
-            item.listStatus == ListStatus.paused ||
-            item.listStatus == ListStatus.dropped)) {
-      await ConfirmationDialog.show(
-        context,
-        title: 'Update status?',
-        content: 'Do you also want to update the list status?',
-        primaryAction: 'Yes',
-        secondaryAction: 'No',
-        onConfirm: () => updateStatus = true,
-      );
-    }
-
-    final err = await widget.onProgressUpdated!(item, updateStatus);
-    if (err == null) {
-      _lastProgress = null;
-      return;
-    }
-
-    _resetProgress();
-    if (mounted) {
-      SnackBarExtension.show(context, 'Failed updating progress: $err');
-    }
-  }
-
-  void _resetProgress() {
-    if (_lastProgress == null) return;
-
-    setState(() => widget.item.progress = _lastProgress!);
-    _lastProgress = null;
   }
 }

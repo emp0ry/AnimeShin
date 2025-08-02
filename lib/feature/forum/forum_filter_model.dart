@@ -1,4 +1,4 @@
-import 'package:otraku/extension/iterable_extension.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
 
 class ForumFilter {
   const ForumFilter({

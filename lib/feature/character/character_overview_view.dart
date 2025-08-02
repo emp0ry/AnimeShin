@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/character/character_model.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/table_list.dart';
-import 'package:otraku/widget/html_content.dart';
-import 'package:otraku/widget/loaders.dart';
+import 'package:animeshin/feature/character/character_model.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/table_list.dart';
+import 'package:animeshin/widget/html_content.dart';
+import 'package:animeshin/widget/loaders.dart';
 
 class CharacterOverviewSubview extends StatelessWidget {
   const CharacterOverviewSubview.asFragment({

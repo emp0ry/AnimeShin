@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/widget/layout/constrained_view.dart';
-import 'package:otraku/feature/review/review_header.dart';
-import 'package:otraku/feature/review/review_models.dart';
-import 'package:otraku/feature/review/review_provider.dart';
-import 'package:otraku/widget/html_content.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/widget/layout/constrained_view.dart';
+import 'package:animeshin/feature/review/review_header.dart';
+import 'package:animeshin/feature/review/review_models.dart';
+import 'package:animeshin/feature/review/review_provider.dart';
+import 'package:animeshin/widget/html_content.dart';
 
 class ReviewView extends StatelessWidget {
   const ReviewView(this.id, this.bannerUrl);

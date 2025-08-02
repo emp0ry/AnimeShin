@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/activity/activities_provider.dart';
-import 'package:otraku/feature/composition/composition_model.dart';
-import 'package:otraku/feature/composition/composition_view.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/feature/activity/activities_provider.dart';
+import 'package:animeshin/feature/composition/composition_model.dart';
+import 'package:animeshin/feature/composition/composition_view.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 class FeedFloatingAction extends StatelessWidget {
   const FeedFloatingAction(this.ref) : super(key: const Key('newPost'));

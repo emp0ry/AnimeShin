@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/feature/media/media_provider.dart';
-import 'package:otraku/feature/tag/tag_model.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/html_content.dart';
-import 'package:otraku/widget/loaders.dart';
-import 'package:otraku/widget/table_list.dart';
-import 'package:otraku/feature/discover/discover_filter_provider.dart';
-import 'package:otraku/feature/home/home_model.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/media/media_provider.dart';
+import 'package:animeshin/feature/tag/tag_model.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/html_content.dart';
+import 'package:animeshin/widget/loaders.dart';
+import 'package:animeshin/widget/table_list.dart';
+import 'package:animeshin/feature/discover/discover_filter_provider.dart';
+import 'package:animeshin/feature/home/home_model.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/widget/dialogs.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
 
 class MediaOverviewSubview extends StatelessWidget {
   const MediaOverviewSubview.asFragment({

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/input/stateful_tiles.dart';
-import 'package:otraku/feature/discover/discover_model.dart';
-import 'package:otraku/widget/input/chip_selector.dart';
-import 'package:otraku/feature/home/home_model.dart';
-import 'package:otraku/feature/settings/theme_preview.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/input/stateful_tiles.dart';
+import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/widget/input/chip_selector.dart';
+import 'package:animeshin/feature/home/home_model.dart';
+import 'package:animeshin/feature/settings/theme_preview.dart';
 
 class SettingsAppSubview extends ConsumerWidget {
   const SettingsAppSubview(this.scrollCtrl);

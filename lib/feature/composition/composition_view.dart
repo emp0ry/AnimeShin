@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/util/markdown.dart';
-import 'package:otraku/feature/composition/composition_model.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/html_content.dart';
-import 'package:otraku/widget/layout/navigation_tool.dart';
-import 'package:otraku/widget/loaders.dart';
-import 'package:otraku/widget/sheets.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/feature/composition/composition_provider.dart';
+import 'package:animeshin/util/markdown.dart';
+import 'package:animeshin/feature/composition/composition_model.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/html_content.dart';
+import 'package:animeshin/widget/layout/navigation_tool.dart';
+import 'package:animeshin/widget/loaders.dart';
+import 'package:animeshin/widget/sheets.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/feature/composition/composition_provider.dart';
 
 class CompositionView extends StatelessWidget {
   const CompositionView({

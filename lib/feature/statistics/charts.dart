@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/shadowed_overflow_list.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/shadowed_overflow_list.dart';
 
 class BarChart extends StatelessWidget {
   const BarChart({

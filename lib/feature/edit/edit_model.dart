@@ -1,6 +1,6 @@
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/settings/settings_model.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/settings/settings_model.dart';
 
 typedef EditTag = ({int id, bool setComplete});
 

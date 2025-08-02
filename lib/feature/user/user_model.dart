@@ -1,6 +1,6 @@
-import 'package:otraku/extension/string_extension.dart';
-import 'package:otraku/util/markdown.dart';
-import 'package:otraku/feature/statistics/statistics_model.dart';
+import 'package:animeshin/extension/string_extension.dart';
+import 'package:animeshin/util/markdown.dart';
+import 'package:animeshin/feature/statistics/statistics_model.dart';
 
 class User {
   User._({

@@ -4,16 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/collection/collection_entries_provider.dart';
-import 'package:otraku/feature/collection/collection_filter_provider.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/collection/collection_provider.dart';
-import 'package:otraku/feature/collection/collection_filter_view.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/debounce.dart';
-import 'package:otraku/widget/input/search_field.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/feature/collection/collection_entries_provider.dart';
+import 'package:animeshin/feature/collection/collection_filter_provider.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/collection/collection_provider.dart';
+import 'package:animeshin/feature/collection/collection_filter_view.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/debounce.dart';
+import 'package:animeshin/widget/input/search_field.dart';
+import 'package:animeshin/widget/dialogs.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 class CollectionTopBarTrailingContent extends StatelessWidget {
   const CollectionTopBarTrailingContent(this.tag, this.focusNode);

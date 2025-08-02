@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:otraku/feature/studio/studio_item_model.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/grid/sliver_grid_delegates.dart';
+import 'package:animeshin/feature/studio/studio_item_model.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
 
 class StudioItemGrid extends StatelessWidget {
   const StudioItemGrid(this.items);

@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/background_handler.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/background_handler.dart';
+import 'package:animeshin/util/theming.dart';
 
 Future<void> main() async {
   final container = ProviderContainer();
@@ -145,7 +145,7 @@ class AppState extends ConsumerState<_App> {
 
         return MaterialApp.router(
           debugShowCheckedModeBanner: false,
-          title: 'Otraku',
+          title: 'AnimeShin',
           theme: Theming.generateThemeData(lightScheme),
           darkTheme: Theming.generateThemeData(darkScheme),
           themeMode: options.themeMode,

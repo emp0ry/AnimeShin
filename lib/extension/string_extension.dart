@@ -1,4 +1,4 @@
-import 'package:otraku/extension/date_time_extension.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
 
 extension StringExtension on String {
   static String? languageToCode(String? language) => switch (language) {

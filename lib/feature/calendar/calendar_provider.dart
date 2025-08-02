@@ -1,14 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/paged.dart';
-import 'package:otraku/util/graphql.dart';
-import 'package:otraku/feature/calendar/calendar_filter_provider.dart';
-import 'package:otraku/feature/calendar/calendar_models.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/paged.dart';
+import 'package:animeshin/util/graphql.dart';
+import 'package:animeshin/feature/calendar/calendar_filter_provider.dart';
+import 'package:animeshin/feature/calendar/calendar_models.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
 
 final calendarProvider =
     AsyncNotifierProvider.autoDispose<CalendarNotifier, Paged<CalendarItem>>(

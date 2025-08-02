@@ -14,44 +14,45 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.otraku.app"
+    namespace = "com.emp0ry.animeshin"
     compileSdk = flutter.compileSdkVersion
 
     ndkVersion = "27.2.12479018"
     // ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
 
         // Desugaring is required by flutter_local_notifications.
         isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
-        applicationId = "com.otraku.app"
+        applicationId = "com.emp0ry.animeshin"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file(rootDir.canonicalPath + "/" + keystoreProperties["releaseKeyStore"])
-            storePassword = keystoreProperties["releaseStorePassword"] as String
-            keyPassword = keystoreProperties["releaseKeyPassword"] as String
-            keyAlias = keystoreProperties["releaseKeyAlias"] as String
-        }
-    }
+    // signingConfigs {
+    //     create("release") {
+    //         storeFile = file(rootDir.canonicalPath + "/" + keystoreProperties["releaseKeyStore"])
+    //         storePassword = keystoreProperties["releaseStorePassword"] as String
+    //         keyPassword = keystoreProperties["releaseKeyPassword"] as String
+    //         keyAlias = keystoreProperties["releaseKeyAlias"] as String
+    //     }
+    // }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
+            // signingConfig = signingConfigs.getByName("release")
         }
     }
 

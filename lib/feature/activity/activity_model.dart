@@ -1,8 +1,8 @@
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/extension/string_extension.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/util/paged.dart';
-import 'package:otraku/util/markdown.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/extension/string_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/util/paged.dart';
+import 'package:animeshin/util/markdown.dart';
 
 class ExpandedActivity {
   ExpandedActivity(this.activity, this.replies);

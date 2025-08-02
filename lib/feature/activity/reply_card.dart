@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/activity/activity_model.dart';
-import 'package:otraku/feature/activity/activity_provider.dart';
-import 'package:otraku/feature/composition/composition_model.dart';
-import 'package:otraku/feature/composition/composition_view.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/extension/snack_bar_extension.dart';
-import 'package:otraku/widget/cached_image.dart';
-import 'package:otraku/widget/html_content.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/widget/sheets.dart';
-import 'package:otraku/widget/timestamp.dart';
+import 'package:animeshin/feature/activity/activity_model.dart';
+import 'package:animeshin/feature/activity/activity_provider.dart';
+import 'package:animeshin/feature/composition/composition_model.dart';
+import 'package:animeshin/feature/composition/composition_view.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/widget/html_content.dart';
+import 'package:animeshin/widget/dialogs.dart';
+import 'package:animeshin/widget/sheets.dart';
+import 'package:animeshin/widget/timestamp.dart';
 
 class ReplyCard extends StatelessWidget {
   const ReplyCard({

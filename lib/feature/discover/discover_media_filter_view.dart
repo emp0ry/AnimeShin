@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/discover/discover_filter_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/widget/dialogs.dart';
-import 'package:otraku/widget/input/chip_selector.dart';
-import 'package:otraku/feature/tag/tag_picker.dart';
-import 'package:otraku/widget/input/year_range_picker.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/tag/tag_provider.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/layout/navigation_tool.dart';
-import 'package:otraku/widget/loaders.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/feature/discover/discover_filter_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/widget/dialogs.dart';
+import 'package:animeshin/widget/input/chip_selector.dart';
+import 'package:animeshin/feature/tag/tag_picker.dart';
+import 'package:animeshin/widget/input/year_range_picker.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/tag/tag_provider.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/layout/navigation_tool.dart';
+import 'package:animeshin/widget/loaders.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 class DiscoverMediaFilterView extends ConsumerStatefulWidget {
   const DiscoverMediaFilterView({

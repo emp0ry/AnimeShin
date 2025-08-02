@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/input/stateful_tiles.dart';
-import 'package:otraku/widget/input/chip_selector.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/settings/settings_model.dart';
-import 'package:otraku/widget/grid/chip_grids.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/input/stateful_tiles.dart';
+import 'package:animeshin/widget/input/chip_selector.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/settings/settings_model.dart';
+import 'package:animeshin/widget/grid/chip_grids.dart';
 
 class SettingsContentSubview extends StatelessWidget {
   const SettingsContentSubview(this.scrollCtrl, this.settings);

@@ -1,6 +1,6 @@
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/extension/iterable_extension.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
 
 enum NotificationType {
   following('Follows', 'FOLLOWING'),

@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/util/theming.dart';
 
 /// Horizontally constrains [child] in the center.
 class ConstrainedView extends StatelessWidget {

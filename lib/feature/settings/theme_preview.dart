@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/viewer/persistence_model.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/widget/shadowed_overflow_list.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/feature/viewer/persistence_model.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/widget/shadowed_overflow_list.dart';
+import 'package:animeshin/util/theming.dart';
 
 class ThemePreview extends StatelessWidget {
   const ThemePreview({required this.ref, required this.options});

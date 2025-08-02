@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/util/theming.dart';
 
 /// A horizontal list with inner shadow
 /// on the left and right that indicates overflow.

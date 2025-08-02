@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/collection/collection_provider.dart';
-import 'package:otraku/feature/home/home_provider.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/input/pill_selector.dart';
-import 'package:otraku/widget/swipe_switcher.dart';
-import 'package:otraku/widget/sheets.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/collection/collection_provider.dart';
+import 'package:animeshin/feature/home/home_provider.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/input/pill_selector.dart';
+import 'package:animeshin/widget/swipe_switcher.dart';
+import 'package:animeshin/widget/sheets.dart';
 
 class CollectionFloatingAction extends StatelessWidget {
   CollectionFloatingAction(this.tag)

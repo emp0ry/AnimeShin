@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/feature/review/review_models.dart';
+import 'package:animeshin/feature/review/review_models.dart';
 
 final reviewsFilterProvider = NotifierProvider.autoDispose
     .family<ReviewsFilterNotifier, ReviewsFilter, int>(

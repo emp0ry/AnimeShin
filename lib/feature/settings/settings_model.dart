@@ -1,6 +1,6 @@
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/notification/notifications_model.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/notification/notifications_model.dart';
 
 /// Some fields are modifiable to allow for quick and simple edits.
 /// But to apply those edits, the [SettingsNotifier] should be used.

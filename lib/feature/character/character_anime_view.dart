@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:otraku/feature/character/character_model.dart';
-import 'package:otraku/util/routes.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/widget/grid/dual_relation_grid.dart';
-import 'package:otraku/widget/paged_view.dart';
-import 'package:otraku/feature/character/character_provider.dart';
-import 'package:otraku/widget/shadowed_overflow_list.dart';
+import 'package:animeshin/feature/character/character_model.dart';
+import 'package:animeshin/util/routes.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/grid/dual_relation_grid.dart';
+import 'package:animeshin/widget/paged_view.dart';
+import 'package:animeshin/feature/character/character_provider.dart';
+import 'package:animeshin/widget/shadowed_overflow_list.dart';
 
 class CharacterAnimeSubview extends StatelessWidget {
   const CharacterAnimeSubview({required this.id, required this.scrollCtrl});

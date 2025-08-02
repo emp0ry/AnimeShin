@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/util/theming.dart';
-import 'package:otraku/util/debounce.dart';
+import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/util/debounce.dart';
 
 class SearchField extends StatefulWidget {
   const SearchField({

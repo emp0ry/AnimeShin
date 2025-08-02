@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/util/theming.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/util/theming.dart';
 
 /// Score picker.
 class ScoreField extends StatefulWidget {

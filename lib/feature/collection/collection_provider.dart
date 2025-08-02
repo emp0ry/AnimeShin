@@ -1,13 +1,14 @@
 import 'dart:async';
 
+import 'package:animeshin/anilibria/anilibria_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:otraku/extension/date_time_extension.dart';
-import 'package:otraku/feature/viewer/persistence_provider.dart';
-import 'package:otraku/feature/collection/collection_models.dart';
-import 'package:otraku/feature/home/home_provider.dart';
-import 'package:otraku/feature/media/media_models.dart';
-import 'package:otraku/feature/viewer/repository_provider.dart';
-import 'package:otraku/util/graphql.dart';
+import 'package:animeshin/extension/date_time_extension.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/home/home_provider.dart';
+import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/viewer/repository_provider.dart';
+import 'package:animeshin/util/graphql.dart';
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
@@ -43,6 +44,95 @@ class CollectionNotifier
       },
     );
 
+    String toKebabCase(String input) => input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+
+    final List<String> aliases = [];
+    for (final l in data['MediaListCollection']['lists']) {
+      for (final e in l['entries']) {
+        final title = e['media']['title']['romaji'];
+        if (title != null) {
+          aliases.add(toKebabCase(title));
+        }
+      }
+    }
+
+    final anilibriaRepo = AnilibriaRepository();
+    final anilibriaData = await anilibriaRepo.fetchListByAliases(
+      aliases: aliases,
+      include: ['name', 'episodes', 'alias'],
+      exclude: [
+        'name.english',
+        'name.alternative',
+        'episodes.id',
+        'episodes.name',
+        'episodes.opening',
+        'episodes.ending',
+        'episodes.preview',
+        'episodes.hls_480',
+        'episodes.hls_720',
+        'episodes.hls_1080',
+        'episodes.duration',
+        'episodes.rutube_id',
+        'episodes.youtube_id',
+        'episodes.updated_at',
+        'episodes.sort_order',
+        'episodes.release_id',
+        'episodes.name_english'
+      ],
+    );
+
+    final dataList = anilibriaData['data'] as List<dynamic>;
+
+    print(dataList.toString());
+
+    final Map<String, dynamic> anilibriaByAlias = {};
+    for (final item in dataList) {
+      if (item['alias'] != null) {
+        anilibriaByAlias[item['alias']] = item;
+      }
+    }
+    for (final l in data['MediaListCollection']['lists']) {
+      for (final e in l['entries']) {
+        final entryAlias = toKebabCase(e['media']['title']['romaji']);
+        final aniItem = anilibriaByAlias[entryAlias];
+        if (aniItem != null) {
+          final ruTitle = aniItem['name']?['main'];
+          final episodes = aniItem['episodes'] as List<dynamic>?;
+          if (ruTitle != null) e['media']['title']['russian'] = ruTitle;
+          if (episodes != null && episodes.isNotEmpty) {
+            e['media']['anilibriaLastEpisode'] = episodes.last['ordinal'];
+          }
+        }
+      }
+    }
+
+    // final Map<String, dynamic> anilibriaByAlias = {};
+    // for (final item in (anilibriaData['data'] as List)) {
+    //   if (item['alias'] != null) {
+    //     anilibriaByAlias[item['alias']] = item;
+    //   }
+    // }
+
+    // for (final l in data['MediaListCollection']['lists']) {
+    //   for (final e in l['entries']) {
+    //     final alias = toKebabCase(e['media']['title']['romaji']);
+    //     final aniItem = anilibriaByAlias[alias];
+    //     if (aniItem != null) {
+    //       e['media']['title']['russian'] = aniItem['name']['main'];
+    //       if (aniItem['episodes'] != null &&
+    //           (aniItem['episodes'] as List).isNotEmpty) {
+    //         final episodes = aniItem['episodes'] as List;
+    //         episodes.sort((a, b) =>
+    //             (a['sort_order'] as num).compareTo(b['sort_order'] as num));
+    //         e['media']['anilibriaLastEpisode'] = episodes.last['sort_order'];
+    //       }
+    //     }
+    //   }
+    // }
+
     final imageQuality = ref.read(persistenceProvider).options.imageQuality;
 
     final collection = isFull
@@ -54,6 +144,7 @@ class CollectionNotifier
           )
         : PreviewCollection(data['MediaListCollection'], imageQuality);
     collection.sort(_sort);
+
     return collection;
   }
 
