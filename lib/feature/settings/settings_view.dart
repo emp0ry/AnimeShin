@@ -139,7 +139,7 @@ class _SettingsViewState extends ConsumerState<SettingsView>
       ),
       child: TabBarView(
         controller: _tabCtrl,
-        physics: const FastTabBarViewScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         children: tabs,
       ),
     );

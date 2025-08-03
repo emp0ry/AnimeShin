@@ -259,7 +259,7 @@ class _HomeViewState extends ConsumerState<HomeView>
 
     final child = TabBarView(
       controller: _tabCtrl,
-      physics: const FastTabBarViewScrollPhysics(),
+      physics: const ClampingScrollPhysics(),
       children: [
         ActivitiesSubView(null, _feedScrollCtrl),
         CollectionSubview(

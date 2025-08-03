@@ -66,7 +66,7 @@ class _StatisticsViewState extends State<StatisticsView>
               data: (data) {
                 return TabBarView(
                   controller: _tabCtrl,
-                  physics: const FastTabBarViewScrollPhysics(),
+                  physics: const ClampingScrollPhysics(),
                   children: [
                     ConstrainedView(
                       child: _StatisticsView(

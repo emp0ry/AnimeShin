@@ -99,7 +99,7 @@ class _SocialViewState extends ConsumerState<SocialView>
       ),
       child: TabBarView(
         controller: _tabCtrl,
-        physics: const FastTabBarViewScrollPhysics(),
+        physics: const ClampingScrollPhysics(),
         children: [
           PagedView(
             scrollCtrl: _scrollCtrl,

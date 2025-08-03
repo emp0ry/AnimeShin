@@ -163,7 +163,7 @@ class _FavoritesViewState extends ConsumerState<FavoritesView>
               ? const Key('editTabBarView')
               : const Key('tabBarView'),
           controller: _tabCtrl,
-          physics: const FastTabBarViewScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           children: [
             PagedView<FavoriteItem>(
               provider: favoritesProvider(widget.userId).select(

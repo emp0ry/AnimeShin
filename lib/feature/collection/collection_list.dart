@@ -39,11 +39,6 @@ class CollectionList extends StatelessWidget {
   }
 }
 
-bool isDesktop() {
-  if (kIsWeb) return true;
-  return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-}
-
 class _Tile extends StatelessWidget {
   const _Tile(this.entry, this.scoreFormat, this.onProgressUpdated);
 
@@ -53,82 +48,22 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isDesktop()) {
-      // Desktop — show + and - buttons
-      return Card(
-        margin: const EdgeInsets.only(bottom: Theming.offset),
-        child: MediaRouteTile(
-          key: ValueKey(entry.mediaId),
-          id: entry.mediaId,
-          imageUrl: entry.imageUrl,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Hero(
-                tag: entry.mediaId,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Theming.radiusSmall,
-                  ),
-                  child: Container(
-                    width: _tileHeight / Theming.coverHtoWRatio,
-                    color: ColorScheme.of(context).surfaceContainerHighest,
-                    child: CachedImage(entry.imageUrl),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: Theming.paddingAll,
-                  child: _TileContent(entry, scoreFormat, onProgressUpdated),
-                ),
-              ),
-              // Buttons on the right
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove, color: Colors.red),
-                    onPressed: entry.progress > 0
-                        ? () {
-                            entry.progress--;
-                            onProgressUpdated?.call(entry, false);
-                          }
-                        : null,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, color: Colors.green),
-                    onPressed: (entry.progressMax == null || entry.progress < entry.progressMax!)
-                        ? () {
-                            entry.progress++;
-                            onProgressUpdated?.call(entry, false);
-                          }
-                        : null,
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
-      );
-    } else {
-      return _TileMobile(entry, scoreFormat, onProgressUpdated);
-    }
+    return _TileWidget(entry, scoreFormat, onProgressUpdated);
   }
 }
 
-class _TileMobile extends StatefulWidget {
-  const _TileMobile(this.entry, this.scoreFormat, this.onProgressUpdated);
+class _TileWidget extends StatefulWidget {
+  const _TileWidget(this.entry, this.scoreFormat, this.onProgressUpdated);
 
   final Entry entry;
   final ScoreFormat scoreFormat;
   final Future<String?> Function(Entry, bool)? onProgressUpdated;
 
   @override
-  State<_TileMobile> createState() => _TileMobileState();
+  State<_TileWidget> createState() => _TileState();
 }
 
-class _TileMobileState extends State<_TileMobile> with SingleTickerProviderStateMixin {
+class _TileState extends State<_TileWidget> with SingleTickerProviderStateMixin {
   late final SlidableController _slidableController;
   bool _actionInProgress = false;
 
