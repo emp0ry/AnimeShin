@@ -86,7 +86,7 @@ class CollectionNotifier
 
     final dataList = anilibriaData['data'] as List<dynamic>;
 
-    print(dataList.toString());
+    // print(dataList.toString());
 
     final Map<String, dynamic> anilibriaByAlias = {};
     for (final item in dataList) {

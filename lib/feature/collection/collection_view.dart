@@ -132,6 +132,10 @@ class CollectionSubview extends StatelessWidget {
               data: (data) {
                 final content = Scrollbar(
                   controller: scrollCtrl,
+                  interactive: false,
+                  thumbVisibility: false,
+                  trackVisibility: false,
+                  thickness: 0.0,
                   child: ConstrainedView(
                     child: CustomScrollView(
                       physics: Theming.bouncyPhysics,

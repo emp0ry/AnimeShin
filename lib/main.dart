@@ -1,25 +1,65 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/util/background_handler.dart';
 import 'package:animeshin/util/theming.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // For Hive.initFlutter()
+
+final _notificationCtrl = StreamController<String>.broadcast();
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive (required for Hive.openBox)
+  await Hive.initFlutter();
+
+  // === Desktop window size persistence ===
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    await windowManager.ensureInitialized();
+
+    await Hive.openBox('window_settings');
+    var box = Hive.box('window_settings');
+
+    // Get saved window size or use default
+    final width = box.get('window_width', defaultValue: 1200.0);
+    final height = box.get('window_height', defaultValue: 800.0);
+
+    await windowManager.setSize(Size(width, height));
+  }
+
   final container = ProviderContainer();
   await container.read(persistenceProvider.notifier).init();
   BackgroundHandler.init(_notificationCtrl);
 
   runApp(UncontrolledProviderScope(container: container, child: const _App()));
+
+  // Listen for resize events on desktop only
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    windowManager.addListener(_WindowResizeListener());
+  }
 }
 
-final _notificationCtrl = StreamController<String>.broadcast();
+class _WindowResizeListener extends WindowListener {
+  @override
+  void onWindowResize() async {
+    // Only execute if box is open (for safety)
+    if (Hive.isBoxOpen('window_settings')) {
+      final box = Hive.box('window_settings');
+      final size = await windowManager.getSize();
+      box.put('window_width', size.width);
+      box.put('window_height', size.height);
+    }
+  }
+}
 
 class _App extends ConsumerStatefulWidget {
   const _App();

@@ -3,7 +3,7 @@ description: An unofficial AniList app integrated with AniLiberty.
 
 publish_to: 'none'
 
-version: 1.0.1
+version: 1.0.2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -23,6 +23,7 @@ dependencies:
 
   # Lightweight storage.
   hive: ^2.2.3
+  hive_flutter: ^1.1.0
 
   # Access to device storage. Used for [hive] setup.
   path_provider: ^2.1.5
@@ -58,19 +59,46 @@ dependencies:
   ionicons: ^0.2.2
 
   flutter_slidable: ^4.0.0
+  window_manager: ^0.5.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter_icons:
-  ios: true
   android: true
+  ios: true
   image_path: "assets/icons/ios.png"
-  adaptive_icon_background: "#0D161E"
+  adaptive_icon_background: "#0a0011"
   adaptive_icon_foreground: "assets/icons/android.png"
+  flavors:
+    main:
+      image_path: "assets/icons/ios.png"
+      adaptive_icon_background: "#0a0011"
+      adaptive_icon_foreground: "assets/icons/android.png"
+    dev:
+      image_path: "assets/icons/ios.png"
+      adaptive_icon_background: "#0a0011"
+      adaptive_icon_foreground: "assets/icons/android.png"
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/ios.png"
+  adaptive_icon_background: "#0a0011"
+  adaptive_icon_foreground: "assets/icons/android.png"
+  flavors:
+    main:
+      image_path: "assets/icons/ios.png"
+      adaptive_icon_background: "#0a0011"
+      adaptive_icon_foreground: "assets/icons/android.png"
+    dev:
+      image_path: "assets/icons/ios.png"
+      adaptive_icon_background: "#0a0011"
+      adaptive_icon_foreground: "assets/icons/android.png"
 
 flutter:
   uses-material-design: true
