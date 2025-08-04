@@ -1,5 +1,3 @@
-<title align="center">AnimeShin - AniList & AniLiberty Cross-Platform Client</title>
-
 <p align="center">
   <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/icons/about.png?raw=true" width="160" alt="AnimeShin Logo">
 </p>
