@@ -55,6 +55,7 @@ Future<String?> listenForToken({int port = 28371}) async {
     }
 
     final token = request.uri.queryParameters['access_token'];
+    await request.response.close();
     if (!completer.isCompleted && token != null) {
       completer.complete(token);
       await server.close();

@@ -506,8 +506,6 @@ class Entry {
 
   final int mediaId;
   final List<String> titles;
-  final String? ruTitle;
-  final int? ruLastEpisode;
   final String imageUrl;
   final MediaFormat? format;
   final ReleaseStatus? releaseStatus;
@@ -521,6 +519,8 @@ class Entry {
   final List<String> genres;
   final List<int> tagIds;
   final int? progressMax;
+  String? ruTitle;
+  int? ruLastEpisode;
   int progress;
   int repeat;
   double score;

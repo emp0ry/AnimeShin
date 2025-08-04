@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:animeshin/anilibria/anilibria_repository.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -109,30 +110,6 @@ class CollectionNotifier
       }
     }
 
-    // final Map<String, dynamic> anilibriaByAlias = {};
-    // for (final item in (anilibriaData['data'] as List)) {
-    //   if (item['alias'] != null) {
-    //     anilibriaByAlias[item['alias']] = item;
-    //   }
-    // }
-
-    // for (final l in data['MediaListCollection']['lists']) {
-    //   for (final e in l['entries']) {
-    //     final alias = toKebabCase(e['media']['title']['romaji']);
-    //     final aniItem = anilibriaByAlias[alias];
-    //     if (aniItem != null) {
-    //       e['media']['title']['russian'] = aniItem['name']['main'];
-    //       if (aniItem['episodes'] != null &&
-    //           (aniItem['episodes'] as List).isNotEmpty) {
-    //         final episodes = aniItem['episodes'] as List;
-    //         episodes.sort((a, b) =>
-    //             (a['sort_order'] as num).compareTo(b['sort_order'] as num));
-    //         e['media']['anilibriaLastEpisode'] = episodes.last['sort_order'];
-    //       }
-    //     }
-    //   }
-    // }
-
     final imageQuality = ref.read(persistenceProvider).options.imageQuality;
 
     final collection = isFull
@@ -192,10 +169,26 @@ class CollectionNotifier
       );
       data = data['MediaList'];
 
+      Entry? oldEntry;
+      final collection = state.valueOrNull;
+      if (collection is FullCollection) {
+        for (final list in collection.lists) {
+          oldEntry = list.entries.firstWhereOrNull((e) => e.mediaId == mediaId);
+          if (oldEntry != null) break;
+        }
+      } else if (collection is PreviewCollection) {
+        oldEntry = collection.list.entries.firstWhereOrNull((e) => e.mediaId == mediaId);
+      }
+
       final entry = Entry(
         data,
         ref.read(persistenceProvider).options.imageQuality,
       );
+
+      if (oldEntry != null) {
+        entry.ruTitle = oldEntry.ruTitle;
+        entry.ruLastEpisode = oldEntry.ruLastEpisode;
+      }
 
       _updateState(
         (collection) => switch (collection) {
