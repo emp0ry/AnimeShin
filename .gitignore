@@ -74,12 +74,10 @@ app.*.symbols
 app.*.map.json
 
 # =====================
-# Secret keys (DO NOT ADD TO GIT!)
+# Secret keys
 # =====================
 .env
 .env.*
-secrets.dart
-lib/secrets.dart
 android/key.properties
 
 # =====================

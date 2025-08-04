@@ -17,7 +17,6 @@ import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
 import 'package:animeshin/widget/layout/adaptive_scaffold.dart';
 import 'package:animeshin/widget/layout/hiding_floating_action_button.dart';
-import 'package:animeshin/widget/layout/scroll_physics.dart';
 import 'package:animeshin/widget/layout/top_bar.dart';
 import 'package:animeshin/widget/paged_view.dart';
 import 'package:animeshin/widget/sheets.dart';

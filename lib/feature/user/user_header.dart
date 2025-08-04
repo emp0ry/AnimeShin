@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
-import 'package:animeshin/secrets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,41 +19,49 @@ import 'package:animeshin/widget/dialogs.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/widget/text_rail.dart';
 
-Future<String?> listenForCode({int port = 28371}) async {
+Future<String?> listenForToken({int port = 28371}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
   final completer = Completer<String?>();
-  server.listen((HttpRequest request) async {
-    final code = request.uri.queryParameters['code'];
-    request.response
-      ..headers.contentType = ContentType.html
-      ..write(
-          '<h3>Authorization complete!<br>You can close this window and return to the app.</h3>');
-    await request.response.close();
-    completer.complete(code);
-    await server.close();
-  });
-  return completer.future;
-}
 
-Future<String?> exchangeCodeForToken(String code) async {
-  const clientId = '29018';
-  const redirectUri = 'http://localhost:28371/callback';
-  final response = await http.post(
-    Uri.parse('https://anilist.co/api/v2/oauth/token'),
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({
-      'grant_type': 'authorization_code',
-      'client_id': clientId,
-      'client_secret': clientSecret,
-      'redirect_uri': redirectUri,
-      'code': code,
-    }),
-  );
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    return data['access_token'] as String?;
-  }
-  return null;
+  server.listen((HttpRequest request) async {
+    if (request.uri.path == '/') {
+      final htmlContent = '''
+        <!DOCTYPE html>
+        <html>
+        <body>
+        <script>
+          const params = new URLSearchParams(window.location.hash.slice(1));
+          const token = params.get('access_token');
+          if (token) {
+            fetch('http://localhost:28371/token?access_token=' + encodeURIComponent(token))
+              .then(() => {
+                document.body.innerHTML = "Success! You can close this window.";
+              })
+              .catch(() => {
+                document.body.innerHTML = "Error sending token.";
+              });
+          } else {
+            document.body.innerHTML = "Error: No token found.";
+          }
+        </script>
+        </body>
+        </html>
+      ''';
+      request.response
+        ..headers.contentType = ContentType.html
+        ..write(htmlContent);
+      await request.response.close();
+      return;
+    }
+
+    final token = request.uri.queryParameters['access_token'];
+    if (!completer.isCompleted && token != null) {
+      completer.complete(token);
+      await server.close();
+    }
+  });
+
+  return completer.future;
 }
 
 Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
@@ -175,8 +182,8 @@ class _AccountPicker extends StatefulWidget {
 
 class __AccountPickerState extends State<_AccountPicker> {
   static final _loginLink = Platform.isAndroid || Platform.isIOS
-      ? 'https://anilist.co/api/v2/oauth/authorize?client_id=29017&response_type=token' // &redirect_uri=animeshin://callback'
-      : 'https://anilist.co/api/v2/oauth/authorize?client_id=29018&response_type=code'; //&redirect_uri=http://localhost:28371/callback';
+      ? 'https://anilist.co/api/v2/oauth/authorize?client_id=29017&response_type=token'
+      : 'https://anilist.co/api/v2/oauth/authorize?client_id=29106&response_type=token';
 
   static const _imageSize = 55.0;
 
@@ -313,27 +320,22 @@ class __AccountPickerState extends State<_AccountPicker> {
   Future<void> _addAccount(WidgetRef ref, bool isAccountListEmpty) async {
     if (isAccountListEmpty) {
       if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        final futureCode = listenForCode(port: 28371);
+        final futureToken = listenForToken(port: 28371);
         await SnackBarExtension.launch(context, _loginLink);
-        final code = await futureCode;
-        if (code != null) {
-          final accessToken = await exchangeCodeForToken(code);
-          if (accessToken != null) {
-            final profile = await fetchAniListProfile(accessToken);
-            if (profile != null) {
-              final now = DateTime.now();
-              final expiration = now.add(const Duration(days: 365));
-
-              final account = Account(
-                id: profile['id'],
-                name: profile['name'],
-                avatarUrl: profile['avatar']['large'],
-                expiration: expiration,
-                accessToken: accessToken,
-              );
-
-              await ref.read(persistenceProvider.notifier).addAccount(account);
-            }
+        final accessToken = await futureToken;
+        if (accessToken != null) {
+          final profile = await fetchAniListProfile(accessToken);
+          if (profile != null) {
+            final now = DateTime.now();
+            final expiration = now.add(const Duration(days: 365));
+            final account = Account(
+              id: profile['id'],
+              name: profile['name'],
+              avatarUrl: profile['avatar']['large'],
+              expiration: expiration,
+              accessToken: accessToken,
+            );
+            await ref.read(persistenceProvider.notifier).addAccount(account);
           }
         }
         return;

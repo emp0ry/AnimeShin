@@ -14,7 +14,6 @@ import 'package:animeshin/util/paged_controller.dart';
 import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/layout/adaptive_scaffold.dart';
-import 'package:animeshin/widget/layout/scroll_physics.dart';
 import 'package:animeshin/widget/layout/top_bar.dart';
 import 'package:animeshin/widget/paged_view.dart';
 

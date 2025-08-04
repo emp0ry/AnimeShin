@@ -29,7 +29,6 @@ import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/layout/adaptive_scaffold.dart';
 import 'package:animeshin/widget/layout/hiding_floating_action_button.dart';
-import 'package:animeshin/widget/layout/scroll_physics.dart';
 import 'package:animeshin/widget/layout/top_bar.dart';
 
 class HomeView extends ConsumerStatefulWidget {

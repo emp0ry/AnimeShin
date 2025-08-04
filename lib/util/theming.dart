@@ -8,6 +8,7 @@ enum FormFactor {
 }
 
 enum ThemeBase {
+  default_('Default', Color(0xFF2C2688)),
   navy('Navy', Color(0xFF45A0F2)),
   mint('Mint', Color(0xFF2AB8B8)),
   lavender('Lavender', Color(0xFFB4ABF5)),
