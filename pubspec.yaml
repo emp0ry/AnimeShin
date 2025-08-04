@@ -1,9 +1,10 @@
 name: animeshin
-description: An unofficial AniList app integrated with AniLiberty.
-
-publish_to: 'none'
 
 version: 1.0.3
+
+description: An unofficial AniList app integrated with AniLiberty.
+
+repository: https://github.com/emp0ry/animeshin
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
