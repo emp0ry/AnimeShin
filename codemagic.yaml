@@ -14,5 +14,12 @@ workflows:
         script: flutter pub get
       - name: 'Build iOS'
         script: flutter build ios --no-codesign
+      - name: Create IPA
+        script: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          cd Payload
+          zip -r ../AnimeShin.ipa .
+          cd ..
     artifacts:
-      - build/ios/iphoneos/*.app
+      - AnimeShin.ipa
