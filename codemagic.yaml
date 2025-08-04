@@ -19,8 +19,6 @@ workflows:
           VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
-          cd Payload
-          zip -r ../AnimeShin-v${VERSION}.ipa .
-          cd ..
+          zip -r "AnimeShin-v${VERSION}.ipa" Payload
     artifacts:
       - AnimeShin-v*.ipa
