@@ -49,7 +49,7 @@ class SettingsAboutSubview extends StatelessWidget {
                 ),
               ),
               const Text(
-                'An unofficial AniList app integrated with AniLiberty',
+                'Unofficial multi-platform AniList application integrated with AniLiberty.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
