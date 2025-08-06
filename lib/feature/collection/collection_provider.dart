@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:animeshin/anilibria/anilibria_repository.dart';
 import 'package:animeshin/extension/iterable_extension.dart';
+import 'package:animeshin/util/notification_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -10,8 +11,6 @@ import 'package:animeshin/feature/home/home_provider.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/feature/viewer/repository_provider.dart';
 import 'package:animeshin/util/graphql.dart';
-import 'package:animeshin/util/background_handler.dart';
-import 'package:timezone/timezone.dart' as tz;
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
@@ -132,6 +131,9 @@ class CollectionNotifier
         : PreviewCollection(data['MediaListCollection'], imageQuality);
     collection.sort(_sort);
 
+    await NotificationSystem.scheduleNotificationsForAll(collection.list.entries);
+    print(2);
+
     return collection;
   }
 
@@ -199,22 +201,6 @@ class CollectionNotifier
         entry.ruTitle = oldEntry.ruTitle;
         entry.ruLastEpisode = oldEntry.ruLastEpisode;
       }
-
-      try {
-        if ((entry.listStatus == ListStatus.current || entry.listStatus == ListStatus.planning) &&
-            entry.airingAt != null &&
-            entry.nextEpisode != null) {
-          await BackgroundHandler.scheduleEpisodeNotification(
-            // entry.airingAt!,
-            tz.TZDateTime.now(tz.local).add(const Duration(seconds: 30)),
-            entry.titles[0],
-            entry.nextEpisode!,
-            entry.imageUrl,
-          );
-        } else {
-          await BackgroundHandler.cancelEpisodeNotification(entry.titles[0], entry.nextEpisode ?? 1);
-        }
-      } catch (_) {}
 
       _updateState(
         (collection) => switch (collection) {
