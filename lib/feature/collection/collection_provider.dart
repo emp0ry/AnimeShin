@@ -11,6 +11,7 @@ import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/feature/viewer/repository_provider.dart';
 import 'package:animeshin/util/graphql.dart';
 import 'package:animeshin/util/background_handler.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
@@ -204,7 +205,8 @@ class CollectionNotifier
             entry.airingAt != null &&
             entry.nextEpisode != null) {
           await BackgroundHandler.scheduleEpisodeNotification(
-            entry.airingAt!,
+            // entry.airingAt!,
+            tz.TZDateTime.now(tz.local).add(const Duration(seconds: 30)),
             entry.titles[0],
             entry.nextEpisode!,
             entry.imageUrl,
