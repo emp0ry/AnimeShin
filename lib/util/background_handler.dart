@@ -10,6 +10,7 @@ import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/feature/notification/notifications_model.dart';
 import 'package:animeshin/util/graphql.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 final _notificationPlugin = FlutterLocalNotificationsPlugin();
 
@@ -53,23 +54,23 @@ class BackgroundHandler {
       );
     }
 
-    if (Platform.isIOS) {
-      await BackgroundHandler.requestPermissionForNotifications();
-    }
-    await _notificationPlugin.show(
-    0,
-    'Notification Test',
-    'Check if the notification arrived',
-    const NotificationDetails(
-      iOS: DarwinNotificationDetails(),
-      android: AndroidNotificationDetails(
-        'test_channel',
-        'Test Notifications',
-        channelDescription: 'Channel for test notifications',
-      ),
-    ),
-    payload: 'test_payload',
-  );
+    // if (Platform.isIOS) {
+    //   await BackgroundHandler.requestPermissionForNotifications();
+    // }
+    // await _notificationPlugin.show(
+    //   0,
+    //   'Notification Test',
+    //   'Check if the notification arrived',
+    //   const NotificationDetails(
+    //     iOS: DarwinNotificationDetails(),
+    //     android: AndroidNotificationDetails(
+    //       'test_channel',
+    //       'Test Notifications',
+    //       channelDescription: 'Channel for test notifications',
+    //     ),
+    //   ),
+    //   payload: 'test_payload',
+    // );
   }
 
   /// Requests a notifications permission, if not already granted.
@@ -96,6 +97,39 @@ class BackgroundHandler {
 
   /// Clears device notifications.
   static void clearNotifications() => _notificationPlugin.cancelAll();
+
+  static Future<void> scheduleEpisodeNotification(
+    DateTime airingAt,
+    String animeTitle,
+    int episodeNumber,
+  ) async {
+    final tzDateTime = tz.TZDateTime.from(airingAt, tz.local);
+
+    await _notificationPlugin.zonedSchedule(
+      (animeTitle + episodeNumber.toString()).hashCode, // Unique ID
+      'New episode released!',
+      '$animeTitle — Episode $episodeNumber is now available!',
+      tzDateTime,
+      const NotificationDetails(
+        iOS: DarwinNotificationDetails(),
+        android: AndroidNotificationDetails(
+          'episode_channel',
+          'Episode releases',
+          channelDescription: 'Notifications about new episode releases',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+        ),
+      ),
+      payload: '$animeTitle-$episodeNumber',
+      matchDateTimeComponents: DateTimeComponents.dateAndTime,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+  }
+
+  static Future<void> cancelEpisodeNotification(String animeTitle, int episodeNumber) async {
+    await _notificationPlugin.cancel((animeTitle + episodeNumber.toString()).hashCode);
+  }
 }
 
 @pragma('vm:entry-point')

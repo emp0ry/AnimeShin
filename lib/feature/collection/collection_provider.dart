@@ -10,6 +10,7 @@ import 'package:animeshin/feature/home/home_provider.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/feature/viewer/repository_provider.dart';
 import 'package:animeshin/util/graphql.dart';
+import 'package:animeshin/util/background_handler.dart';
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
@@ -197,6 +198,20 @@ class CollectionNotifier
         entry.ruTitle = oldEntry.ruTitle;
         entry.ruLastEpisode = oldEntry.ruLastEpisode;
       }
+
+      try {
+        if ((entry.listStatus == ListStatus.current || entry.listStatus == ListStatus.planning) &&
+            entry.airingAt != null &&
+            entry.nextEpisode != null) {
+          await BackgroundHandler.scheduleEpisodeNotification(
+            entry.airingAt!,
+            entry.titles[0],
+            entry.nextEpisode!,
+          );
+        } else {
+          await BackgroundHandler.cancelEpisodeNotification(entry.titles[0], entry.nextEpisode ?? 1);
+        }
+      } catch (_) {}
 
       _updateState(
         (collection) => switch (collection) {

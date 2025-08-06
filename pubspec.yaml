@@ -1,6 +1,6 @@
 name: animeshin
 
-version: 1.1.1
+version: 1.2.0
 
 description: Unofficial multi-platform AniList application integrated with AniLiberty.
 
@@ -51,7 +51,7 @@ dependencies:
   workmanager: ^0.9.0
 
   # Sending device notifications.
-  flutter_local_notifications: ^19.2.1
+  flutter_local_notifications: ^19.4.0
 
   # Parsing html into flutter widgets.
   flutter_widget_from_html_core: ^0.17.0
@@ -61,6 +61,7 @@ dependencies:
 
   flutter_slidable: ^4.0.0
   window_manager: ^0.5.1
+  timezone: ^0.10.1
 
 dev_dependencies:
   flutter_test:

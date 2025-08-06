@@ -13,11 +13,13 @@ import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/util/background_handler.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:hive_flutter/hive_flutter.dart'; // For Hive.initFlutter()
+import 'package:timezone/data/latest.dart' as tz;
 
 final _notificationCtrl = StreamController<String>.broadcast();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  tz.initializeTimeZones();
 
   // Initialize Hive (required for Hive.openBox)
   await Hive.initFlutter();
