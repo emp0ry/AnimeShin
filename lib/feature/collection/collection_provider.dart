@@ -207,6 +207,7 @@ class CollectionNotifier
             entry.airingAt!,
             entry.titles[0],
             entry.nextEpisode!,
+            entry.imageUrl,
           );
         } else {
           await BackgroundHandler.cancelEpisodeNotification(entry.titles[0], entry.nextEpisode ?? 1);

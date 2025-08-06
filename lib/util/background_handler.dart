@@ -9,6 +9,8 @@ import 'package:animeshin/feature/viewer/repository_provider.dart';
 import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/feature/notification/notifications_model.dart';
 import 'package:animeshin/util/graphql.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -98,27 +100,73 @@ class BackgroundHandler {
   /// Clears device notifications.
   static void clearNotifications() => _notificationPlugin.cancelAll();
 
+  static String safeFileName(String base, int episode) {
+    final cleaned = base.replaceAll(RegExp(r'[^\w\d]+'), '_');
+    return '${cleaned}_ep$episode.png';
+  }
+
+  static Future<String?> downloadAndSaveFile(String url, String fileName) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/$fileName';
+
+      // Optionally delete previous file with same name (avoid duplicates)
+      final file = File(filePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        await file.writeAsBytes(response.bodyBytes);
+        return filePath;
+      }
+      return null; // Error downloading file
+    } catch (e) {
+      // Optionally log error
+      return null;
+    }
+  }
+
   static Future<void> scheduleEpisodeNotification(
     DateTime airingAt,
     String animeTitle,
     int episodeNumber,
+    String imageUrl,
   ) async {
+    final safeName = safeFileName(animeTitle, episodeNumber);
+
+    // Download image once and reuse for both bigPicture and largeIcon
+    final String? imagePath = await downloadAndSaveFile(imageUrl, safeName);
+
     final tzDateTime = tz.TZDateTime.from(airingAt, tz.local);
 
     await _notificationPlugin.zonedSchedule(
-      (animeTitle + episodeNumber.toString()).hashCode, // Unique ID
+      (animeTitle + episodeNumber.toString()).hashCode,
       'New episode released!',
-      '$animeTitle — Episode $episodeNumber is now available!',
+      '$animeTitle — Episode $episodeNumber aired!',
       tzDateTime,
-      const NotificationDetails(
-        iOS: DarwinNotificationDetails(),
+      NotificationDetails(
         android: AndroidNotificationDetails(
           'episode_channel',
           'Episode releases',
           channelDescription: 'Notifications about new episode releases',
+          styleInformation: imagePath != null
+              ? BigPictureStyleInformation(
+                  FilePathAndroidBitmap(imagePath),
+                  largeIcon: FilePathAndroidBitmap(imagePath),
+                  contentTitle: 'New episode released!',
+                  summaryText: '$animeTitle — Episode $episodeNumber is now available!',
+                )
+              : null,
           importance: Importance.high,
           priority: Priority.high,
           playSound: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          attachments: imagePath != null
+              ? [DarwinNotificationAttachment(imagePath)]
+              : null,
         ),
       ),
       payload: '$animeTitle-$episodeNumber',
