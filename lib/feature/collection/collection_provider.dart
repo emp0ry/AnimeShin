@@ -50,17 +50,18 @@ class CollectionNotifier
         .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
         .replaceAll(RegExp(r'^-+|-+$'), '');
 
+    final anilibriaRepo = AnilibriaRepository();
+
     final List<String> aliases = [];
+    final Map<String, Map<String, dynamic>> entriesByAlias = {};
     for (final l in data['MediaListCollection']['lists']) {
       for (final e in l['entries']) {
-        final title = e['media']['title']['romaji'];
-        if (title != null) {
-          aliases.add(toKebabCase(title));
-        }
+        final alias = toKebabCase(e['media']['title']['romaji']);
+        aliases.add(alias);
+        entriesByAlias[alias] = e;
       }
     }
 
-    final anilibriaRepo = AnilibriaRepository();
     final anilibriaData = await anilibriaRepo.fetchListByAliases(
       aliases: aliases,
       include: ['name', 'episodes', 'alias'],
@@ -85,18 +86,25 @@ class CollectionNotifier
       ],
     );
 
+    // final result = await anilibriaRepo.searchAliasByEnglishTitle(englishTitle: data['MediaListCollection']['lists'][0]['entries'][10]['media']['title']['english'], include: ['name', 'alias']);
+    // print('english ${data['MediaListCollection']['lists'][0]['entries'][10]['media']['title']['english']} result: $result');
+
     final dataList = anilibriaData['data'] as List<dynamic>;
-
-    // print(dataList.toString());
-
     final Map<String, dynamic> anilibriaByAlias = {};
     for (final item in dataList) {
       if (item['alias'] != null) {
         anilibriaByAlias[item['alias']] = item;
       }
     }
+
     for (final l in data['MediaListCollection']['lists']) {
       for (final e in l['entries']) {
+        // if (e['media']['title']['english'] == "Dr. STONE New World") {
+        //   // print('Rascal Does Not Dream of Santa Claus found');
+        //   // final result = await anilibriaRepo.searchAliasByEnglishTitle(englishTitle: e['media']['title']['romaji'], include: ['name', 'alias']);
+        //   // print('Rascal Does Not Dream of Santa Claus result: $result');
+        //   print(e['media']['title']);
+        // }
         final entryAlias = toKebabCase(e['media']['title']['romaji']);
         final aniItem = anilibriaByAlias[entryAlias];
         if (aniItem != null) {

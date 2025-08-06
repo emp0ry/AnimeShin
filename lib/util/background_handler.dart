@@ -52,6 +52,24 @@ class BackgroundHandler {
         constraints: Constraints(networkType: NetworkType.connected),
       );
     }
+
+    if (Platform.isIOS) {
+      await BackgroundHandler.requestPermissionForNotifications();
+    }
+    await _notificationPlugin.show(
+    0,
+    'Notification Test',
+    'Check if the notification arrived',
+    const NotificationDetails(
+      iOS: DarwinNotificationDetails(),
+      android: AndroidNotificationDetails(
+        'test_channel',
+        'Test Notifications',
+        channelDescription: 'Channel for test notifications',
+      ),
+    ),
+    payload: 'test_payload',
+  );
   }
 
   /// Requests a notifications permission, if not already granted.
@@ -69,16 +87,10 @@ class BackgroundHandler {
     }
 
     if (Platform.isIOS) {
-      final platform =
-          _notificationPlugin.resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>();
+      final platform = _notificationPlugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
       if (platform == null) return;
-
-      final permissions = await platform.checkPermissions();
-      if (permissions?.isEnabled ?? false) return;
-
-      await platform.requestPermissions(sound: true, badge: true);
-      return;
+      await platform.requestPermissions(sound: true, badge: true, alert: true);
     }
   }
 
