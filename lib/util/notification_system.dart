@@ -92,26 +92,30 @@ class NotificationSystem {
     await _plugin.cancel((animeTitle + episodeNumber.toString()).hashCode);
   }
 
-  /// Batch schedules notifications for all entries.
+  /// Schedules or cancels a notification for a single anime entry.
+  static Future<void> scheduleNotificationForEntry(Entry entry) async {
+    try {
+      if ((entry.listStatus == ListStatus.current || entry.listStatus == ListStatus.planning) &&
+          entry.airingAt != null &&
+          entry.nextEpisode != null) {
+        await scheduleEpisodeNotification(
+          entry.airingAt!,
+          entry.titles[0],
+          entry.nextEpisode!,
+          entry.imageUrl,
+        );
+      } else {
+        await cancelEpisodeNotification(entry.titles[0], entry.nextEpisode ?? 1);
+      }
+    } catch (e) {
+      print('Failed to schedule notification for entry: $e');
+    }
+  }
+
+  /// Batch schedules notifications for all entries (uses per-entry function).
   static Future<void> scheduleNotificationsForAll(List<Entry> entries) async {
     for (final entry in entries) {
-      try {
-        if ((entry.listStatus == ListStatus.current || entry.listStatus == ListStatus.planning) &&
-            entry.airingAt != null &&
-            entry.nextEpisode != null) {
-          await NotificationSystem.scheduleEpisodeNotification(
-            entry.airingAt!,
-            entry.titles[0],
-            entry.nextEpisode!,
-            entry.imageUrl,
-          );
-          print('Scheduled notification for ${entry.titles[0]} episode ${entry.nextEpisode}');
-        } else {
-          await NotificationSystem.cancelEpisodeNotification(entry.titles[0], entry.nextEpisode ?? 1);
-        }
-      } catch (e) {
-        print('Failed to schedule notification: $e');
-      }
+      await scheduleNotificationForEntry(entry);
     }
   }
 }

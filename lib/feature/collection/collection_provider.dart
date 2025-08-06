@@ -132,7 +132,6 @@ class CollectionNotifier
     collection.sort(_sort);
 
     await NotificationSystem.scheduleNotificationsForAll(collection.list.entries);
-    print(2);
 
     return collection;
   }
@@ -201,6 +200,8 @@ class CollectionNotifier
         entry.ruTitle = oldEntry.ruTitle;
         entry.ruLastEpisode = oldEntry.ruLastEpisode;
       }
+
+      await NotificationSystem.scheduleNotificationForEntry(entry);
 
       _updateState(
         (collection) => switch (collection) {
