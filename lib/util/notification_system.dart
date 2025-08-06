@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/util/routes.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -44,6 +45,7 @@ class NotificationSystem {
     DateTime airingAt,
     String animeTitle,
     int episodeNumber,
+    int mediaId,
     String imageUrl,
   ) async {
     final safeName = safeFileName(animeTitle, episodeNumber);
@@ -55,8 +57,8 @@ class NotificationSystem {
 
     await _plugin.zonedSchedule(
       (animeTitle + episodeNumber.toString()).hashCode,
-      'New episode released!',
-      '$animeTitle — Episode $episodeNumber aired!',
+      animeTitle,
+      'Episode $episodeNumber is now available!',
       tzDateTime,
       NotificationDetails(
         android: AndroidNotificationDetails(
@@ -67,8 +69,8 @@ class NotificationSystem {
               ? BigPictureStyleInformation(
                   FilePathAndroidBitmap(imagePath),
                   largeIcon: FilePathAndroidBitmap(imagePath),
-                  contentTitle: 'New episode released!',
-                  summaryText: '$animeTitle — Episode $episodeNumber is now available!',
+                  contentTitle: animeTitle,
+                  summaryText: 'Episode $episodeNumber is now available!',
                 )
               : null,
           importance: Importance.high,
@@ -76,12 +78,13 @@ class NotificationSystem {
           playSound: true,
         ),
         iOS: DarwinNotificationDetails(
+          subtitle: 'Episode $episodeNumber',
           attachments: imagePath != null
               ? [DarwinNotificationAttachment(imagePath)]
               : null,
         ),
       ),
-      payload: '$animeTitle-$episodeNumber',
+      payload: Routes.media(mediaId, imageUrl),
       matchDateTimeComponents: DateTimeComponents.dateAndTime,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
@@ -102,6 +105,7 @@ class NotificationSystem {
           entry.airingAt!,
           entry.titles[0],
           entry.nextEpisode!,
+          entry.mediaId,
           entry.imageUrl,
         );
       } else {
