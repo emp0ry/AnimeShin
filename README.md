@@ -6,7 +6,7 @@
 <p align="center">
   A modern, unofficial AniList client with Russian voice-over tracking via AniLiberty.
   <br>
-  Track anime & manga, update progress with gestures — all in one place.
+  Track anime & manga, update progress with gestures, receive notifications when a new episode is aired — all in one place.
 </p>
 
 <p align="center">
@@ -39,6 +39,9 @@
 
 - **👆 Swipe-Based Progress**  
   Swipe left/right on covers to update episode or chapter progress.
+
+- **🔔 Episode Airing Notification**
+  Notifying when a new episode has aired. (tested on ios)
 
 - **📝 Personal Notes & Scores**  
   Rate entries and attach personal notes directly in your library.
@@ -74,7 +77,6 @@
 ## 📈 Roadmap
 
 - Support for macOS and Linux
-- Push notifications (cross-device sync)
 - Notifications for new AniLiberty voice-over releases
 - Links to AniLiberty anime/episode pages
 - Import/export of watchlist and progress
