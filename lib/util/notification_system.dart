@@ -78,7 +78,7 @@ class NotificationSystem {
           playSound: true,
         ),
         iOS: DarwinNotificationDetails(
-          subtitle: 'Episode $episodeNumber',
+          // subtitle: 'Episode $episodeNumber',
           attachments: imagePath != null
               ? [DarwinNotificationAttachment(imagePath)]
               : null,
