@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
@@ -74,6 +75,7 @@ class _TileState extends State<_TileWidget> with SingleTickerProviderStateMixin 
       // Swipe left to the end (increase progress)
       if (ratio <= -1.0 && !_actionInProgress) {
         _actionInProgress = true;
+        HapticFeedback.mediumImpact();
         if (widget.onProgressUpdated != null &&
             (widget.entry.progressMax == null ||
                 widget.entry.progress < widget.entry.progressMax!)) {
@@ -85,6 +87,7 @@ class _TileState extends State<_TileWidget> with SingleTickerProviderStateMixin 
       // Swipe right to the end (decrease progress)
       if (ratio >= 1.0 && !_actionInProgress) {
         _actionInProgress = true;
+        HapticFeedback.mediumImpact();
         if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
           setState(() => widget.entry.progress--);
           widget.onProgressUpdated!(widget.entry, false);
@@ -212,9 +215,9 @@ class __TileContentState extends State<_TileContent> {
     if (widget.item.nextEpisode != null && widget.item.nextEpisode! - 1 > widget.item.progress) {
       String key;
       if (widget.item.ruLastEpisode != null && widget.item.ruLastEpisode! > widget.item.progress) {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AniLiberty)';
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
       } else {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AniLiberty)';
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
       }
       textRailItems[key] = true;
     }
