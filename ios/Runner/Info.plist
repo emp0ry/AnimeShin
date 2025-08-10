@@ -32,10 +32,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>AnimeShin</string>
+			<string>com.emp0ry.animeshin</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>app</string>
+				<string>animeshin</string>
 			</array>
 		</dict>
 	</array>

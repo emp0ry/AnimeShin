@@ -23,6 +23,7 @@ class CollectionList extends StatelessWidget {
 
   final List<Entry> items;
   final ScoreFormat scoreFormat;
+  /// Signature: (entry, setAsCurrent) -> error message or null
   final Future<String?> Function(Entry, bool)? onProgressUpdated;
 
   @override
@@ -61,53 +62,124 @@ class _TileWidget extends StatefulWidget {
   State<_TileWidget> createState() => _TileState();
 }
 
-class _TileState extends State<_TileWidget> with SingleTickerProviderStateMixin {
-  late final SlidableController _slidableController;
-  bool _actionInProgress = false;
+class _TileState extends State<_TileWidget> {
+  bool _busy = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _slidableController = SlidableController(this);
+  bool get _canIncrement {
+    final max = widget.entry.progressMax;
+    if (max == null) return true;
+    return widget.entry.progress < max;
+  }
 
-    _slidableController.animation.addListener(() {
-      final ratio = _slidableController.ratio;
-      // Swipe left to the end (increase progress)
-      if (ratio <= -1.0 && !_actionInProgress) {
-        _actionInProgress = true;
-        HapticFeedback.mediumImpact();
-        if (widget.onProgressUpdated != null &&
-            (widget.entry.progressMax == null ||
-                widget.entry.progress < widget.entry.progressMax!)) {
-          setState(() => widget.entry.progress++);
-          widget.onProgressUpdated!(widget.entry, false);
-        }
-        _slidableController.close();
-      }
-      // Swipe right to the end (decrease progress)
-      if (ratio >= 1.0 && !_actionInProgress) {
-        _actionInProgress = true;
-        HapticFeedback.mediumImpact();
-        if (widget.onProgressUpdated != null && widget.entry.progress > 0) {
-          setState(() => widget.entry.progress--);
-          widget.onProgressUpdated!(widget.entry, false);
-        }
-        _slidableController.close();
-      }
-    });
+  bool get _canDecrement => widget.entry.progress > 0;
 
-    // Reset the action lock when the slidable animation is fully closed
-    _slidableController.animation.addStatusListener((status) {
-      if (status == AnimationStatus.dismissed) {
-        _actionInProgress = false;
+  void _optimisticInc() => setState(() => widget.entry.progress += 1);
+  void _optimisticDec() => setState(() => widget.entry.progress -= 1);
+
+  void _persistWithUndo({
+    required BuildContext context,
+    required Future<String?> Function() persist,
+    required Future<void> Function() undoOptimistic,
+    required String snackLabel,
+  }) {
+    // Run after the current frame so we don't block the animation.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Close the slidable smoothly
+      Slidable.of(context)?.close();
+      // Medium haptic after the animation feels nicer
+      HapticFeedback.mediumImpact();
+
+      // Fire-and-forget persist; if it fails, revert.
+      final err = await persist();
+      if (err != null) {
+        await undoOptimistic();
+        return;
       }
+
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(snackLabel),
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () async {
+              HapticFeedback.selectionClick();
+              await undoOptimistic();
+            },
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     });
   }
 
-  @override
-  void dispose() {
-    _slidableController.dispose();
-    super.dispose();
+  Future<String?> _saveProgress() async {
+    if (widget.onProgressUpdated == null) return null;
+    return widget.onProgressUpdated!(widget.entry, false);
+  }
+
+  Future<void> _runAction({
+    required BuildContext context,
+    required Future<void> Function() doAction,
+    required Future<void> Function()? undoAction,
+    required String label,
+  }) async {
+    if (_busy) return;
+    _busy = true;
+
+    // Start haptic
+    HapticFeedback.lightImpact();
+
+    try {
+      await doAction();
+      // Confirm haptic
+      HapticFeedback.mediumImpact();
+
+      // Close slidable if open
+      Slidable.of(context)?.close();
+
+      // Show Undo
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(label),
+          action: undoAction != null
+              ? SnackBarAction(
+                  label: 'Undo',
+                  onPressed: () async {
+                    HapticFeedback.selectionClick();
+                    await undoAction();
+                  },
+                )
+              : null,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _increment(BuildContext context) async {
+    if (!_canIncrement || widget.onProgressUpdated == null) return;
+    setState(() => widget.entry.progress += 1);
+    final err = await widget.onProgressUpdated!(widget.entry, false);
+    if (err != null) {
+      // revert on error
+      setState(() => widget.entry.progress -= 1);
+    }
+  }
+
+  Future<void> _decrement(BuildContext context) async {
+    if (!_canDecrement || widget.onProgressUpdated == null) return;
+    setState(() => widget.entry.progress -= 1);
+    final err = await widget.onProgressUpdated!(widget.entry, false);
+    if (err != null) {
+      // revert on error
+      setState(() => widget.entry.progress += 1);
+    }
   }
 
   @override
@@ -116,21 +188,112 @@ class _TileState extends State<_TileWidget> with SingleTickerProviderStateMixin 
       padding: const EdgeInsets.only(bottom: Theming.offset),
       child: Slidable(
         key: ValueKey(widget.entry.mediaId),
-        controller: _slidableController,
+        groupTag: 'collection-tiles',
+
+        // Start (swipe right) → decrement
         startActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          extentRatio: 1.0, // swipe to full left edge
+          motion: const StretchMotion(),        // smoothest on desktop
+          extentRatio: 0.24,                    // a bit smaller feels snappier
+          dismissible: DismissiblePane(
+            confirmDismiss: () {
+              if (!_canDecrement) return Future.value(false);
+
+              HapticFeedback.lightImpact();     // start haptic
+              _optimisticDec();                 // instant UI update
+
+              _persistWithUndo(
+                context: context,
+                persist: _saveProgress,         // async, runs post-frame
+                undoOptimistic: () async {      // revert path
+                  setState(() => widget.entry.progress += 1);
+                  await _saveProgress();
+                },
+                snackLabel: 'Progress -1',
+              );
+
+              return Future.value(false);       // never actually dismiss
+            },
+            onDismissed: () {},                 // no-op; not called because we return false
+            closeOnCancel: true,
+          ),
           children: [
-            // You can add an icon for visualization if you want
+            SlidableAction(
+              onPressed: (_) {
+                if (!_canDecrement) return;
+                HapticFeedback.lightImpact();
+                _optimisticDec();
+                _persistWithUndo(
+                  context: context,
+                  persist: _saveProgress,
+                  undoOptimistic: () async {
+                    setState(() => widget.entry.progress += 1);
+                    await _saveProgress();
+                  },
+                  snackLabel: 'Progress -1',
+                );
+              },
+              icon: Ionicons.remove,
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              borderRadius: BorderRadius.circular(8),
+              autoClose: true,
+            ),
           ],
         ),
+
+        // End (swipe left) → increment
         endActionPane: ActionPane(
-          motion: const DrawerMotion(),
-          extentRatio: 1.0, // swipe to full right edge
+          motion: const StretchMotion(),
+          extentRatio: 0.24,
+          dismissible: DismissiblePane(
+            confirmDismiss: () {
+              if (!_canIncrement) return Future.value(false);
+
+              HapticFeedback.lightImpact();
+              _optimisticInc();
+
+              _persistWithUndo(
+                context: context,
+                persist: _saveProgress,
+                undoOptimistic: () async {
+                  setState(() => widget.entry.progress -= 1);
+                  await _saveProgress();
+                },
+                snackLabel: 'Progress +1',
+              );
+
+              return Future.value(false);
+            },
+            onDismissed: () {},
+            closeOnCancel: true,
+          ),
           children: [
-            // You can add an icon for visualization if you want
+            SlidableAction(
+              onPressed: (_) {
+                if (!_canIncrement) return;
+                HapticFeedback.lightImpact();
+                _optimisticInc();
+                _persistWithUndo(
+                  context: context,
+                  persist: _saveProgress,
+                  undoOptimistic: () async {
+                    setState(() => widget.entry.progress -= 1);
+                    await _saveProgress();
+                  },
+                  snackLabel: 'Progress +1',
+                );
+              },
+              icon: Ionicons.add,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              borderRadius: BorderRadius.circular(8),
+              autoClose: true,
+            ),
           ],
         ),
+
         child: SizedBox(
           height: _tileHeight,
           child: Card(
@@ -159,7 +322,10 @@ class _TileState extends State<_TileWidget> with SingleTickerProviderStateMixin 
                     child: Padding(
                       padding: Theming.paddingAll,
                       child: _TileContent(
-                        widget.entry, widget.scoreFormat, widget.onProgressUpdated),
+                        widget.entry,
+                        widget.scoreFormat,
+                        widget.onProgressUpdated,
+                      ),
                     ),
                   ),
                 ],
@@ -189,13 +355,14 @@ class __TileContentState extends State<_TileContent> {
     final item = widget.item;
 
     double progressPercent = 0;
-    if (item.progressMax != null) {
+    if (item.progressMax != null && item.progressMax! > 0) {
       progressPercent = item.progress / item.progressMax!;
-    } else if (item.nextEpisode != null) {
+    } else if (item.nextEpisode != null && item.nextEpisode! > 1) {
       progressPercent = item.progress / (item.nextEpisode! - 1);
     } else if (item.progress > 0) {
       progressPercent = 1;
     }
+    progressPercent = progressPercent.clamp(0.0, 1.0);
 
     final textRailItems = <String, bool>{};
 
@@ -208,16 +375,21 @@ class __TileContentState extends State<_TileContent> {
     }
 
     if (widget.item.airingAt != null) {
-      final key = 'Ep ${widget.item.nextEpisode} in ${widget.item.airingAt!.timeUntil}';
+      final key =
+          'Ep ${widget.item.nextEpisode} in ${widget.item.airingAt!.timeUntil}';
       textRailItems[key] = false;
     }
 
-    if (widget.item.nextEpisode != null && widget.item.nextEpisode! - 1 > widget.item.progress) {
+    if (widget.item.nextEpisode != null &&
+        widget.item.nextEpisode! - 1 > widget.item.progress) {
       String key;
-      if (widget.item.ruLastEpisode != null && widget.item.ruLastEpisode! > widget.item.progress) {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
+      if (widget.item.ruLastEpisode != null &&
+          widget.item.ruLastEpisode! > widget.item.progress) {
+        key =
+            '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
       } else {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
+        key =
+            '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
       }
       textRailItems[key] = true;
     }
@@ -285,11 +457,12 @@ class __TileContentState extends State<_TileContent> {
                   ? widget.item.progress.toString()
                   : '${widget.item.progress}/${widget.item.progressMax ?? "?"}',
               style: TextTheme.of(context).labelSmall?.copyWith(
-                color: (widget.item.nextEpisode != null &&
-                        widget.item.progress + 1 < widget.item.nextEpisode!)
-                    ? ColorScheme.of(context).error
-                    : ColorScheme.of(context).onSurfaceVariant,
-              ),
+                    color: (widget.item.nextEpisode != null &&
+                            widget.item.progress + 1 <
+                                widget.item.nextEpisode!)
+                        ? ColorScheme.of(context).error
+                        : ColorScheme.of(context).onSurfaceVariant,
+                  ),
             ),
           ],
         ),

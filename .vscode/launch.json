@@ -22,8 +22,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "e:/Projects/Flutter/AnimeShin/windows/runner",
-      "program": "e:/Projects/Flutter/AnimeShin/windows/runner/build/Debug/outDebug",
+      "cwd": "e:/Projects/Flutter/AnimeShin",
+      "program": "e:/Projects/Flutter/AnimeShin/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:ionicons/ionicons.dart';
@@ -19,6 +20,9 @@ import 'package:animeshin/widget/dialogs.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/widget/text_rail.dart';
 
+/// ------------------------
+/// Desktop helper (unchanged)
+/// ------------------------
 Future<String?> listenForToken({int port = 28371}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
   final completer = Completer<String?>();
@@ -104,6 +108,9 @@ Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
   return null;
 }
 
+/// ------------------------
+/// Header
+/// ------------------------
 class UserHeader extends StatelessWidget {
   const UserHeader({
     required this.id,
@@ -174,6 +181,9 @@ class UserHeader extends StatelessWidget {
   }
 }
 
+/// ------------------------
+/// Account picker + OAuth
+/// ------------------------
 class _AccountPicker extends StatefulWidget {
   const _AccountPicker();
 
@@ -182,9 +192,26 @@ class _AccountPicker extends StatefulWidget {
 }
 
 class __AccountPickerState extends State<_AccountPicker> {
-  static final _loginLink = Platform.isAndroid || Platform.isIOS
-      ? 'https://anilist.co/api/v2/oauth/authorize?client_id=29017&response_type=token'
-      : 'https://anilist.co/api/v2/oauth/authorize?client_id=29106&response_type=token';
+  static const _mobileClientId = '29017';
+  static const _desktopClientId = '29106';
+
+  // Зарегистрируй такой redirect в AniList Dashboard для обоих клиентов
+  static const _redirectUri = 'animeshin://oauth/callback';
+
+  static String _buildAuthUrl({required bool mobile}) {
+    final clientId = mobile ? _mobileClientId : _desktopClientId;
+    return Uri.parse('https://anilist.co/api/v2/oauth/authorize').replace(
+      queryParameters: {
+        'client_id': clientId,
+        'response_type': 'token',     // implicit
+        // 'redirect_uri': _redirectUri, // КРИТИЧНО
+      },
+    ).toString();
+  }
+
+  static String get _loginLink => (Platform.isAndroid || Platform.isIOS)
+      ? _buildAuthUrl(mobile: true)
+      : _buildAuthUrl(mobile: false);
 
   static const _imageSize = 55.0;
 
@@ -319,48 +346,117 @@ class __AccountPickerState extends State<_AccountPicker> {
   }
 
   Future<void> _addAccount(WidgetRef ref, bool isAccountListEmpty) async {
-    if (isAccountListEmpty) {
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-        final futureToken = listenForToken(port: 28371);
-        await SnackBarExtension.launch(context, _loginLink);
-        final accessToken = await futureToken;
-        if (accessToken != null) {
-          final profile = await fetchAniListProfile(accessToken);
-          if (profile != null) {
-            final now = DateTime.now();
-            final expiration = now.add(const Duration(days: 365));
-            final account = Account(
-              id: profile['id'],
-              name: profile['name'],
-              avatarUrl: profile['avatar']['large'],
-              expiration: expiration,
-              accessToken: accessToken,
-            );
-            await ref.read(persistenceProvider.notifier).addAccount(account);
-          }
+    // ---------
+    // Mobile
+    // ---------
+    if (Platform.isAndroid || Platform.isIOS) {
+      try {
+        final callbackUrl = await FlutterWebAuth2.authenticate(
+          url: _loginLink,
+          // должен совпадать со схемой в манифестах и в redirect_uri
+          callbackUrlScheme: 'animeshin',
+        );
+
+        // Пример: animeshin://oauth/callback#access_token=...&token_type=Bearer&expires_in=31536000
+        final returned = Uri.parse(callbackUrl);
+
+        // У некоторых реализаций (на всякий) параметры могут прийти как query — проверим оба
+        final rawParams = returned.fragment.isNotEmpty
+            ? returned.fragment
+            : (returned.query.isNotEmpty ? returned.query : '');
+
+        if (rawParams.isEmpty) {
+          SnackBarExtension.show(context, 'Login failed: empty callback');
+          return;
         }
-        return;
-      } else {
-        SnackBarExtension.launch(context, _loginLink);
-        return;
+
+        Map<String, String> params;
+        try {
+          params = Uri.splitQueryString(rawParams);
+        } catch (_) {
+          params = {
+            for (final kv in rawParams.split('&'))
+              if (kv.contains('='))
+                kv.split('=')[0]: Uri.decodeComponent(kv.split('=')[1]),
+          };
+        }
+
+        final accessToken = params['access_token'];
+        final expiresInStr = params['expires_in'];
+        if (accessToken == null || accessToken.isEmpty) {
+          SnackBarExtension.show(context, 'Login failed: no access token');
+          return;
+        }
+
+        final expiresIn = int.tryParse(expiresInStr ?? '') ?? 31536000;
+        final expiration = DateTime.now().add(Duration(seconds: expiresIn));
+
+        final profile = await fetchAniListProfile(accessToken);
+        if (profile == null) {
+          SnackBarExtension.show(context, 'Failed to load profile');
+          return;
+        }
+
+        final account = Account(
+          id: profile['id'],
+          name: profile['name'],
+          avatarUrl: profile['avatar']['large'],
+          expiration: expiration,
+          accessToken: accessToken,
+        );
+        await ref.read(persistenceProvider.notifier).addAccount(account);
+        Navigator.pop(context);
+      } catch (e) {
+        SnackBarExtension.show(context, 'Auth error: $e');
       }
+      return;
     }
-    ConfirmationDialog.show(
-      context,
-      title: 'Add an Account',
-      content:
-          'To add more accounts, make sure you\'re logged out of the previous ones in the browser.',
-      primaryAction: 'Continue',
-      secondaryAction: 'Cancel',
-      onConfirm: () {
-        if (mounted) {
-          SnackBarExtension.launch(context, _loginLink);
+
+    // ---------
+    // Desktop
+    // ---------
+    if (isAccountListEmpty) {
+      final futureToken = listenForToken(port: 28371);
+      await SnackBarExtension.launch(context, _loginLink);
+      final accessToken = await futureToken;
+      if (accessToken != null) {
+        final profile = await fetchAniListProfile(accessToken);
+        if (profile != null) {
+          final now = DateTime.now();
+          final expiration = now.add(const Duration(days: 365));
+          final account = Account(
+            id: profile['id'],
+            name: profile['name'],
+            avatarUrl: profile['avatar']['large'],
+            expiration: expiration,
+            accessToken: accessToken,
+          );
+          await ref.read(persistenceProvider.notifier).addAccount(account);
+          Navigator.pop(context);
         }
-      },
-    );
+      }
+      return;
+    } else {
+      ConfirmationDialog.show(
+        context,
+        title: 'Add an Account',
+        content:
+            'To add more accounts, make sure you\'re logged out of the previous ones in the browser.',
+        primaryAction: 'Continue',
+        secondaryAction: 'Cancel',
+        onConfirm: () {
+          if (mounted) {
+            SnackBarExtension.launch(context, _loginLink);
+          }
+        },
+      );
+    }
   }
 }
 
+/// ------------------------
+/// Follow button
+/// ------------------------
 class _FollowButton extends StatefulWidget {
   const _FollowButton(this.user, this.toggleFollow);
 

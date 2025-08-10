@@ -1,8 +1,11 @@
+// lib/feature/collection/collection_provider.dart
+
 import 'dart:async';
 
 import 'package:animeshin/anilibria/anilibria_repository.dart';
 import 'package:animeshin/extension/iterable_extension.dart';
 import 'package:animeshin/util/notification_system.dart';
+import 'package:animeshin/util/text_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -11,6 +14,17 @@ import 'package:animeshin/feature/home/home_provider.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/feature/viewer/repository_provider.dart';
 import 'package:animeshin/util/graphql.dart';
+
+/// Toggle the extra/fallback search for missed aliases.
+/// Set to false if you want only the fast bulk lookup.
+const bool kEnableFallbackSearch = true;
+
+/// Upper bound on how many misses we try to rescue per page.
+/// Keeps the UI snappy even on huge collections.
+const int kMaxFallbackPerPage = 10;
+
+/// Concurrency for fallback searches (4 keeps it quick but polite).
+const int _kSearchConcurrency = 4;
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
@@ -46,13 +60,12 @@ class CollectionNotifier
       },
     );
 
-    String toKebabCase(String input) => input
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
+    // Use robust alias generator (handles punctuation/diacritics)
+    String toKebabCase(String input) => toKebabAlias(input);
 
     final anilibriaRepo = AnilibriaRepository();
 
+    // Build AniList-derived alias list and quick lookup
     final List<String> aliases = [];
     final Map<String, Map<String, dynamic>> entriesByAlias = {};
     for (final l in data['MediaListCollection']['lists']) {
@@ -63,6 +76,7 @@ class CollectionNotifier
       }
     }
 
+    // Bulk fetch Anilibria by aliases
     final anilibriaData = await anilibriaRepo.fetchListByAliases(
       aliases: aliases,
       include: ['name', 'episodes', 'alias'],
@@ -87,9 +101,6 @@ class CollectionNotifier
       ],
     );
 
-    // final result = await anilibriaRepo.searchAliasByEnglishTitle(englishTitle: data['MediaListCollection']['lists'][0]['entries'][10]['media']['title']['english'], include: ['name', 'alias']);
-    // print('english ${data['MediaListCollection']['lists'][0]['entries'][10]['media']['title']['english']} result: $result');
-
     final dataList = anilibriaData['data'] as List<dynamic>;
     final Map<String, dynamic> anilibriaByAlias = {};
     for (final item in dataList) {
@@ -98,14 +109,21 @@ class CollectionNotifier
       }
     }
 
+    // Figure out which aliases were missed in the bulk request
+    final missingAliases =
+        aliases.where((a) => !anilibriaByAlias.containsKey(a)).toList();
+
+    // Try to enrich the misses using a bounded, cached, concurrent search
+    await _enrichMissingWithSearch(
+      missingAliases,
+      entriesByAlias,
+      anilibriaByAlias,
+      anilibriaRepo,
+    );
+
+    // Merge back into entries: add ruTitle and last episode ordinal
     for (final l in data['MediaListCollection']['lists']) {
       for (final e in l['entries']) {
-        // if (e['media']['title']['english'] == "Dr. STONE New World") {
-        //   // print('Rascal Does Not Dream of Santa Claus found');
-        //   // final result = await anilibriaRepo.searchAliasByEnglishTitle(englishTitle: e['media']['title']['romaji'], include: ['name', 'alias']);
-        //   // print('Rascal Does Not Dream of Santa Claus result: $result');
-        //   print(e['media']['title']);
-        // }
         final entryAlias = toKebabCase(e['media']['title']['romaji']);
         final aniItem = anilibriaByAlias[entryAlias];
         if (aniItem != null) {
@@ -345,4 +363,77 @@ class CollectionNotifier
     final result = mutator(state.value!);
     if (result != null) state = AsyncValue.data(result);
   }
+}
+
+/// Concurrent, bounded enrichment for missed aliases.
+/// Keeps UI responsive while still rescuing some items.
+Future<void> _enrichMissingWithSearch(
+  List<String> missingAliases,
+  Map<String, dynamic> entriesByAlias,
+  Map<String, dynamic> anilibriaByAlias,
+  AnilibriaRepository repo,
+) async {
+  if (!kEnableFallbackSearch) return;
+
+  // Bound the amount of extra work per page load.
+  final targets = missingAliases.take(kMaxFallbackPerPage).toList();
+
+  // Fields to request (keep it light).
+  final _include = ['name', 'episodes', 'alias'];
+  final _exclude = [
+    'name.english',
+    'name.alternative',
+    'episodes.id',
+    'episodes.name',
+    'episodes.opening',
+    'episodes.ending',
+    'episodes.preview',
+    'episodes.hls_480',
+    'episodes.hls_720',
+    'episodes.hls_1080',
+    'episodes.duration',
+    'episodes.rutube_id',
+    'episodes.youtube_id',
+    'episodes.updated_at',
+    'episodes.sort_order',
+    'episodes.release_id',
+    'episodes.name_english'
+  ];
+
+  // Small concurrency pool
+  final pool = <Future<void>>[];
+  for (final alias in targets) {
+    pool.add(() async {
+      final e = entriesByAlias[alias];
+      if (e == null) return;
+
+      final media = (e['media'] as Map<String, dynamic>?);
+      final titles = (media?['title'] as Map<String, dynamic>?) ?? const {};
+      final romaji = (titles['romaji'] ?? '').toString();
+      final english = (titles['english'] ?? '').toString();
+
+      final foundAlias = await repo.searchBestAlias(
+        romajiTitle: romaji,
+        englishTitle: english.isEmpty ? null : english,
+      );
+
+      if (foundAlias == null) return;
+
+      final single = await repo.fetchListByAliases(
+        aliases: [foundAlias],
+        include: _include,
+        exclude: _exclude,
+      );
+      final items = (single['data'] as List<dynamic>?);
+      if (items != null && items.isNotEmpty) {
+        anilibriaByAlias[alias] = items.first;
+      }
+    }());
+
+    if (pool.length == _kSearchConcurrency) {
+      await Future.wait(pool);
+      pool.clear();
+    }
+  }
+  if (pool.isNotEmpty) await Future.wait(pool);
 }

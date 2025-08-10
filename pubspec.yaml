@@ -62,6 +62,7 @@ dependencies:
   flutter_slidable: ^4.0.0
   window_manager: ^0.5.1
   timezone: ^0.10.1
+  flutter_web_auth_2: ^4.1.0
 
 dev_dependencies:
   flutter_test:

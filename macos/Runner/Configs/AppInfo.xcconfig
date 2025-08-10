@@ -8,7 +8,7 @@
 PRODUCT_NAME = animeshin
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.AnimeShin.animeshin
+PRODUCT_BUNDLE_IDENTIFIER = com.emp0ry.animeshin
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2025 com.AnimeShin. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2025 com.emp0ry. All rights reserved.
