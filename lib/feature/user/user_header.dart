@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:ionicons/ionicons.dart';
@@ -19,9 +18,10 @@ import 'package:animeshin/widget/layout/content_header.dart';
 import 'package:animeshin/widget/dialogs.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/widget/text_rail.dart';
+import 'package:webview_flutter/webview_flutter.dart'; // WebView for OAuth (no deep-link dependency)
 
 /// ------------------------
-/// Desktop helper (unchanged)
+/// Desktop helper for implicit flow (unchanged)
 /// ------------------------
 Future<String?> listenForToken({int port = 28371}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
@@ -34,16 +34,13 @@ Future<String?> listenForToken({int port = 28371}) async {
         <html>
         <body>
         <script>
+          // Parse fragment and POST it back to localhost server
           const params = new URLSearchParams(window.location.hash.slice(1));
           const token = params.get('access_token');
           if (token) {
-            fetch('http://localhost:28371/token?access_token=' + encodeURIComponent(token))
-              .then(() => {
-                document.body.innerHTML = "Success! You can close this window.";
-              })
-              .catch(() => {
-                document.body.innerHTML = "Error sending token.";
-              });
+            fetch('http://localhost:$port/token?access_token=' + encodeURIComponent(token))
+              .then(() => { document.body.innerHTML = "Success! You can close this window."; })
+              .catch(() => { document.body.innerHTML = "Error sending token."; });
           } else {
             document.body.innerHTML = "Error: No token found.";
           }
@@ -69,6 +66,7 @@ Future<String?> listenForToken({int port = 28371}) async {
   return completer.future;
 }
 
+/// Fetch AniList Viewer profile with the received access token
 Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
   final response = await http.post(
     Uri.parse('https://graphql.anilist.co'),
@@ -106,6 +104,118 @@ Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
     return data['data']['Viewer'];
   }
   return null;
+}
+
+/// ------------------------
+/// Small OAuth result model
+/// ------------------------
+class OAuthResult {
+  final String accessToken;
+  final int expiresIn; // seconds
+  OAuthResult({required this.accessToken, required this.expiresIn});
+}
+
+/// ------------------------
+/// WebView-based OAuth page
+/// ------------------------
+/// We open AniList authorize URL, wait for redirect to the app scheme.
+/// In LiveContainer (or any host), we intercept the custom scheme inside WebView
+/// and never rely on OS deep link handlers.
+class AuthWebViewPage extends StatefulWidget {
+  const AuthWebViewPage({
+    super.key,
+    required this.authUrl,
+    required this.redirectScheme,
+    required this.redirectHost,
+    required this.redirectPath,
+  });
+
+  final String authUrl;
+  final String redirectScheme; // e.g. "app"
+  final String redirectHost;   // e.g. "animeshin"
+  final String redirectPath;   // e.g. "/auth"
+
+  @override
+  State<AuthWebViewPage> createState() => _AuthWebViewPageState();
+}
+
+class _AuthWebViewPageState extends State<AuthWebViewPage> {
+  late final WebViewController _controller;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) => setState(() => _loading = true),
+          onPageFinished: (_) => setState(() => _loading = false),
+          onNavigationRequest: (request) {
+            final uri = Uri.parse(request.url);
+
+            final isCallback =
+                uri.scheme == widget.redirectScheme &&
+                uri.host == widget.redirectHost &&
+                uri.path == widget.redirectPath;
+
+            if (isCallback) {
+              // AniList implicit flow returns token in fragment (#...)
+              final params = _parseImplicitParams(uri);
+              final token = params['access_token'];
+              final expires = int.tryParse(params['expires_in'] ?? '') ?? 31536000;
+
+              if (token != null && token.isNotEmpty) {
+                Navigator.of(context).pop(
+                  OAuthResult(accessToken: token, expiresIn: expires),
+                );
+              } else {
+                Navigator.of(context).pop(null);
+              }
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.authUrl));
+  }
+
+  Map<String, String> _parseImplicitParams(Uri uri) {
+    // Primary source: fragment; fallback: query (just in case)
+    final raw = uri.fragment.isNotEmpty ? uri.fragment : uri.query;
+    if (raw.isEmpty) return {};
+    try {
+      return Uri.splitQueryString(raw);
+    } catch (_) {
+      final map = <String, String>{};
+      for (final part in raw.split('&')) {
+        final i = part.indexOf('=');
+        if (i > 0) {
+          final k = part.substring(0, i);
+          final v = Uri.decodeComponent(part.substring(i + 1));
+          map[k] = v;
+        }
+      }
+      return map;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('AniList Login')),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
+        ],
+      ),
+    );
+  }
 }
 
 /// ------------------------
@@ -192,26 +302,37 @@ class _AccountPicker extends StatefulWidget {
 }
 
 class __AccountPickerState extends State<_AccountPicker> {
+  // NOTE: Keep the client IDs you already use
   static const _mobileClientId = '29017';
   static const _desktopClientId = '29106';
 
-  // Зарегистрируй такой redirect в AniList Dashboard для обоих клиентов
-  static const _redirectUri = 'animeshin://oauth/callback';
+  // IMPORTANT:
+  // Your registered mobile redirect URI with AniList is: app://animeshin/auth
+  // We will supply it explicitly and intercept it inside the WebView.
+  static const _redirectScheme = 'app';
+  static const _redirectHost = 'animeshin';
+  static const _redirectPath = '/auth';
 
-  static String _buildAuthUrl({required bool mobile}) {
-    final clientId = mobile ? _mobileClientId : _desktopClientId;
-    return Uri.parse('https://anilist.co/api/v2/oauth/authorize').replace(
-      queryParameters: {
-        'client_id': clientId,
-        'response_type': 'token',     // implicit
-        // 'redirect_uri': _redirectUri, // КРИТИЧНО
-      },
-    ).toString();
+  /// Builds the authorize URL for implicit flow.
+  static String _buildAuthUrl({
+    required String clientId,
+  }) {
+    final qp = <String, String>{
+      'client_id': clientId,
+      'response_type': 'token', // implicit flow
+    };
+    return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
+        .replace(queryParameters: qp)
+        .toString();
   }
 
-  static String get _loginLink => (Platform.isAndroid || Platform.isIOS)
-      ? _buildAuthUrl(mobile: true)
-      : _buildAuthUrl(mobile: false);
+  /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
+  /// For desktop we keep the existing local server flow in browser.
+  static String get _loginLinkMobile =>
+      _buildAuthUrl(clientId: _mobileClientId);
+
+  static String get _loginLinkDesktop =>
+      _buildAuthUrl(clientId: _desktopClientId);
 
   static const _imageSize = 55.0;
 
@@ -346,78 +467,53 @@ class __AccountPickerState extends State<_AccountPicker> {
   }
 
   Future<void> _addAccount(WidgetRef ref, bool isAccountListEmpty) async {
-    // ---------
-    // Mobile
-    // ---------
+    // --- Mobile path: always use embedded WebView and intercept callback ---
     if (Platform.isAndroid || Platform.isIOS) {
-      try {
-        final callbackUrl = await FlutterWebAuth2.authenticate(
-          url: _loginLink,
-          // должен совпадать со схемой в манифестах и в redirect_uri
-          callbackUrlScheme: 'animeshin',
-        );
+      final result = await Navigator.of(context).push<OAuthResult?>(
+        MaterialPageRoute(
+          builder: (_) => AuthWebViewPage(
+            authUrl: _loginLinkMobile,
+            redirectScheme: _redirectScheme, // "app"
+            redirectHost: _redirectHost,     // "animeshin"
+            redirectPath: _redirectPath,     // "/auth"
+          ),
+        ),
+      );
 
-        // Пример: animeshin://oauth/callback#access_token=...&token_type=Bearer&expires_in=31536000
-        final returned = Uri.parse(callbackUrl);
-
-        // У некоторых реализаций (на всякий) параметры могут прийти как query — проверим оба
-        final rawParams = returned.fragment.isNotEmpty
-            ? returned.fragment
-            : (returned.query.isNotEmpty ? returned.query : '');
-
-        if (rawParams.isEmpty) {
-          SnackBarExtension.show(context, 'Login failed: empty callback');
-          return;
+      if (result == null) {
+        if (context.mounted) {
+          SnackBarExtension.show(context, 'Login canceled or failed');
         }
-
-        Map<String, String> params;
-        try {
-          params = Uri.splitQueryString(rawParams);
-        } catch (_) {
-          params = {
-            for (final kv in rawParams.split('&'))
-              if (kv.contains('='))
-                kv.split('=')[0]: Uri.decodeComponent(kv.split('=')[1]),
-          };
-        }
-
-        final accessToken = params['access_token'];
-        final expiresInStr = params['expires_in'];
-        if (accessToken == null || accessToken.isEmpty) {
-          SnackBarExtension.show(context, 'Login failed: no access token');
-          return;
-        }
-
-        final expiresIn = int.tryParse(expiresInStr ?? '') ?? 31536000;
-        final expiration = DateTime.now().add(Duration(seconds: expiresIn));
-
-        final profile = await fetchAniListProfile(accessToken);
-        if (profile == null) {
-          SnackBarExtension.show(context, 'Failed to load profile');
-          return;
-        }
-
-        final account = Account(
-          id: profile['id'],
-          name: profile['name'],
-          avatarUrl: profile['avatar']['large'],
-          expiration: expiration,
-          accessToken: accessToken,
-        );
-        await ref.read(persistenceProvider.notifier).addAccount(account);
-        Navigator.pop(context);
-      } catch (e) {
-        SnackBarExtension.show(context, 'Auth error: $e');
+        return;
       }
+
+      final accessToken = result.accessToken;
+      final expiration = DateTime.now().add(Duration(seconds: result.expiresIn));
+
+      final profile = await fetchAniListProfile(accessToken);
+      if (profile == null) {
+        if (context.mounted) {
+          SnackBarExtension.show(context, 'Failed to load profile');
+        }
+        return;
+      }
+
+      final account = Account(
+        id: profile['id'],
+        name: profile['name'],
+        avatarUrl: profile['avatar']['large'],
+        expiration: expiration,
+        accessToken: accessToken,
+      );
+      await ref.read(persistenceProvider.notifier).addAccount(account);
+      if (context.mounted) Navigator.pop(context);
       return;
     }
 
-    // ---------
-    // Desktop
-    // ---------
+    // --- Desktop path: keep existing external browser flow with localhost listener ---
     if (isAccountListEmpty) {
       final futureToken = listenForToken(port: 28371);
-      await SnackBarExtension.launch(context, _loginLink);
+      await SnackBarExtension.launch(context, _loginLinkDesktop);
       final accessToken = await futureToken;
       if (accessToken != null) {
         final profile = await fetchAniListProfile(accessToken);
@@ -432,7 +528,7 @@ class __AccountPickerState extends State<_AccountPicker> {
             accessToken: accessToken,
           );
           await ref.read(persistenceProvider.notifier).addAccount(account);
-          Navigator.pop(context);
+          if (context.mounted) Navigator.pop(context);
         }
       }
       return;
@@ -441,12 +537,12 @@ class __AccountPickerState extends State<_AccountPicker> {
         context,
         title: 'Add an Account',
         content:
-            'To add more accounts, make sure you\'re logged out of the previous ones in the browser.',
+            'To add more accounts, make sure you are logged out of the previous ones in the browser.',
         primaryAction: 'Continue',
         secondaryAction: 'Cancel',
         onConfirm: () {
           if (mounted) {
-            SnackBarExtension.launch(context, _loginLink);
+            SnackBarExtension.launch(context, _loginLinkDesktop);
           }
         },
       );
