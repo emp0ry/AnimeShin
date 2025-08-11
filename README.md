@@ -41,7 +41,7 @@
   Swipe left/right on covers to update episode or chapter progress.
 
 - **🔔 Episode Airing Notification**
-  Notifying when a new episode has aired. (tested on ios)
+  Notifying when a new episode has aired.
 
 - **📝 Personal Notes & Scores**  
   Rate entries and attach personal notes directly in your library.
