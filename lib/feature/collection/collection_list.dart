@@ -63,8 +63,6 @@ class _TileWidget extends StatefulWidget {
 }
 
 class _TileState extends State<_TileWidget> {
-  bool _busy = false;
-
   bool get _canIncrement {
     final max = widget.entry.progressMax;
     if (max == null) return true;
@@ -117,69 +115,6 @@ class _TileState extends State<_TileWidget> {
   Future<String?> _saveProgress() async {
     if (widget.onProgressUpdated == null) return null;
     return widget.onProgressUpdated!(widget.entry, false);
-  }
-
-  Future<void> _runAction({
-    required BuildContext context,
-    required Future<void> Function() doAction,
-    required Future<void> Function()? undoAction,
-    required String label,
-  }) async {
-    if (_busy) return;
-    _busy = true;
-
-    // Start haptic
-    HapticFeedback.lightImpact();
-
-    try {
-      await doAction();
-      // Confirm haptic
-      HapticFeedback.mediumImpact();
-
-      // Close slidable if open
-      Slidable.of(context)?.close();
-
-      // Show Undo
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(label),
-          action: undoAction != null
-              ? SnackBarAction(
-                  label: 'Undo',
-                  onPressed: () async {
-                    HapticFeedback.selectionClick();
-                    await undoAction();
-                  },
-                )
-              : null,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _increment(BuildContext context) async {
-    if (!_canIncrement || widget.onProgressUpdated == null) return;
-    setState(() => widget.entry.progress += 1);
-    final err = await widget.onProgressUpdated!(widget.entry, false);
-    if (err != null) {
-      // revert on error
-      setState(() => widget.entry.progress -= 1);
-    }
-  }
-
-  Future<void> _decrement(BuildContext context) async {
-    if (!_canDecrement || widget.onProgressUpdated == null) return;
-    setState(() => widget.entry.progress -= 1);
-    final err = await widget.onProgressUpdated!(widget.entry, false);
-    if (err != null) {
-      // revert on error
-      setState(() => widget.entry.progress += 1);
-    }
   }
 
   @override

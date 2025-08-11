@@ -18,10 +18,10 @@ import 'package:animeshin/widget/layout/content_header.dart';
 import 'package:animeshin/widget/dialogs.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/widget/text_rail.dart';
-import 'package:webview_flutter/webview_flutter.dart'; // WebView for OAuth (no deep-link dependency)
+import 'package:webview_flutter/webview_flutter.dart';
 
 /// ------------------------
-/// Desktop helper for implicit flow (unchanged)
+/// Desktop helper (unchanged)
 /// ------------------------
 Future<String?> listenForToken({int port = 28371}) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
@@ -34,7 +34,6 @@ Future<String?> listenForToken({int port = 28371}) async {
         <html>
         <body>
         <script>
-          // Parse fragment and POST it back to localhost server
           const params = new URLSearchParams(window.location.hash.slice(1));
           const token = params.get('access_token');
           if (token) {
@@ -66,7 +65,6 @@ Future<String?> listenForToken({int port = 28371}) async {
   return completer.future;
 }
 
-/// Fetch AniList Viewer profile with the received access token
 Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
   final response = await http.post(
     Uri.parse('https://graphql.anilist.co'),
@@ -104,118 +102,6 @@ Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
     return data['data']['Viewer'];
   }
   return null;
-}
-
-/// ------------------------
-/// Small OAuth result model
-/// ------------------------
-class OAuthResult {
-  final String accessToken;
-  final int expiresIn; // seconds
-  OAuthResult({required this.accessToken, required this.expiresIn});
-}
-
-/// ------------------------
-/// WebView-based OAuth page
-/// ------------------------
-/// We open AniList authorize URL, wait for redirect to the app scheme.
-/// In LiveContainer (or any host), we intercept the custom scheme inside WebView
-/// and never rely on OS deep link handlers.
-class AuthWebViewPage extends StatefulWidget {
-  const AuthWebViewPage({
-    super.key,
-    required this.authUrl,
-    required this.redirectScheme,
-    required this.redirectHost,
-    required this.redirectPath,
-  });
-
-  final String authUrl;
-  final String redirectScheme; // e.g. "app"
-  final String redirectHost;   // e.g. "animeshin"
-  final String redirectPath;   // e.g. "/auth"
-
-  @override
-  State<AuthWebViewPage> createState() => _AuthWebViewPageState();
-}
-
-class _AuthWebViewPageState extends State<AuthWebViewPage> {
-  late final WebViewController _controller;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.transparent)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (_) => setState(() => _loading = true),
-          onPageFinished: (_) => setState(() => _loading = false),
-          onNavigationRequest: (request) {
-            final uri = Uri.parse(request.url);
-
-            final isCallback =
-                uri.scheme == widget.redirectScheme &&
-                uri.host == widget.redirectHost &&
-                uri.path == widget.redirectPath;
-
-            if (isCallback) {
-              // AniList implicit flow returns token in fragment (#...)
-              final params = _parseImplicitParams(uri);
-              final token = params['access_token'];
-              final expires = int.tryParse(params['expires_in'] ?? '') ?? 31536000;
-
-              if (token != null && token.isNotEmpty) {
-                Navigator.of(context).pop(
-                  OAuthResult(accessToken: token, expiresIn: expires),
-                );
-              } else {
-                Navigator.of(context).pop(null);
-              }
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.authUrl));
-  }
-
-  Map<String, String> _parseImplicitParams(Uri uri) {
-    // Primary source: fragment; fallback: query (just in case)
-    final raw = uri.fragment.isNotEmpty ? uri.fragment : uri.query;
-    if (raw.isEmpty) return {};
-    try {
-      return Uri.splitQueryString(raw);
-    } catch (_) {
-      final map = <String, String>{};
-      for (final part in raw.split('&')) {
-        final i = part.indexOf('=');
-        if (i > 0) {
-          final k = part.substring(0, i);
-          final v = Uri.decodeComponent(part.substring(i + 1));
-          map[k] = v;
-        }
-      }
-      return map;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('AniList Login')),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
-        ],
-      ),
-    );
-  }
 }
 
 /// ------------------------
@@ -302,37 +188,23 @@ class _AccountPicker extends StatefulWidget {
 }
 
 class __AccountPickerState extends State<_AccountPicker> {
-  // NOTE: Keep the client IDs you already use
   static const _mobileClientId = '29017';
   static const _desktopClientId = '29106';
 
-  // IMPORTANT:
-  // Your registered mobile redirect URI with AniList is: app://animeshin/auth
-  // We will supply it explicitly and intercept it inside the WebView.
-  static const _redirectScheme = 'app';
-  static const _redirectHost = 'animeshin';
-  static const _redirectPath = '/auth';
-
-  /// Builds the authorize URL for implicit flow.
-  static String _buildAuthUrl({
-    required String clientId,
-  }) {
-    final qp = <String, String>{
-      'client_id': clientId,
-      'response_type': 'token', // implicit flow
-    };
-    return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
-        .replace(queryParameters: qp)
-        .toString();
+  static String _buildAuthUrl({required bool mobile}) {
+    final clientId = mobile ? _mobileClientId : _desktopClientId;
+    // NOTE: implicit flow returns token in URL fragment (#...)
+    return Uri.parse('https://anilist.co/api/v2/oauth/authorize').replace(
+      queryParameters: {
+        'client_id': clientId,
+        'response_type': 'token',
+      },
+    ).toString();
   }
 
-  /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
-  /// For desktop we keep the existing local server flow in browser.
-  static String get _loginLinkMobile =>
-      _buildAuthUrl(clientId: _mobileClientId);
-
-  static String get _loginLinkDesktop =>
-      _buildAuthUrl(clientId: _desktopClientId);
+  static String get _loginLink => (Platform.isAndroid || Platform.isIOS)
+      ? _buildAuthUrl(mobile: true)
+      : _buildAuthUrl(mobile: false);
 
   static const _imageSize = 55.0;
 
@@ -400,14 +272,9 @@ class __AccountPickerState extends State<_AccountPicker> {
                       secondaryAction: 'No',
                       onConfirm: () {
                         if (i == accountGroup.accountIndex) {
-                          ref
-                              .read(persistenceProvider.notifier)
-                              .switchAccount(null);
+                          ref.read(persistenceProvider.notifier).switchAccount(null);
                         }
-                        ref
-                            .read(persistenceProvider.notifier)
-                            .removeAccount(i)
-                            .then((_) => setState(() {}));
+                        ref.read(persistenceProvider.notifier).removeAccount(i).then((_) => setState(() {}));
                       },
                     ),
                   ),
@@ -467,34 +334,33 @@ class __AccountPickerState extends State<_AccountPicker> {
   }
 
   Future<void> _addAccount(WidgetRef ref, bool isAccountListEmpty) async {
-    // --- Mobile path: always use embedded WebView and intercept callback ---
+    // ---------
+    // Mobile: WebView fallback (works even in LiveContainer)
+    // ---------
     if (Platform.isAndroid || Platform.isIOS) {
-      final result = await Navigator.of(context).push<OAuthResult?>(
-        MaterialPageRoute(
-          builder: (_) => AuthWebViewPage(
-            authUrl: _loginLinkMobile,
-            redirectScheme: _redirectScheme, // "app"
-            redirectHost: _redirectHost,     // "animeshin"
-            redirectPath: _redirectPath,     // "/auth"
-          ),
-        ),
+      final result = await showDialog<_OAuthResult>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _OAuthWebViewDialog(authUrl: _loginLink),
       );
 
-      if (result == null) {
-        if (context.mounted) {
-          SnackBarExtension.show(context, 'Login canceled or failed');
-        }
+      if (result == null) return;
+
+      if (result.error != null) {
+        SnackBarExtension.show(context, result.error!);
         return;
       }
 
       final accessToken = result.accessToken;
-      final expiration = DateTime.now().add(Duration(seconds: result.expiresIn));
+      final expiration = result.expiration ?? DateTime.now().add(const Duration(days: 365));
+      if (accessToken == null || accessToken.isEmpty) {
+        SnackBarExtension.show(context, 'Login failed: no access token');
+        return;
+      }
 
       final profile = await fetchAniListProfile(accessToken);
       if (profile == null) {
-        if (context.mounted) {
-          SnackBarExtension.show(context, 'Failed to load profile');
-        }
+        SnackBarExtension.show(context, 'Failed to load profile');
         return;
       }
 
@@ -506,14 +372,16 @@ class __AccountPickerState extends State<_AccountPicker> {
         accessToken: accessToken,
       );
       await ref.read(persistenceProvider.notifier).addAccount(account);
-      if (context.mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context); // close _AccountPicker
       return;
     }
 
-    // --- Desktop path: keep existing external browser flow with localhost listener ---
+    // ---------
+    // Desktop (unchanged)
+    // ---------
     if (isAccountListEmpty) {
       final futureToken = listenForToken(port: 28371);
-      await SnackBarExtension.launch(context, _loginLinkDesktop);
+      await SnackBarExtension.launch(context, _loginLink);
       final accessToken = await futureToken;
       if (accessToken != null) {
         final profile = await fetchAniListProfile(accessToken);
@@ -528,7 +396,7 @@ class __AccountPickerState extends State<_AccountPicker> {
             accessToken: accessToken,
           );
           await ref.read(persistenceProvider.notifier).addAccount(account);
-          if (context.mounted) Navigator.pop(context);
+          if (mounted) Navigator.pop(context);
         }
       }
       return;
@@ -536,17 +404,192 @@ class __AccountPickerState extends State<_AccountPicker> {
       ConfirmationDialog.show(
         context,
         title: 'Add an Account',
-        content:
-            'To add more accounts, make sure you are logged out of the previous ones in the browser.',
+        content: 'To add more accounts, make sure you\'re logged out of the previous ones in the browser.',
         primaryAction: 'Continue',
         secondaryAction: 'Cancel',
         onConfirm: () {
           if (mounted) {
-            SnackBarExtension.launch(context, _loginLinkDesktop);
+            SnackBarExtension.launch(context, _loginLink);
           }
         },
       );
     }
+  }
+}
+
+/// Small DTO for the dialog result
+class _OAuthResult {
+  final String? accessToken;
+  final DateTime? expiration;
+  final String? error;
+  const _OAuthResult({this.accessToken, this.expiration, this.error});
+}
+
+/// WebView‑based OAuth dialog with loading overlay & error handling
+class _OAuthWebViewDialog extends StatefulWidget {
+  const _OAuthWebViewDialog({required this.authUrl});
+  final String authUrl;
+
+  @override
+  State<_OAuthWebViewDialog> createState() => _OAuthWebViewDialogState();
+}
+
+class _OAuthWebViewDialogState extends State<_OAuthWebViewDialog> {
+  late final WebViewController _controller;
+  bool _loading = true;
+  String? _lastError;
+
+  // AniList redirects to our custom scheme with params in fragment: animeshin://oauth/callback#access_token=...&expires_in=...
+  static final _callbackPrefix = 'animeshin://oauth/callback';
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.transparent)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) => setState(() => _loading = true),
+          onPageFinished: (_) => setState(() => _loading = false),
+
+          // Called for network/SSL/HTTP errors. We store to show user.
+          onWebResourceError: (e) {
+            // Keep a short error text for the UI
+            _lastError = e.description?.isNotEmpty == true
+                ? e.description!
+                : 'Network error (${e.errorCode})';
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_lastError!)),
+              );
+            }
+          },
+
+          // Intercept the custom callback scheme to extract token or errors.
+          onNavigationRequest: (req) {
+            final url = req.url;
+            if (url.startsWith(_callbackPrefix)) {
+              // Parse either fragment (#...) or query (?...)
+              final uri = Uri.parse(url);
+              final rawParams = uri.fragment.isNotEmpty ? uri.fragment : uri.query;
+              final params = _parseParams(rawParams);
+
+              // Handle known OAuth failure first
+              final error = params['error'] ?? params['error_description'];
+              if (error != null && error.isNotEmpty) {
+                Navigator.of(context).pop(_OAuthResult(error: _prettyError(error)));
+                return NavigationDecision.prevent;
+              }
+
+              final accessToken = params['access_token'];
+              final expiresIn = int.tryParse(params['expires_in'] ?? '');
+              final expiration = (expiresIn == null)
+                  ? null
+                  : DateTime.now().add(Duration(seconds: expiresIn));
+
+              if (accessToken == null || accessToken.isEmpty) {
+                Navigator.of(context).pop(const _OAuthResult(error: 'Login failed: no access token'));
+              } else {
+                Navigator.of(context).pop(_OAuthResult(accessToken: accessToken, expiration: expiration));
+              }
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.authUrl));
+  }
+
+  Map<String, String> _parseParams(String raw) {
+    // Params can arrive URL-encoded inside fragment or query.
+    if (raw.isEmpty) return const {};
+    try {
+      return Uri.splitQueryString(raw);
+    } catch (_) {
+      // Fallback parser for odd edge cases
+      final map = <String, String>{};
+      for (final kv in raw.split('&')) {
+        final idx = kv.indexOf('=');
+        if (idx <= 0) continue;
+        final k = kv.substring(0, idx);
+        final v = Uri.decodeComponent(kv.substring(idx + 1));
+        map[k] = v;
+      }
+      return map;
+    }
+  }
+
+  String _prettyError(String raw) {
+    // Make common OAuth errors human-friendly
+    final lower = raw.toLowerCase();
+    if (lower.contains('access_denied')) return 'Access denied';
+    if (lower.contains('cancel')) return 'Authorization was cancelled';
+    return raw;
+    }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(vertical: 24, horizontal: Theming.offset),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 720),
+        child: Column(
+          children: [
+            // Header with close button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('Log in to AniList', style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // WebView + loading overlay
+            Expanded(
+              child: Stack(
+                children: [
+                  WebViewWidget(controller: _controller),
+                  if (_loading)
+                    // Simple centered loader; we can upgrade to a nicer shimmer/progress later
+                    Container(
+                      color: Colors.black.withOpacity(0.05),
+                      child: const Center(
+                        child: SizedBox(
+                          height: 36,
+                          width: 36,
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            if (_lastError != null)
+              // Inline error hint (non-blocking)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Text(
+                  _lastError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -571,26 +614,20 @@ class __FollowButtonState extends State<_FollowButton> {
       padding: const EdgeInsets.all(Theming.offset),
       child: ElevatedButton.icon(
         icon: Icon(
-          user.isFollowed
-              ? Ionicons.person_remove_outline
-              : Ionicons.person_add_outline,
+          user.isFollowed ? Ionicons.person_remove_outline : Ionicons.person_add_outline,
           size: Theming.iconSmall,
         ),
         label: Text(
           user.isFollowed
-              ? user.isFollower
-                  ? 'Mutual'
-                  : 'Following'
-              : user.isFollower
-                  ? 'Follower'
-                  : 'Follow',
+              ? (user.isFollower ? 'Mutual' : 'Following')
+              : (user.isFollower ? 'Follower' : 'Follow'),
         ),
         onPressed: () {
-          final isFollowed = user.isFollowed;
-          setState(() => user.isFollowed = !isFollowed);
+          final was = user.isFollowed;
+          setState(() => user.isFollowed = !was);
           widget.toggleFollow().then((err) {
             if (err == null) return;
-            setState(() => user.isFollowed = isFollowed);
+            setState(() => user.isFollowed = was);
             if (context.mounted) {
               SnackBarExtension.show(context, err.toString());
             }

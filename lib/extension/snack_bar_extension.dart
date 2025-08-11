@@ -31,26 +31,21 @@ extension SnackBarExtension on SnackBar {
     if (context.mounted) show(context, 'Copied');
   }
 
-  /// Simple launcher wrapper to centralize UX for opening external links.
-  /// This is NOT used for OAuth on mobile anymore (we use WebView instead).
-  static Future<bool> launch(
-    BuildContext context,
-    String link,
-  ) async {
+  /// Simple launcher for non‑OAuth links (kept for desktop flows and misc links).
+  static Future<bool> launch(BuildContext context, String link) async {
     try {
-      final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-      final isAniList = link.startsWith('https://anilist.co');
+      final launchMode =
+          (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+              ? LaunchMode.externalApplication
+              : link.startsWith("https://anilist.co")
+                  ? LaunchMode.inAppBrowserView
+                  : LaunchMode.externalApplication;
 
-      final mode = isDesktop
-          ? LaunchMode.externalApplication
-          : (isAniList ? LaunchMode.inAppBrowserView : LaunchMode.externalApplication);
+      final ok = await launchUrl(Uri.parse(link), mode: launchMode);
+      if (ok) return true;
+    } catch (_) {}
 
-      final ok = await launchUrl(Uri.parse(link), mode: mode);
-      if (!ok && context.mounted) show(context, 'Could not open link');
-      return ok;
-    } catch (_) {
-      if (context.mounted) show(context, 'Could not open link');
-      return false;
-    }
+    if (context.mounted) show(context, 'Could not open link');
+    return false;
   }
 }
