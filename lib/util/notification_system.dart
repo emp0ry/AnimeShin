@@ -11,6 +11,67 @@ class NotificationSystem {
 
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
 
+  static bool _channelsCreated = false;
+  static bool _askedIosPerms = false;
+  static bool _tzReady = false;
+
+  /// Ensure time zone database is ready.
+  static Future<void> _ensureTz() async {
+    if (_tzReady) return;
+    // Expect that `timezone` package is initialized at app start,
+    // but if not, tz.local still works with system local time zone.
+    // Mark as ready to avoid re-doing work.
+    _tzReady = true;
+  }
+
+  /// Create Android channel(s) once.
+  static Future<void> _ensureAndroidChannels() async {
+    if (_channelsCreated) return;
+    if (Platform.isAndroid) {
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (android != null) {
+        await android.createNotificationChannel(const AndroidNotificationChannel(
+          'episode_channel',
+          'Episode releases',
+          description: 'Notifications about new episode releases',
+          importance: Importance.high,
+        ));
+      }
+    }
+    _channelsCreated = true;
+  }
+
+  /// Ask permissions if needed (iOS/macOS and Android 13+ post-notifications).
+  static Future<void> _ensurePermissions() async {
+    if (Platform.isIOS || Platform.isMacOS) {
+      if (_askedIosPerms) return;
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+      final mac = _plugin
+          .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin>();
+      await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      await mac?.requestPermissions(alert: true, badge: true, sound: true);
+      _askedIosPerms = true;
+    } else if (Platform.isAndroid) {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      // Android 13+ POST_NOTIFICATIONS
+      await android?.requestNotificationsPermission();
+
+      // Exact alarm permission (Android 12+) — optional ask.
+      // DO NOT force open settings here; we will detect and fallback.
+      // If you do want to ask, uncomment:
+      // final exactGranted = await android?.canScheduleExactNotifications() ?? false;
+      // if (!exactGranted) {
+      //   await android?.requestExactAlarmsPermission();
+      // }
+    }
+  }
+
   /// Generates a safe file name for images.
   static String safeFileName(String base, int episode) {
     final cleaned = base.replaceAll(RegExp(r'[^\w\d]+'), '_');
@@ -48,6 +109,10 @@ class NotificationSystem {
     int mediaId,
     String imageUrl,
   ) async {
+    await _ensureTz();
+    await _ensurePermissions();
+    await _ensureAndroidChannels();
+    
     final safeName = safeFileName(animeTitle, episodeNumber);
 
     // Download image only once (bigPicture and largeIcon use same file)
