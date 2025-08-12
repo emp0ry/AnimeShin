@@ -66,6 +66,7 @@ class MediaOverviewSubview extends StatelessWidget {
       if (info.hashtag != null) ('Hashtag', info.hashtag!),
       if (info.romajiTitle != null) ('Romaji', info.romajiTitle!),
       if (info.englishTitle != null) ('English', info.englishTitle!),
+      if (info.russianTitle != null) ('Russian', info.russianTitle!),
       if (info.nativeTitle != null) ('Native', info.nativeTitle!),
       ...info.synonyms.map((s) => ('Synonym', s)),
     ];

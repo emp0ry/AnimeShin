@@ -286,6 +286,7 @@ class MediaInfo {
     required this.preferredTitle,
     required this.romajiTitle,
     required this.englishTitle,
+    required this.russianTitle,
     required this.nativeTitle,
     required this.synonyms,
     required this.cover,
@@ -312,6 +313,9 @@ class MediaInfo {
     required this.source,
     required this.hashtag,
     required this.siteUrl,
+    required this.siteShikimoriUrl,
+    required this.siteAniLibriaUrl,
+    required this.anilibriaLastEpisode,
     required this.countryOfOrigin,
     required this.isAdult,
   });
@@ -321,6 +325,7 @@ class MediaInfo {
   final String? preferredTitle;
   final String? romajiTitle;
   final String? englishTitle;
+  final String? russianTitle;
   final String? nativeTitle;
   final List<String> synonyms;
   final String description;
@@ -350,6 +355,9 @@ class MediaInfo {
   final MediaSource? source;
   final String? hashtag;
   final String? siteUrl;
+  final String? siteShikimoriUrl;
+  final String? siteAniLibriaUrl;
+  final int? anilibriaLastEpisode;
   final OriginCountry? countryOfOrigin;
   final bool isAdult;
   final externalLinks = <ExternalLink>[];
@@ -380,6 +388,7 @@ class MediaInfo {
       preferredTitle: map['title']['userPreferred'],
       romajiTitle: map['title']['romaji'],
       englishTitle: map['title']['english'],
+      russianTitle: map['title']['russian'],
       nativeTitle: map['title']['native'],
       synonyms: List<String>.from(map['synonyms'] ?? [], growable: false),
       description: description,
@@ -408,6 +417,9 @@ class MediaInfo {
       source: MediaSource.from(map['source']),
       hashtag: map['hashtag'],
       siteUrl: map['siteUrl'],
+      siteShikimoriUrl: map['shikimoriUrl'],
+      siteAniLibriaUrl: map['anilibriaUrl'],
+      anilibriaLastEpisode: map['anilibriaLastEpisode'],
       countryOfOrigin: OriginCountry.fromCode(map['countryOfOrigin']),
       isAdult: map['isAdult'] ?? false,
     );

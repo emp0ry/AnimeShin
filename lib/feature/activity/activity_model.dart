@@ -111,6 +111,8 @@ sealed class Activity {
             isLiked: map['isLiked'] ?? false,
             isSubscribed: map['isSubscribed'] ?? false,
             isPinned: map['isPinned'] ?? false,
+            ruTitle: map['media']['title']['russian'],
+            siteShikimoriUrl: map['media']['shikimoriUrl'],
           );
         default:
           return null;
@@ -200,6 +202,8 @@ class MediaActivity extends Activity {
     required this.coverUrl,
     required this.isAnime,
     required this.format,
+    required this.ruTitle,
+    required this.siteShikimoriUrl,
   });
 
   final int mediaId;
@@ -207,6 +211,8 @@ class MediaActivity extends Activity {
   final String coverUrl;
   final bool isAnime;
   final String? format;
+  final String? ruTitle;
+  final String? siteShikimoriUrl;
 }
 
 class ActivityReply {

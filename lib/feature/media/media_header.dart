@@ -38,6 +38,10 @@ class MediaHeader extends StatelessWidget {
     if (media != null) {
       final info = media!.info;
 
+      if (info.russianTitle != null) {
+        textRailItems['${info.russianTitle}\n'] = false;
+      }
+
       if (info.isAdult) textRailItems['Adult'] = true;
 
       if (info.format != null) {
@@ -69,6 +73,8 @@ class MediaHeader extends StatelessWidget {
       imageHeightToWidthRatio: Theming.coverHtoWRatio,
       imageHeroTag: id,
       siteUrl: media?.info.siteUrl,
+      siteShikimoriUrl: media?.info.siteShikimoriUrl,
+      siteAniLibriaUrl: media?.info.siteAniLibriaUrl,
       title: media?.info.preferredTitle,
       details: TextRail(
         textRailItems,

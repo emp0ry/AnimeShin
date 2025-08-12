@@ -4,9 +4,9 @@
 
 <h1 align="center">AnimeShin</h1>
 <p align="center">
-  A modern, unofficial AniList client with Russian voice-over tracking via AniLiberty.
+  A modern, unofficial AniList client with Russian titles and AniLiberty voice-over tracking.
   <br>
-  Track anime & manga, update progress with gestures, receive notifications when a new episode is aired — all in one place.
+  Track anime & manga, update progress with gestures, get notified about new episodes and dubs — all in one place.
 </p>
 
 <p align="center">
@@ -29,46 +29,50 @@
 ## ✨ Features
 
 - **🎮 AniList Sync**  
-  Track your anime and manga seamlessly via full AniList integration.
+  Full AniList integration for tracking anime and manga.
 
-- **🏠 Russian Titles**  
-  Displays Russian titles in your user library.
+- **🏠 Russian Titles & Search**  
+  Automatically displays Russian titles from Shikimori in your library.  
+  Supports **search by Russian titles** in your library.
 
 - **🗣 AniLiberty Dub Checker**  
-  See which episodes are already dubbed and which are still pending voice-over.
+  Indicates whether the latest episode is dubbed directly in your library.
+
+- **🔗 Extra Links**  
+  Direct links to Shikimori and AniLiberty release pages.
 
 - **👆 Swipe-Based Progress**  
-  Swipe left/right on covers to update episode or chapter progress.
+  Swipe left/right on covers to update episode or chapter progress instantly.
 
-- **🔔 Episode Airing Notification**
-  Notifying when a new episode has aired.
+- **🔔 Notifications**  
+  - New episode aired  
+  - (Planned) New AniLiberty voice-over release
 
 - **📝 Personal Notes & Scores**  
-  Rate entries and attach personal notes directly in your library.
+  Rate entries and attach personal notes right in your list.
 
 - **🔒 Secure Authentication**  
-  OAuth-based login with AniList ensures security and privacy of your account.
+  OAuth-based login with AniList.
 
 - **🖥 Multi-Platform**  
-  Works on Android, iOS, and Windows.  
-  Planned: macOS & Linux support.
+  Android, iOS, Windows — macOS & Linux planned.
 
 ---
 
 ## 📸 Preview
 
 <p align="center">
-  <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/1.PNG?raw=true" width="25%">
-  <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/2.PNG?raw=true" width="25%">
-  <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/3.PNG?raw=true" width="25%">
+  <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/1.PNG?raw=true" width="32%">
+  <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/2.PNG?raw=true" width="32%">
+  <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/3.PNG?raw=true" width="32%">
 </p>
-<p align="center">
+
 <details>
   <summary>See more screenshots</summary>
-  <p align='center'>
-    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/4.PNG?raw=true" width="25%">
-    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/5.PNG?raw=true" width="25%">
-    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/6.PNG?raw=true" width="25%">
+  <p align="center">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/4.PNG?raw=true" width="32%">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/5.PNG?raw=true" width="32%">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/6.PNG?raw=true" width="32%">
   </p>
 </details>
 
@@ -76,18 +80,17 @@
 
 ## 📈 Roadmap
 
-- Support for macOS and Linux
-- Notifications for new AniLiberty voice-over releases
-- Links to AniLiberty anime/episode pages
-- Import/export of watchlist and progress
-- Home screen widgets
-- Full Russian language localization
+- macOS & Linux support  
+- Notifications for new AniLiberty dubs  
+- Import/export of watchlist and progress  
+- Home screen widgets  
+- Full Russian UI localization
 
 ---
 
-## 💖 Support the Project  
+## 💖 Support
 
-Love AnimeShin? Fuel its development with a coffee!  
+If you love AnimeShin — fuel development with a coffee!  
 
 [![Buy Me a Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/emp0ry)  
 
@@ -95,14 +98,11 @@ Love AnimeShin? Fuel its development with a coffee!
 
 ## 🧪 Development
 
-Run the app on your platform of choice:
-
 ```bash
 # Windows
 flutter run -d windows
 
 # Android
-flutter build apk --flavor dev
 flutter emulators --launch <your_emulator_name>
 flutter run --flavor dev
 
@@ -114,17 +114,16 @@ flutter run -d ios
 
 ## 📦 Release Builds
 
-**Android APK (per ABI):**
+**Android (split by ABI):**
 
 ```bash
 flutter build apk --flavor dev --split-per-abi
 ```
 
-**iOS (without code signing):**
+**iOS (no code signing):**
 
 ```bash
 flutter build ios --no-codesign
-# Create .ipa manually from build/ios/iphoneos/Runner.app
 ```
 
 **Windows:**
@@ -135,9 +134,9 @@ flutter build windows
 
 ---
 
-## 🙏 Acknowledgments
+## 🙏 Credits
 
-Special thanks to [@lotusprey](https://github.com/lotusprey) for the original work on [Otraku](https://github.com/lotusprey/otraku), which served as inspiration for this project.
+Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https://github.com/lotusprey/otraku) — the inspiration for AnimeShin.
 
 ---
 

@@ -56,6 +56,51 @@ class SimpleSheet extends StatelessWidget {
         ),
       ]);
 
+    factory SimpleSheet.link2(
+      BuildContext context,
+      String link,
+      String shikimoriLink,
+      String aniLibriaLink, [
+      List<Widget> children = const [],
+    ]) =>
+      SimpleSheet.list([
+        ...children,
+        ListTile(
+          title: const Text('Open in AniList'),
+          leading: const Icon(Ionicons.link_outline),
+          onTap: () {
+            SnackBarExtension.launch(context, link);
+            Navigator.pop(context);
+          },
+        ),
+        if (shikimoriLink != '')
+          ListTile(
+          title: const Text('Open in Shikimori'),
+          leading: const Icon(Ionicons.link_outline),
+          onTap: () {
+            SnackBarExtension.launch(context, shikimoriLink);
+            Navigator.pop(context);
+            },
+          ),
+        if (aniLibriaLink != '')
+          ListTile(
+          title: const Text('Open in AniLibria'),
+          leading: const Icon(Ionicons.link_outline),
+          onTap: () {
+            SnackBarExtension.launch(context, aniLibriaLink);
+            Navigator.pop(context);
+            },
+          ),
+        ListTile(
+          title: const Text('Copy AniList Link'),
+          leading: const Icon(Ionicons.clipboard_outline),
+          onTap: () {
+            SnackBarExtension.copy(context, link);
+            Navigator.pop(context);
+          },
+        ),
+    ]);
+
   final Widget Function(BuildContext, ScrollController) builder;
   final double? initialHeight;
 

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
+import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/extension/future_extension.dart';
 import 'package:animeshin/extension/iterable_extension.dart';
@@ -43,6 +45,81 @@ class MediaNotifier extends AutoDisposeFamilyAsyncNotifier<Media, int> {
 
     final imageQuality = ref.read(persistenceProvider).options.imageQuality;
 
+    // AniList returns 'ANIME' or 'MANGA'
+    final ofAnime = data['type'] == 'ANIME';
+
+    // Try to enrich data with Shikimori russian title + absolute url
+    final idMal = data['idMal'];
+    if (idMal != null && idMal is int) {
+    try {
+      final shikiRepo = ShikimoriRestRepository();
+
+      // Fetch Shikimori item by MAL id
+      final shikiData = await shikiRepo.fetchByMalId(idMal, ofAnime: ofAnime);
+      if (shikiData != null) {
+        // 1) Fill russian title when available
+        final ru = shikiData['russian']?.toString().trim();
+        if (ru != null && ru.isNotEmpty) {
+          (data['title'] as Map<String, dynamic>)['russian'] = ru;
+        }
+
+        // 2) Normalize URL to absolute (API returns /animes/... or /mangas/...)
+        final u = shikiData['url']?.toString().trim();
+        if (u != null && u.isNotEmpty) {
+          data['shikimoriUrl'] = u.startsWith('http') ? u : 'https://shikimori.one$u';
+
+          // 3) If ANIME: try to find matching Anilibria release by alias
+          if (ofAnime) {
+            final anilibriaRepo = AnilibriaRepository();
+
+            // Collect candidate aliases in order of confidence (use a Set to avoid duplicates)
+            final aliases = <String>{};
+
+            // Prefer AniList romaji -> kebab-case
+            final titles = data['title'] as Map<String, dynamic>?;
+            final romaji = (titles?['romaji'] ?? '').toString().trim();
+            if (romaji.isNotEmpty) {
+              aliases.add(toKebabCase(romaji));
+            }
+
+            // Fallback: slug derived from Shikimori URL
+            final slug = slugFromShikiUrl(u);
+            if (slug.isNotEmpty) {
+              aliases.add(slug);
+            }
+
+            // Try aliases one by one until we find a matching Anilibria release
+            for (final alias in aliases) {
+              if (alias.isEmpty) continue;
+
+              final ani = await anilibriaRepo.fetchByAlias(
+                alias: alias,
+                include: const ['alias', 'episodes.ordinal'],
+              );
+
+              // If Anilibria returns an alias, consider it a match
+              final aniAlias = (ani?['alias'] as String?)?.trim();
+              if (aniAlias != null && aniAlias.isNotEmpty) {
+                data['anilibriaUrl'] = 'https://anilibria.top/anime/releases/release/$alias';
+
+                final eps = ani?['episodes'];
+                if (eps is List && eps.isNotEmpty) {
+                  final last = eps.last;
+                  if (last is Map && last['ordinal'] is int) {
+                    data['anilibriaLastEpisode'] = last['ordinal'];
+                  }
+                }
+
+                break; // stop after first successful match
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    }
+
+    // Existing AniList mapping
     final relatedMedia = <RelatedMedia>[];
     for (final relation in data['relations']['edges']) {
       if (relation['node'] != null) {

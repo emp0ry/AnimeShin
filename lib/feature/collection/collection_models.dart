@@ -423,8 +423,8 @@ class Entry {
   Entry._({
     required this.mediaId,
     required this.titles,
-    required this.ruTitle,
-    required this.ruLastEpisode,
+    required this.shikimoriUrl,
+    required this.lastAniLibriaEpisode,
     required this.imageUrl,
     required this.format,
     required this.releaseStatus,
@@ -450,7 +450,7 @@ class Entry {
 
   factory Entry(Map<String, dynamic> map, ImageQuality imageQuality) {
     final titles = <String>[map['media']['title']['userPreferred']];
-    String ruTitle = '';
+    String shikimoriUrl = '';
     if (map['media']['title']['english'] != null) {
       titles.add(map['media']['title']['english']);
     }
@@ -461,7 +461,10 @@ class Entry {
       titles.add(map['media']['title']['native']);
     }
     if (map['media']['title']['russian'] != null) {
-      ruTitle = map['media']['title']['russian'].toString();
+      titles.add(map['media']['title']['russian']);
+    }
+    if (map['media']['shikimoriUrl'] != null) {
+      shikimoriUrl = map['media']['shikimoriUrl'].toString();
     }
 
     final tagIds = <int>[];
@@ -469,15 +472,15 @@ class Entry {
       tagIds.add(t['id']);
     }
 
-    final int? ruLastEpisode = map['media']?['anilibriaLastEpisode'] is int
+    final int? lastAniLibriaEpisode = map['media']?['anilibriaLastEpisode'] is int
         ? map['media']['anilibriaLastEpisode'] as int
         : null;
 
     return Entry._(
       mediaId: map['media']['id'],
       titles: titles,
-      ruTitle: ruTitle,
-      ruLastEpisode: ruLastEpisode,
+      shikimoriUrl: shikimoriUrl,
+      lastAniLibriaEpisode: lastAniLibriaEpisode,
       imageUrl: map['media']['coverImage'][imageQuality.value],
       format: MediaFormat.from(map['media']['format']),
       releaseStatus: ReleaseStatus.from(map['media']['status']),
@@ -519,8 +522,8 @@ class Entry {
   final List<String> genres;
   final List<int> tagIds;
   final int? progressMax;
-  String? ruTitle;
-  int? ruLastEpisode;
+  String? shikimoriUrl;
+  int? lastAniLibriaEpisode;
   int progress;
   int repeat;
   double score;

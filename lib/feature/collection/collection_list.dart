@@ -1,3 +1,4 @@
+import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -74,44 +75,6 @@ class _TileState extends State<_TileWidget> {
   void _optimisticInc() => setState(() => widget.entry.progress += 1);
   void _optimisticDec() => setState(() => widget.entry.progress -= 1);
 
-  void _persistWithUndo({
-    required BuildContext context,
-    required Future<String?> Function() persist,
-    required Future<void> Function() undoOptimistic,
-    required String snackLabel,
-  }) {
-    // Run after the current frame so we don't block the animation.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Close the slidable smoothly
-      Slidable.of(context)?.close();
-      // Medium haptic after the animation feels nicer
-      HapticFeedback.mediumImpact();
-
-      // Fire-and-forget persist; if it fails, revert.
-      final err = await persist();
-      if (err != null) {
-        await undoOptimistic();
-        return;
-      }
-
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(snackLabel),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () async {
-              HapticFeedback.selectionClick();
-              await undoOptimistic();
-            },
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    });
-  }
-
   Future<String?> _saveProgress() async {
     if (widget.onProgressUpdated == null) return null;
     return widget.onProgressUpdated!(widget.entry, false);
@@ -133,18 +96,8 @@ class _TileState extends State<_TileWidget> {
             confirmDismiss: () {
               if (!_canDecrement) return Future.value(false);
 
-              HapticFeedback.lightImpact();     // start haptic
+              HapticFeedback.mediumImpact();    // start haptic
               _optimisticDec();                 // instant UI update
-
-              _persistWithUndo(
-                context: context,
-                persist: _saveProgress,         // async, runs post-frame
-                undoOptimistic: () async {      // revert path
-                  setState(() => widget.entry.progress += 1);
-                  await _saveProgress();
-                },
-                snackLabel: 'Progress -1',
-              );
 
               return Future.value(false);       // never actually dismiss
             },
@@ -155,17 +108,8 @@ class _TileState extends State<_TileWidget> {
             SlidableAction(
               onPressed: (_) {
                 if (!_canDecrement) return;
-                HapticFeedback.lightImpact();
+                HapticFeedback.mediumImpact();
                 _optimisticDec();
-                _persistWithUndo(
-                  context: context,
-                  persist: _saveProgress,
-                  undoOptimistic: () async {
-                    setState(() => widget.entry.progress += 1);
-                    await _saveProgress();
-                  },
-                  snackLabel: 'Progress -1',
-                );
               },
               icon: Ionicons.remove,
               backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
@@ -185,18 +129,8 @@ class _TileState extends State<_TileWidget> {
             confirmDismiss: () {
               if (!_canIncrement) return Future.value(false);
 
-              HapticFeedback.lightImpact();
+              HapticFeedback.mediumImpact();
               _optimisticInc();
-
-              _persistWithUndo(
-                context: context,
-                persist: _saveProgress,
-                undoOptimistic: () async {
-                  setState(() => widget.entry.progress -= 1);
-                  await _saveProgress();
-                },
-                snackLabel: 'Progress +1',
-              );
 
               return Future.value(false);
             },
@@ -207,17 +141,8 @@ class _TileState extends State<_TileWidget> {
             SlidableAction(
               onPressed: (_) {
                 if (!_canIncrement) return;
-                HapticFeedback.lightImpact();
+                HapticFeedback.mediumImpact();
                 _optimisticInc();
-                _persistWithUndo(
-                  context: context,
-                  persist: _saveProgress,
-                  undoOptimistic: () async {
-                    setState(() => widget.entry.progress -= 1);
-                    await _saveProgress();
-                  },
-                  snackLabel: 'Progress +1',
-                );
               },
               icon: Ionicons.add,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -300,9 +225,11 @@ class __TileContentState extends State<_TileContent> {
     progressPercent = progressPercent.clamp(0.0, 1.0);
 
     final textRailItems = <String, bool>{};
-
-    if (widget.item.ruTitle != null) {
-      textRailItems['${widget.item.ruTitle}\n'] = false;
+  
+    if (widget.item.titles.last.isNotEmpty) {
+      if (russianRegex.hasMatch(widget.item.titles.last)) {
+        textRailItems['${widget.item.titles.last}\n'] = false;
+      }
     }
 
     if (widget.item.format != null) {
@@ -310,21 +237,21 @@ class __TileContentState extends State<_TileContent> {
     }
 
     if (widget.item.airingAt != null) {
-      final key =
-          'Ep ${widget.item.nextEpisode} in ${widget.item.airingAt!.timeUntil}';
+      final key = 'Ep ${widget.item.nextEpisode} in ${widget.item.airingAt!.timeUntil}';
       textRailItems[key] = false;
     }
 
     if (widget.item.nextEpisode != null &&
         widget.item.nextEpisode! - 1 > widget.item.progress) {
       String key;
-      if (widget.item.ruLastEpisode != null &&
-          widget.item.ruLastEpisode! > widget.item.progress) {
-        key =
-            '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
-      } else {
-        key =
-            '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
+      if (widget.item.lastAniLibriaEpisode != null &&
+          widget.item.lastAniLibriaEpisode! > widget.item.progress) {
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
+      } else if (widget.item.lastAniLibriaEpisode != null) {
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
+      }
+      else {
+        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
       }
       textRailItems[key] = true;
     }

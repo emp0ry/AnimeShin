@@ -1,11 +1,8 @@
-// lib/feature/collection/collection_provider.dart
-
 import 'dart:async';
 
-import 'package:animeshin/anilibria/anilibria_repository.dart';
+import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
 import 'package:animeshin/extension/iterable_extension.dart';
 import 'package:animeshin/util/notification_system.dart';
-import 'package:animeshin/util/text_utils.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -15,16 +12,9 @@ import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/feature/viewer/repository_provider.dart';
 import 'package:animeshin/util/graphql.dart';
 
-/// Toggle the extra/fallback search for missed aliases.
-/// Set to false if you want only the fast bulk lookup.
-const bool kEnableFallbackSearch = true;
-
-/// Upper bound on how many misses we try to rescue per page.
-/// Keeps the UI snappy even on huge collections.
-const int kMaxFallbackPerPage = 10;
-
-/// Concurrency for fallback searches (4 keeps it quick but polite).
-const int _kSearchConcurrency = 4;
+// Shikimori repositories (primary source for Russian titles)
+import 'package:animeshin/repository/shikimori/shikimori_gql_repository.dart';
+import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
@@ -60,81 +50,20 @@ class CollectionNotifier
       },
     );
 
-    // Use robust alias generator (handles punctuation/diacritics)
-    String toKebabCase(String input) => toKebabAlias(input);
-
-    final anilibriaRepo = AnilibriaRepository();
-
-    // Build AniList-derived alias list and quick lookup
-    final List<String> aliases = [];
-    final Map<String, Map<String, dynamic>> entriesByAlias = {};
-    for (final l in data['MediaListCollection']['lists']) {
-      for (final e in l['entries']) {
-        final alias = toKebabCase(e['media']['title']['romaji']);
-        aliases.add(alias);
-        entriesByAlias[alias] = e;
-      }
-    }
-
-    // Bulk fetch Anilibria by aliases
-    final anilibriaData = await anilibriaRepo.fetchListByAliases(
-      aliases: aliases,
-      include: ['name', 'episodes', 'alias'],
-      exclude: [
-        'name.english',
-        'name.alternative',
-        'episodes.id',
-        'episodes.name',
-        'episodes.opening',
-        'episodes.ending',
-        'episodes.preview',
-        'episodes.hls_480',
-        'episodes.hls_720',
-        'episodes.hls_1080',
-        'episodes.duration',
-        'episodes.rutube_id',
-        'episodes.youtube_id',
-        'episodes.updated_at',
-        'episodes.sort_order',
-        'episodes.release_id',
-        'episodes.name_english'
-      ],
+    // ---------- STEP A: Fill Russian titles from Shikimori ----------
+    // Strategy:
+    // 1) If media has idMal -> batch GraphQL with ids string (limit=50) and map by myanimelistId.
+    // 2) If no idMal -> fallback to REST search by romaji/english (limited concurrency).
+    await _enrichRussianTitlesFromShikimori(
+      data,
+      ofAnime: arg.ofAnime,
     );
 
-    final dataList = anilibriaData['data'] as List<dynamic>;
-    final Map<String, dynamic> anilibriaByAlias = {};
-    for (final item in dataList) {
-      if (item['alias'] != null) {
-        anilibriaByAlias[item['alias']] = item;
-      }
-    }
-
-    // Figure out which aliases were missed in the bulk request
-    final missingAliases =
-        aliases.where((a) => !anilibriaByAlias.containsKey(a)).toList();
-
-    // Try to enrich the misses using a bounded, cached, concurrent search
-    await _enrichMissingWithSearch(
-      missingAliases,
-      entriesByAlias,
-      anilibriaByAlias,
-      anilibriaRepo,
-    );
-
-    // Merge back into entries: add ruTitle and last episode ordinal
-    for (final l in data['MediaListCollection']['lists']) {
-      for (final e in l['entries']) {
-        final entryAlias = toKebabCase(e['media']['title']['romaji']);
-        final aniItem = anilibriaByAlias[entryAlias];
-        if (aniItem != null) {
-          final ruTitle = aniItem['name']?['main'];
-          final episodes = aniItem['episodes'] as List<dynamic>?;
-          if (ruTitle != null) e['media']['title']['russian'] = ruTitle;
-          if (episodes != null && episodes.isNotEmpty) {
-            e['media']['anilibriaLastEpisode'] = episodes.last['ordinal'];
-          }
-        }
-      }
+    // ---------- STEP B: Latest episode from Anilibria ONLY ----------
+    // We do not change title.russian here; we only set media.anilibriaLastEpisode
+    // from episodes.last.ordinal if available (anime only).
+    if (arg.ofAnime) {
+      await _enrichLatestEpisodeFromAnilibria(data);
     }
 
     final imageQuality = ref.read(persistenceProvider).options.imageQuality;
@@ -152,6 +81,230 @@ class CollectionNotifier
     await NotificationSystem.scheduleNotificationsForAll(collection.list.entries);
 
     return collection;
+  }
+
+  // --- Internal helpers ------------------------------------------------------
+
+  /// Simple concurrency limiter (no Future.isCompleted required).
+  Future<void> _forEachLimited<T>(
+    Iterable<T> items, {
+    required int maxConcurrent,
+    required Future<void> Function(T) action,
+  }) async {
+    final inflight = <Future<void>>[];
+    for (final item in items) {
+      final f = action(item);
+      inflight.add(f);
+      f.whenComplete(() => inflight.remove(f));
+      if (inflight.length >= maxConcurrent) {
+        await Future.any(inflight);
+      }
+    }
+    await Future.wait(inflight);
+  }
+
+  /// Primary: Shikimori → set title.russian.
+  Future<void> _enrichRussianTitlesFromShikimori(
+    Map<String, dynamic> data, {
+    required bool ofAnime,
+  }) async {
+    final malToEntry = <int, Map<String, dynamic>>{};
+    final entriesNeedingSearch = <Map<String, dynamic>>[];
+
+    // Collect entries:
+    // - skip if already have russian title
+    // - split by presence of idMal (GQL batch) vs no idMal (REST fallback)
+    for (final l in data['MediaListCollection']['lists']) {
+      for (final e in l['entries']) {
+        final titles = e['media']['title'] as Map<String, dynamic>;
+        final hasRu = (titles['russian'] != null &&
+            titles['russian'].toString().trim().isNotEmpty);
+        if (hasRu) continue;
+
+        final malId = e['media']['idMal'];
+        if (malId is int && malId > 0) {
+          malToEntry[malId] = e;
+        } else {
+          entriesNeedingSearch.add(e);
+        }
+      }
+    }
+
+    // 1) Batch by malId via Shikimori GQL (limit=50)
+    if (malToEntry.isNotEmpty) {
+      final shikiGql = ShikimoriGqlRepository();
+      final malIds = malToEntry.keys.toList();
+      final byMal = await shikiGql.fetchByMalIdsBatch(
+        malIds,
+        ofAnime: ofAnime,
+        chunkSize: 50, // Shikimori GQL max is 50 per your note
+      );
+
+      byMal.forEach((mal, obj) {
+        // Prefer 'russian', fallback to 'name'
+        final ru = (obj['russian'] ?? obj['name'])?.toString();
+        String? url = obj['url']?.toString();
+
+        if (url != null && url.isNotEmpty && !url.startsWith('http')) {
+          // Ensure absolute URL if API returned a relative path
+          url = 'https://shikimori.one$url';
+        }
+
+        if (ru != null && ru.trim().isNotEmpty) {
+          final entry = malToEntry[mal]!;
+          entry['media']['title']['russian'] = ru;
+          if (url != null && url.isNotEmpty) {
+            entry['media']['shikimoriUrl'] = url;
+          }
+        }
+      });
+    }
+
+    // 2) REST fallback for items without malId
+    if (entriesNeedingSearch.isNotEmpty) {
+      final shikiRest = ShikimoriRestRepository();
+
+      await _forEachLimited<Map<String, dynamic>>(
+        entriesNeedingSearch,
+        maxConcurrent: 6, // keep it modest to avoid rate limits
+        action: (e) async {
+          final titles = e['media']['title'] as Map<String, dynamic>;
+          final romaji = (titles['romaji'] ?? '').toString();
+          final english = (titles['english'] ?? '').toString();
+
+          // Try romaji first, then english
+          final first = await shikiRest.searchRussianAndUrl(
+            romaji,
+            ofAnime: ofAnime,
+          );
+          final result = (first.ru != null && first.ru!.trim().isNotEmpty)
+              ? first
+              : await shikiRest.searchRussianAndUrl(
+                  english,
+                  ofAnime: ofAnime,
+                );
+
+          if (result.ru != null && result.ru!.trim().isNotEmpty) {
+            e['media']['title']['russian'] = result.ru;
+            if (result.url != null && result.url!.isNotEmpty) {
+              e['media']['shikimoriUrl'] = result.url;
+            }
+          }
+        },
+      );
+    }
+  }
+
+  /// Secondary: Anilibria → set media.anilibriaLastEpisode using episodes.last.ordinal.
+  /// Russian titles are NOT touched here.
+  ///
+  /// Now we build alias candidates from:
+  ///  - AniList romaji (kebab-case)
+  ///  - Fallback: slug derived from e.media.shikimoriUrl
+  Future<void> _enrichLatestEpisodeFromAnilibria(
+    Map<String, dynamic> data,
+  ) async {
+    final anilibriaRepo = AnilibriaRepository();
+
+    // Collect unique aliases to batch-request; also remember which entry each alias belongs to
+    final aliases = <String>{};
+    final entriesByAlias = <String, Map<String, dynamic>>{};
+
+    for (final l in data['MediaListCollection']['lists']) {
+      for (final e in l['entries']) {
+        final media = e['media'] as Map<String, dynamic>;
+        final titleMap = (media['title'] as Map<String, dynamic>?) ?? const {};
+
+        // 1) romaji -> kebab-case
+        final romaji = (titleMap['romaji'] ?? '').toString().trim();
+        if (romaji.isNotEmpty) {
+          final alias = toKebabCase(romaji);
+          if (alias.isNotEmpty) {
+            aliases.add(alias);
+            // keep first mapping (alias collisions are rare but possible)
+            entriesByAlias.putIfAbsent(alias, () => e);
+          }
+        }
+
+        // 2) fallback from shikimoriUrl slug
+        final shikiUrl = (media['shikimoriUrl'] ?? '').toString().trim();
+        if (shikiUrl.isNotEmpty) {
+          final slug = slugFromShikiUrl(shikiUrl);
+          if (slug.isNotEmpty) {
+            aliases.add(slug);
+            entriesByAlias.putIfAbsent(slug, () => e);
+          }
+        }
+      }
+    }
+
+    if (aliases.isEmpty) return;
+
+    // Fetch all aliases in batches (repo already splits by limit internally)
+    final anilibriaData = await anilibriaRepo.fetchListByAliases(
+      aliases: aliases.toList(),
+      include: const ['episodes', 'alias'],
+      exclude: const [
+        // keep payload small
+        'name',
+        'episodes.id',
+        'episodes.name',
+        'episodes.opening',
+        'episodes.ending',
+        'episodes.preview',
+        'episodes.hls_480',
+        'episodes.hls_720',
+        'episodes.hls_1080',
+        'episodes.duration',
+        'episodes.rutube_id',
+        'episodes.youtube_id',
+        'episodes.updated_at',
+        'episodes.sort_order',
+        'episodes.release_id',
+        'episodes.name_english',
+      ],
+    );
+
+    // Index Anilibria results by alias
+    final dataList = (anilibriaData['data'] as List<dynamic>?) ?? const [];
+    final anilibriaByAlias = <String, dynamic>{};
+    for (final item in dataList) {
+      if (item is Map && item['alias'] is String) {
+        anilibriaByAlias[item['alias'] as String] = item;
+      }
+    }
+
+    // For each entry, try romaji-alias first, then slug alias, set last episode ordinal if found
+    for (final l in data['MediaListCollection']['lists']) {
+      for (final e in l['entries']) {
+        final media = e['media'] as Map<String, dynamic>;
+        final titleMap = (media['title'] as Map<String, dynamic>?) ?? const {};
+
+        final romaji = (titleMap['romaji'] ?? '').toString().trim();
+        final romajiAlias = romaji.isNotEmpty ? toKebabCase(romaji) : '';
+
+        final shikiUrl = (media['shikimoriUrl'] ?? '').toString().trim();
+        final slugAlias = shikiUrl.isNotEmpty ? slugFromShikiUrl(shikiUrl) : '';
+
+        // Try candidates in order
+        for (final alias in <String>[romajiAlias, slugAlias]) {
+          if (alias.isEmpty) continue;
+          final aniItem = anilibriaByAlias[alias];
+          if (aniItem == null) continue;
+
+          final episodes = aniItem['episodes'] as List<dynamic>?;
+          if (episodes != null && episodes.isNotEmpty) {
+            final ordinal = (episodes.last is Map)
+                ? (episodes.last['ordinal'] as num?)?.toInt()
+                : null;
+            if (ordinal != null) {
+              media['anilibriaLastEpisode'] = ordinal;
+              break; // stop after first successful alias
+            }
+          }
+        }
+      }
+    }
   }
 
   void ensureSorted(EntrySort sort, EntrySort previewSort) {
@@ -215,8 +368,9 @@ class CollectionNotifier
       );
 
       if (oldEntry != null) {
-        entry.ruTitle = oldEntry.ruTitle;
-        entry.ruLastEpisode = oldEntry.ruLastEpisode;
+        // entry.ruTitle = oldEntry.ruTitle;
+        entry.shikimoriUrl = oldEntry.shikimoriUrl;
+        entry.lastAniLibriaEpisode = oldEntry.lastAniLibriaEpisode;
       }
 
       await NotificationSystem.scheduleNotificationForEntry(entry);
@@ -363,77 +517,4 @@ class CollectionNotifier
     final result = mutator(state.value!);
     if (result != null) state = AsyncValue.data(result);
   }
-}
-
-/// Concurrent, bounded enrichment for missed aliases.
-/// Keeps UI responsive while still rescuing some items.
-Future<void> _enrichMissingWithSearch(
-  List<String> missingAliases,
-  Map<String, dynamic> entriesByAlias,
-  Map<String, dynamic> anilibriaByAlias,
-  AnilibriaRepository repo,
-) async {
-  if (!kEnableFallbackSearch) return;
-
-  // Bound the amount of extra work per page load.
-  final targets = missingAliases.take(kMaxFallbackPerPage).toList();
-
-  // Fields to request (keep it light).
-  final _include = ['name', 'episodes', 'alias'];
-  final _exclude = [
-    'name.english',
-    'name.alternative',
-    'episodes.id',
-    'episodes.name',
-    'episodes.opening',
-    'episodes.ending',
-    'episodes.preview',
-    'episodes.hls_480',
-    'episodes.hls_720',
-    'episodes.hls_1080',
-    'episodes.duration',
-    'episodes.rutube_id',
-    'episodes.youtube_id',
-    'episodes.updated_at',
-    'episodes.sort_order',
-    'episodes.release_id',
-    'episodes.name_english'
-  ];
-
-  // Small concurrency pool
-  final pool = <Future<void>>[];
-  for (final alias in targets) {
-    pool.add(() async {
-      final e = entriesByAlias[alias];
-      if (e == null) return;
-
-      final media = (e['media'] as Map<String, dynamic>?);
-      final titles = (media?['title'] as Map<String, dynamic>?) ?? const {};
-      final romaji = (titles['romaji'] ?? '').toString();
-      final english = (titles['english'] ?? '').toString();
-
-      final foundAlias = await repo.searchBestAlias(
-        romajiTitle: romaji,
-        englishTitle: english.isEmpty ? null : english,
-      );
-
-      if (foundAlias == null) return;
-
-      final single = await repo.fetchListByAliases(
-        aliases: [foundAlias],
-        include: _include,
-        exclude: _exclude,
-      );
-      final items = (single['data'] as List<dynamic>?);
-      if (items != null && items.isNotEmpty) {
-        anilibriaByAlias[alias] = items.first;
-      }
-    }());
-
-    if (pool.length == _kSearchConcurrency) {
-      await Future.wait(pool);
-      pool.clear();
-    }
-  }
-  if (pool.isNotEmpty) await Future.wait(pool);
 }

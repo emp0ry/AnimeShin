@@ -40,6 +40,7 @@ abstract class GqlQuery {
     }
     fragment info on Media {
       id
+      idMal
       type
       title {userPreferred english romaji native}
       synonyms
@@ -1028,6 +1029,7 @@ abstract class _GqlFragment {
       updatedAt
       media {
         id
+        idMal
         title {userPreferred romaji english native}
         coverImage {extraLarge large medium}
         format
