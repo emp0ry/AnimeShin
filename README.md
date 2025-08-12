@@ -32,7 +32,7 @@
   Full AniList integration for tracking anime and manga.
 
 - **🏠 Russian Titles & Search**  
-  Automatically displays Russian titles from Shikimori in your library.  
+  Automatically displays Russian titles from Shikimori.  
   Supports **search by Russian titles** in your library.
 
 - **🗣 AniLiberty Dub Checker**  
