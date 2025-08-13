@@ -54,8 +54,11 @@
 - **🔒 Secure Authentication**  
   OAuth-based login with AniList.
 
-- **🖥 Multi-Platform**  
+- **💻 Multi-Platform**  
   Android, iOS, Windows — macOS & Linux planned.
+
+- **⚙️ Settings**  
+  Toggle options for AniLibria latest episode dub display, Russian title visibility, and scheduled new episode air notifications.
 
 ---
 
