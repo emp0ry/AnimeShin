@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/feature/media/media_models.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/layout/content_header.dart';
 import 'package:animeshin/widget/text_rail.dart';
 
-class MediaHeader extends StatelessWidget {
+class MediaHeader extends ConsumerWidget {
   const MediaHeader.withTabBar({
     required this.id,
     required this.coverUrl,
@@ -14,6 +17,7 @@ class MediaHeader extends StatelessWidget {
     required TabController this.tabCtrl,
     required void Function() this.scrollToTop,
     required this.toggleFavorite,
+    super.key,
   });
 
   const MediaHeader.withoutTabBar({
@@ -21,6 +25,7 @@ class MediaHeader extends StatelessWidget {
     required this.coverUrl,
     required this.media,
     required this.toggleFavorite,
+    super.key,
   })  : tabCtrl = null,
         scrollToTop = null;
 
@@ -32,13 +37,14 @@ class MediaHeader extends StatelessWidget {
   final Future<Object?> Function() toggleFavorite;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textRailItems = <String, bool>{};
 
     if (media != null) {
       final info = media!.info;
+      final options = ref.watch(persistenceProvider.select((s) => s.options));
 
-      if (info.russianTitle != null) {
+      if (options.ruTitle && info.russianTitle != null && info.russianTitle!.trim().isNotEmpty) {
         textRailItems['${info.russianTitle}\n'] = false;
       }
 
@@ -53,15 +59,13 @@ class MediaHeader extends StatelessWidget {
       }
 
       if (info.airingAt != null) {
-        textRailItems['Ep ${info.nextEpisode} in '
-            '${info.airingAt!.timeUntil}'] = true;
+        textRailItems['Ep ${info.nextEpisode} in ${info.airingAt!.timeUntil}'] = true;
       }
 
       if (media!.entryEdit.listStatus != null) {
         final progress = media!.entryEdit.progress;
         if (info.nextEpisode != null && info.nextEpisode! - 1 > progress) {
-          textRailItems['${info.nextEpisode! - 1 - progress}'
-              ' ep behind'] = true;
+          textRailItems['${info.nextEpisode! - 1 - progress} ep behind'] = true;
         }
       }
     }

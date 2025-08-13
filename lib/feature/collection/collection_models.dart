@@ -446,6 +446,8 @@ class Entry {
     required this.releaseStart,
     required this.watchStart,
     required this.watchEnd,
+    required this.ruTitleState,
+    required this.anilibriaEpDubState,
   });
 
   factory Entry(Map<String, dynamic> map, ImageQuality imageQuality) {
@@ -504,6 +506,8 @@ class Entry {
       releaseStart: DateTimeExtension.fromFuzzyDate(map['media']['startDate']),
       watchStart: DateTimeExtension.fromFuzzyDate(map['startedAt']),
       watchEnd: DateTimeExtension.fromFuzzyDate(map['completedAt']),
+      ruTitleState: map['ruTitleState'] ?? false,
+      anilibriaEpDubState: map['anilibriaEpDubState'] ?? false
     );
   }
 
@@ -532,6 +536,8 @@ class Entry {
   DateTime? releaseStart;
   DateTime? watchStart;
   DateTime? watchEnd;
+  bool? ruTitleState;
+  bool? anilibriaEpDubState;
 }
 
 enum ListStatus {

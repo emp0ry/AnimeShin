@@ -10,7 +10,7 @@ import 'package:animeshin/feature/home/home_model.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/util/theming.dart';
 
-const appVersion = '1.5.0';
+const appVersion = '1.5.1';
 
 class Persistence {
   const Persistence({
@@ -197,6 +197,9 @@ class Options {
     required this.discoverItemView,
     required this.collectionItemView,
     required this.collectionPreviewItemView,
+    required this.ruTitle,
+    required this.anilibriaEpDub,
+    required this.scheduleNotification,
   });
 
   factory Options.empty() => const Options(
@@ -214,6 +217,9 @@ class Options {
         discoverItemView: DiscoverItemView.detailed,
         collectionItemView: CollectionItemView.detailed,
         collectionPreviewItemView: CollectionItemView.detailed,
+        ruTitle: true,
+        anilibriaEpDub: true,
+        scheduleNotification: true,
       );
 
   factory Options.fromPersistenceMap(Map<dynamic, dynamic> map) => Options(
@@ -240,6 +246,9 @@ class Options {
         collectionPreviewItemView: CollectionItemView.values.getOrFirst(
           map['collectionPreviewItemView'],
         ),
+        ruTitle: map['ruTitle'] ?? true,
+        anilibriaEpDub: map['anilibriaEpDub'] ?? true,
+        scheduleNotification: map['scheduleNotification'] ?? true,
       );
 
   final ThemeMode themeMode;
@@ -256,6 +265,9 @@ class Options {
   final DiscoverItemView discoverItemView;
   final CollectionItemView collectionItemView;
   final CollectionItemView collectionPreviewItemView;
+  final bool ruTitle;
+  final bool anilibriaEpDub;
+  final bool scheduleNotification;
 
   Options copyWith({
     ThemeMode? themeMode,
@@ -272,6 +284,9 @@ class Options {
     DiscoverItemView? discoverItemView,
     CollectionItemView? collectionItemView,
     CollectionItemView? collectionPreviewItemView,
+    bool? ruTitle,
+    bool? anilibriaEpDub,
+    bool? scheduleNotification,
   }) =>
       Options(
         themeMode: themeMode ?? this.themeMode,
@@ -280,17 +295,17 @@ class Options {
         homeTab: homeTab ?? this.homeTab,
         discoverType: discoverType ?? this.discoverType,
         imageQuality: imageQuality ?? this.imageQuality,
-        animeCollectionPreview:
-            animeCollectionPreview ?? this.animeCollectionPreview,
-        mangaCollectionPreview:
-            mangaCollectionPreview ?? this.mangaCollectionPreview,
+        animeCollectionPreview: animeCollectionPreview ?? this.animeCollectionPreview,
+        mangaCollectionPreview: mangaCollectionPreview ?? this.mangaCollectionPreview,
         confirmExit: confirmExit ?? this.confirmExit,
         buttonOrientation: buttonOrientation ?? this.buttonOrientation,
         analogClock: analogClock ?? this.analogClock,
         discoverItemView: discoverItemView ?? this.discoverItemView,
         collectionItemView: collectionItemView ?? this.collectionItemView,
-        collectionPreviewItemView:
-            collectionPreviewItemView ?? this.collectionPreviewItemView,
+        collectionPreviewItemView: collectionPreviewItemView ?? this.collectionPreviewItemView,
+        ruTitle: ruTitle ?? this.ruTitle,
+        anilibriaEpDub: anilibriaEpDub ?? this.anilibriaEpDub,
+        scheduleNotification: scheduleNotification ?? this.scheduleNotification,
       );
 
   Map<String, dynamic> toPersistenceMap() => {
@@ -308,6 +323,9 @@ class Options {
         'discoverItemView': discoverItemView.index,
         'collectionItemView': collectionItemView.index,
         'collectionPreviewItemView': collectionPreviewItemView.index,
+        'ruTitle': ruTitle,
+        'anilibriaEpDub': anilibriaEpDub,
+        'scheduleNotification': scheduleNotification,
       };
 }
 
@@ -325,7 +343,7 @@ enum ImageQuality {
 enum ButtonOrientation {
   auto,
   left,
-  right,
+  right
 }
 
 class AppMeta {

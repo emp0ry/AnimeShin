@@ -187,4 +187,9 @@ class NotificationSystem {
       await scheduleNotificationForEntry(entry);
     }
   }
+
+  /// Cancels all scheduled notifications (episodes or others)
+  static Future<void> cancelAllScheduledNotifications() async {
+    await _plugin.cancelAll();
+  }
 }

@@ -50,6 +50,13 @@ class CollectionNotifier
       },
     );
 
+    final options = ref.watch(persistenceProvider.select((s) => s.options));
+    for (final l in data['MediaListCollection']['lists']) {
+      for (final e in l['entries']) {
+        e['ruTitleState'] = options.ruTitle;
+        e['anilibriaEpDubState'] = options.anilibriaEpDub;
+      }
+    }
     // ---------- STEP A: Fill Russian titles from Shikimori ----------
     // Strategy:
     // 1) If media has idMal -> batch GraphQL with ids string (limit=50) and map by myanimelistId.
@@ -78,7 +85,12 @@ class CollectionNotifier
         : PreviewCollection(data['MediaListCollection'], imageQuality);
     collection.sort(_sort);
 
-    await NotificationSystem.scheduleNotificationsForAll(collection.list.entries);
+    if (options.scheduleNotification) {
+      await NotificationSystem.scheduleNotificationsForAll(collection.list.entries);
+    }
+    else {
+      await NotificationSystem.cancelAllScheduledNotifications();
+    }
 
     return collection;
   }
@@ -368,12 +380,17 @@ class CollectionNotifier
       );
 
       if (oldEntry != null) {
-        // entry.ruTitle = oldEntry.ruTitle;
         entry.shikimoriUrl = oldEntry.shikimoriUrl;
         entry.lastAniLibriaEpisode = oldEntry.lastAniLibriaEpisode;
       }
 
-      await NotificationSystem.scheduleNotificationForEntry(entry);
+      final options = ref.watch(persistenceProvider.select((s) => s.options));
+      if (options.scheduleNotification) {
+        await NotificationSystem.scheduleNotificationForEntry(entry);
+      }
+      else {
+        await NotificationSystem.cancelAllScheduledNotifications();
+      }
 
       _updateState(
         (collection) => switch (collection) {

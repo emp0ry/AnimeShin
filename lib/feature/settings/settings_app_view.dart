@@ -121,6 +121,42 @@ class SettingsAppSubview extends ConsumerWidget {
           ],
         ),
         ExpansionTile(
+          title: const Text('Additional'),
+          children: [
+            StatefulSwitchListTile(
+              title: const Text('Aired Schedule Notification'),
+              subtitle: const Text(
+                'Receive notifications when new episodes air for your watching/rewatching anime. '
+                'Works even without an internet connection once the schedule is cached.',
+              ),
+              value: options.scheduleNotification,
+              onChanged: (v) => update(
+                options.copyWith(scheduleNotification: v),
+              ),
+            ),
+            StatefulSwitchListTile(
+              title: const Text('Display Russian Titles'),
+              subtitle: const Text(
+                'Show Russian titles when available in lists, details, and search results.',
+              ),
+              value: options.ruTitle,
+              onChanged: (v) => update(
+                options.copyWith(ruTitle: v),
+              ),
+            ),
+            StatefulSwitchListTile(
+              title: const Text('AniLibriа Dub Indicator'),
+              subtitle: const Text(
+                'Show whether each episode is dubbed in AniLibriа when viewing anime details.',
+              ),
+              value: options.anilibriaEpDub,
+              onChanged: (v) => update(
+                options.copyWith(anilibriaEpDub: v),
+              ),
+            ),
+          ],
+        ),
+        ExpansionTile(
           title: const Text('Collection Previews'),
           children: [
             StatefulSwitchListTile(

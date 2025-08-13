@@ -1,3 +1,6 @@
+import 'package:animeshin/feature/settings/settings_model.dart';
+import 'package:animeshin/feature/settings/settings_view.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -225,8 +228,9 @@ class __TileContentState extends State<_TileContent> {
     progressPercent = progressPercent.clamp(0.0, 1.0);
 
     final textRailItems = <String, bool>{};
-  
-    if (widget.item.titles.last.isNotEmpty) {
+
+    
+    if (widget.item.titles.last.isNotEmpty && widget.item.ruTitleState != null && widget.item.ruTitleState!) {
       if (russianRegex.hasMatch(widget.item.titles.last)) {
         textRailItems['${widget.item.titles.last}\n'] = false;
       }
@@ -244,15 +248,21 @@ class __TileContentState extends State<_TileContent> {
     if (widget.item.nextEpisode != null &&
         widget.item.nextEpisode! - 1 > widget.item.progress) {
       String key;
-      if (widget.item.lastAniLibriaEpisode != null &&
-          widget.item.lastAniLibriaEpisode! > widget.item.progress) {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
-      } else if (widget.item.lastAniLibriaEpisode != null) {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
+
+      if (widget.item.anilibriaEpDubState != null && widget.item.anilibriaEpDubState!) {
+        if (widget.item.lastAniLibriaEpisode != null && widget.item.lastAniLibriaEpisode! > widget.item.progress) {
+          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
+        } else if (widget.item.lastAniLibriaEpisode != null) {
+          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
+        }
+        else {
+          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
+        }
       }
       else {
-        key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
+          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
       }
+      
       textRailItems[key] = true;
     }
 
