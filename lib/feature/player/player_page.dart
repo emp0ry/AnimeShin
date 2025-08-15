@@ -194,6 +194,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       fireImmediately: true,
     );
 
+    // Handle callbacks coming from native iOS AVPlayerViewController.
+    _iosNativePlayer.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'ios_player_dismissed':
+          // Fired when the native player is dismissed (user closed fullscreen).
+          final double pos = (call.arguments?['position'] as num?)?.toDouble() ?? 0.0;
+          final double rate = (call.arguments?['rate'] as num?)?.toDouble() ?? 1.0;
+          final bool wasPlaying = (call.arguments?['wasPlaying'] as bool?) ?? true;
+
+          // Resume Flutter player at the same position & speed.
+          try {
+            await _player.seek(Duration(milliseconds: (pos * 1000).round()));
+            await _player.setRate(rate);
+            if (wasPlaying) {
+              await _player.play();
+            }
+          } catch (_) {}
+          break;
+
+        case 'ios_player_completed':
+          // Fired when native player reached the end.
+          // Persist progress & open next episode (it will re-enter fullscreen).
+          await _saveProgress(clearIfCompleted: true);
+          if (_autoNextEpisode) {
+            unawaited(_openNextEpisode());
+          } else {
+            _showBanner('Completed');
+          }
+          break;
+
+        default:
+          break;
+      }
+    });
+
     _init();
   }
 
@@ -355,18 +390,34 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (_chosenUrl == null || _chosenUrl!.isEmpty) return;
 
     // Pause Flutter-side playback before handing off.
+    final wasPlaying = _player.state.playing;
+    final posSec = _player.state.position.inMilliseconds / 1000.0;
     await _player.pause();
 
     // Prepare arguments for native AVPlayerViewController.
     final args = <String, dynamic>{
       'url': _chosenUrl!,
-      'position': _player.state.position.inSeconds.toDouble(),
+      'position': posSec,
       'rate': _speed,
+      'title': widget.args.title,
+
+      // Opening/ending ranges so native side can auto-skip too.
+      // Use seconds; nulls are allowed.
+      'openingStart': widget.args.openingStart,
+      'openingEnd': widget.args.openingEnd,
+      'endingStart': widget.args.endingStart,
+      'endingEnd': widget.args.endingEnd,
+
+      // Whether we should auto-open next on completion (native will notify anyway).
+      'autoNext': _autoNextEpisode,
+
+      // Whether playback is currently running (to keep behavior consistent after return).
+      'wasPlaying': wasPlaying,
     };
 
     try {
       await _iosNativePlayer.invokeMethod<void>('present', args);
-      // After native VC is dismissed user returns here; keep paused to avoid double audio.
+      // After dismissal, native side will call back 'ios_player_dismissed' with position/rate/wasPlaying.
     } on PlatformException catch (e) {
       _log('iOS native player failed: ${e.code}: ${e.message}');
       // Fallback: try lib fullscreen if native failed.
