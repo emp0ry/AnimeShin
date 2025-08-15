@@ -286,7 +286,7 @@ class _Delegate extends SliverPersistentHeaderDelegate {
     );
 
     final bannerBottomPadding =
-        content.preferredSize.height / 2.0 + Theming.offset / 2;
+        content.preferredSize.height / 2.0 + Theming.offset / 2 + 0.1;
 
     Widget body = Stack(
       fit: StackFit.expand,

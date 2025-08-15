@@ -1,6 +1,4 @@
-import 'package:animeshin/feature/settings/settings_model.dart';
-import 'package:animeshin/feature/settings/settings_view.dart';
-import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/watch/watch_page.dart';
 import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -77,11 +75,6 @@ class _TileState extends State<_TileWidget> {
 
   void _optimisticInc() => setState(() => widget.entry.progress += 1);
   void _optimisticDec() => setState(() => widget.entry.progress -= 1);
-
-  Future<String?> _saveProgress() async {
-    if (widget.onProgressUpdated == null) return null;
-    return widget.onProgressUpdated!(widget.entry, false);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,6 +194,15 @@ class _TileState extends State<_TileWidget> {
   }
 }
 
+// Derive Anilibria alias from Shikimori URL if item.anilibriaAlias is empty.
+String _slugFromShikiUrl(String? url) {
+  if (url == null || url.isEmpty) return '';
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.pathSegments.isEmpty) return '';
+  return uri.pathSegments.last;
+}
+
+
 class _TileContent extends StatefulWidget {
   const _TileContent(this.item, this.scoreFormat, this.onProgressUpdated);
 
@@ -270,22 +272,39 @@ class __TileContentState extends State<_TileContent> {
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Flexible(
-                child: Text(
-                  widget.item.titles[0],
-                  overflow: TextOverflow.fade,
+        // Row with title and optional Watch button
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                item.titles[0],
+                overflow: TextOverflow.fade,
+              ),
+            ),
+            if (item.anilibriaAlias != null &&
+                item.anilibriaAlias!.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: FilledButton.icon(
+                  icon: const Icon(Ionicons.play),
+                  label: const Text('Watch'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            WatchPage(alias: item.anilibriaAlias!.trim()),
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(height: 5),
-              TextRail(textRailItems),
-            ],
-          ),
+          ],
         ),
+        const SizedBox(height: 5),
+        TextRail(textRailItems),
+
+        // Progress bar
         Container(
           height: 5,
           margin: const EdgeInsets.symmetric(vertical: 3),
@@ -302,36 +321,44 @@ class __TileContentState extends State<_TileContent> {
             ),
           ),
         ),
+
+        // Score, repeats, notes, progress
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            ScoreLabel(widget.item.score, widget.scoreFormat),
-            if (widget.item.repeat > 0)
-              Tooltip(
-                message: 'Repeats',
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Ionicons.repeat, size: Theming.iconSmall),
-                    const SizedBox(width: 3),
-                    Text(
-                      widget.item.repeat.toString(),
-                      style: TextTheme.of(context).labelSmall,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ScoreLabel(item.score, widget.scoreFormat),
+                const SizedBox(width: 8),
+                if (item.repeat > 0)
+                  Tooltip(
+                    message: 'Repeats',
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Ionicons.repeat,
+                            size: Theming.iconSmall),
+                        const SizedBox(width: 3),
+                        Text(
+                          item.repeat.toString(),
+                          style: TextTheme.of(context).labelSmall,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              )
-            else
-              const SizedBox(),
+                  )
+                else
+                  const SizedBox(),
+              ],
+            ),
             NotesLabel(item.notes),
             Text(
-              widget.item.progress == widget.item.progressMax
-                  ? widget.item.progress.toString()
-                  : '${widget.item.progress}/${widget.item.progressMax ?? "?"}',
+              item.progress == item.progressMax
+                  ? item.progress.toString()
+                  : '${item.progress}/${item.progressMax ?? "?"}',
               style: TextTheme.of(context).labelSmall?.copyWith(
-                    color: (widget.item.nextEpisode != null &&
-                            widget.item.progress + 1 <
-                                widget.item.nextEpisode!)
+                    color: (item.nextEpisode != null &&
+                            item.progress + 1 < item.nextEpisode!)
                         ? ColorScheme.of(context).error
                         : ColorScheme.of(context).onSurfaceVariant,
                   ),

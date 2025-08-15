@@ -448,11 +448,13 @@ class Entry {
     required this.watchEnd,
     required this.ruTitleState,
     required this.anilibriaEpDubState,
+    required this.anilibriaAlias,
   });
 
   factory Entry(Map<String, dynamic> map, ImageQuality imageQuality) {
     final titles = <String>[map['media']['title']['userPreferred']];
     String shikimoriUrl = '';
+    String anilibriaAlias = '';
     if (map['media']['title']['english'] != null) {
       titles.add(map['media']['title']['english']);
     }
@@ -467,6 +469,11 @@ class Entry {
     }
     if (map['media']['shikimoriUrl'] != null) {
       shikimoriUrl = map['media']['shikimoriUrl'].toString();
+    }
+    // Accept alias either at the media-level (preferred) or legacy top-level.
+    final dynamic aliasDyn = map['media']?['anilibriaAlias'] ?? map['anilibriaAlias'];
+    if (aliasDyn != null) {
+      anilibriaAlias = aliasDyn.toString();
     }
 
     final tagIds = <int>[];
@@ -507,7 +514,8 @@ class Entry {
       watchStart: DateTimeExtension.fromFuzzyDate(map['startedAt']),
       watchEnd: DateTimeExtension.fromFuzzyDate(map['completedAt']),
       ruTitleState: map['ruTitleState'] ?? false,
-      anilibriaEpDubState: map['anilibriaEpDubState'] ?? false
+      anilibriaEpDubState: map['anilibriaEpDubState'] ?? false,
+      anilibriaAlias: anilibriaAlias
     );
   }
 
@@ -538,6 +546,7 @@ class Entry {
   DateTime? watchEnd;
   bool? ruTitleState;
   bool? anilibriaEpDubState;
+  String? anilibriaAlias;
 }
 
 enum ListStatus {

@@ -304,6 +304,10 @@ class CollectionNotifier
           final aniItem = anilibriaByAlias[alias];
           if (aniItem == null) continue;
 
+          if (aniItem['alias'].toString().isNotEmpty) {
+            media['anilibriaAlias'] = aniItem['alias'];
+          }
+
           final episodes = aniItem['episodes'] as List<dynamic>?;
           if (episodes != null && episodes.isNotEmpty) {
             final ordinal = (episodes.last is Map)
@@ -382,6 +386,7 @@ class CollectionNotifier
       if (oldEntry != null) {
         entry.shikimoriUrl = oldEntry.shikimoriUrl;
         entry.lastAniLibriaEpisode = oldEntry.lastAniLibriaEpisode;
+        entry.anilibriaAlias = oldEntry.anilibriaAlias;
       }
 
       final options = ref.watch(persistenceProvider.select((s) => s.options));

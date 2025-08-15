@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -19,10 +20,13 @@ final _notificationCtrl = StreamController<String>.broadcast();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
+
   tz.initializeTimeZones();
 
   // Initialize Hive (required for Hive.openBox)
   await Hive.initFlutter();
+
 
   // === Desktop window size persistence ===
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
