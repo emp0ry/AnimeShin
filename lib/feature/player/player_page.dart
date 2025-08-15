@@ -94,6 +94,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           defaultTargetPlatform == TargetPlatform.linux ||
           defaultTargetPlatform == TargetPlatform.macOS);
 
+  bool get _isMobile =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
 
   void _log(String msg) {
@@ -125,7 +130,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     try {
       if (_isDesktop) {
         await windowManager.setFullScreen(true);
-      } else {
+      } else if (!_isIOS) {
+        // Do not touch SystemChrome on iOS; native VC handles overlays there.
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       }
     } catch (_) {}
@@ -135,7 +141,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     try {
       if (_isDesktop) {
         await windowManager.setFullScreen(false);
-      } else {
+      } else if (!_isIOS) {
+        // Do not touch SystemChrome on iOS; native VC handles overlays there.
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       }
     } catch (_) {}
@@ -150,7 +157,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   void initState() {
     super.initState();
 
-    final vo = 'gpu'; // good default for all platforms incl. iOS/Android/desktop
+    final vo = 'gpu'; // Good default for all platforms incl. iOS/Android/desktop
     _player = Player(configuration: PlayerConfiguration(vo: vo));
     _video = VideoController(_player);
 
@@ -230,8 +237,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   @override
   void dispose() {
-    _log(
-        'dispose() start; _wasFullscreen=$_wasFullscreen, libIsFullscreen=$_libIsFullscreen');
+    _log('dispose() start; _wasFullscreen=$_wasFullscreen, libIsFullscreen=$_libIsFullscreen');
     _navigatingAway = true;
     _prefsSub.close();
     _detachListeners();
@@ -352,13 +358,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }) async {
     await _player.open(Media(url), play: play);
 
-    // Wait a bit for duration, then seek.
-    final started = DateTime.now();
-    while (_player.state.duration == Duration.zero &&
-        DateTime.now().difference(started) <
-            const Duration(milliseconds: 2000)) {
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
+    // Wait for non-zero duration via stream (up to 5s) to avoid early seek on HLS.
+    final completer = Completer<void>();
+    late final StreamSubscription sub;
+    sub = _player.stream.duration.listen((d) {
+      if (d > Duration.zero && !completer.isCompleted) {
+        completer.complete();
+        sub.cancel();
+      }
+    });
+    // Fallback timeout
+    unawaited(Future.delayed(const Duration(seconds: 5)).then((_) {
+      if (!completer.isCompleted) completer.complete();
+    }));
+    await completer.future;
+
     if (position > Duration.zero) {
       await _player.seek(position);
     }
@@ -414,8 +428,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     try {
       await _iosNativePlayer.invokeMethod<void>('present', args);
-      // Nothing else here: we will receive callbacks on dismiss/completion
-      // via _maybeAttachIOSCallbacks() handler and sync state back.
+      // No further action here; callbacks will sync back on dismiss/completion.
     } on PlatformException catch (e) {
       _log('iOS native player failed: ${e.code}: ${e.message}');
       // Fallback to lib fullscreen if native failed.
@@ -738,25 +751,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, _) async {
-        // Always stop & free the player if the route is leaving.
-        if (didPop) {
-          _navigatingAway = true;
-          _detachListeners();
-          await _player.stop();
-          await _player.dispose();
-        } else {
-          // Try a soft pop only if still mounted.
-          if (mounted) {
-            _navigatingAway = true;
-            _detachListeners();
-            await _player.stop();
-            await _player.dispose();
-            // Guard context usage — we are still within build frame.
-            if (mounted) {
-              Navigator.of(context).maybePop();
-            }
-          }
-        }
+        // Capture the navigator before the async break:
+        final navigator = Navigator.of(context);
+
+        _navigatingAway = true;
+        _detachListeners();
+
+        await _player.stop();
+
+        // We do nothing if we have already been hit by the system
+        if (didPop) return;
+
+        // Check both State and NavigatorState itself
+        if (!mounted || !navigator.mounted) return;
+
+        navigator.maybePop();
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -766,58 +775,63 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           foregroundColor: Colors.white,
           actions: actions,
         ),
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Use a tiny bridge to get a context INSIDE the controls subtree.
-            Video(
-              controller: _video,
-              controls: (state) => _ControlsCtxBridge(
-                state: state,
-                onReady: (ctx) {
-                  if (_navigatingAway) return;
-                  _controlsCtx ??= ctx;
-                  _log(
-                      'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
+        body: Padding(
+          padding: _isMobile ? const EdgeInsets.only(bottom: 24) : EdgeInsets.zero,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Use a tiny bridge to get a context INSIDE the controls subtree.
+              Video(
+                controller: _video,
+                controls: (state) => _ControlsCtxBridge(
+                  state: state,
+                  onReady: (ctx) {
+                    if (_navigatingAway) return;
+                    _controlsCtx ??= ctx;
+                    _log(
+                        'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
-                  // Start in fullscreen for this page if requested (lib fullscreen, not iOS native).
-                  if (widget.startFullscreen && !_startFsHandled) {
-                    _startFsHandled = true;
-                    WidgetsBinding.instance.endOfFrame.then((_) async {
-                      if (!mounted || _navigatingAway) return;
-                      final c = _controlsCtx;
-                      if (c == null || !c.mounted) return;
+                    // Start in fullscreen (lib) only for non‑iOS platforms.
+                    if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
+                      _startFsHandled = true;
+                      WidgetsBinding.instance.endOfFrame.then((_) async {
+                        if (!mounted || _navigatingAway) return;
+                        final c = _controlsCtx;
+                        if (c == null || !c.mounted) return;
 
-                      if (!isFullscreen(c)) {
-                        try {
-                          await enterFullscreen(c); // lib fullscreen
-                          _wasFullscreen = true;
-                          await _enterNativeFullscreen(); // also request native overlays
-                          _log('entered fullscreen on new page');
-                        } catch (_) {}
-                      }
-                    });
-                  }
+                        if (!isFullscreen(c)) {
+                          try {
+                            await enterFullscreen(c); // lib fullscreen
+                            _wasFullscreen = true;
+                            await _enterNativeFullscreen(); // request native overlays (non‑iOS)
+                            _log('entered fullscreen on new page');
+                          } catch (_) {}
+                        }
+                      });
+                    }
+                  },
+                ),
+                onEnterFullscreen: () async {
+                  // On iOS we use only the native player button; ignore lib fullscreen.
+                  if (_isIOS) return;
+                  _log('onEnterFullscreen() fired (lib)');
+                  _wasFullscreen = true;
+                  if (!mounted || _navigatingAway) return;
+                  await _enterNativeFullscreen();
+                  _log('native fullscreen requested from onEnterFullscreen()');
+                },
+                onExitFullscreen: () async {
+                  if (_isIOS) return;
+                  _log('onExitFullscreen() fired (lib)');
+                  _wasFullscreen = false;
+                  if (!mounted || _navigatingAway) return;
+                  await _exitNativeFullscreen();
+                  _log('native fullscreen exit requested from onExitFullscreen()');
                 },
               ),
-              onEnterFullscreen: () async {
-                // Standard lib fullscreen for all platforms (iOS native player is now manual via button).
-                _log('onEnterFullscreen() fired (lib)');
-                _wasFullscreen = true;
-                if (!mounted || _navigatingAway) return;
-                await _enterNativeFullscreen();
-                _log('native fullscreen requested from onEnterFullscreen()');
-              },
-              onExitFullscreen: () async {
-                _log('onExitFullscreen() fired (lib)');
-                _wasFullscreen = false;
-                if (!mounted || _navigatingAway) return;
-                await _exitNativeFullscreen();
-                _log('native fullscreen exit requested from onExitFullscreen()');
-              },
-            ),
-            banner,
-          ],
+              banner,
+            ],
+          ),
         ),
       ),
     );
@@ -856,6 +870,8 @@ class _ControlsCtxBridgeState extends State<_ControlsCtxBridge> {
 
   @override
   Widget build(BuildContext context) {
+    // NOTE: If you need to hide the fullscreen button on iOS,
+    // switch to custom controls and omit the fullscreen action.
     return AdaptiveVideoControls(widget.state);
   }
 }

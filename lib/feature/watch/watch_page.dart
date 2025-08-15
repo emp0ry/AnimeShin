@@ -245,7 +245,6 @@ class _EpisodeTile extends StatelessWidget {
           height: 96,
           child: Row(
             children: [
-              // Preview для конкретной серии
               AspectRatio(
                 aspectRatio: Theming.coverHtoWRatio,
                 child: Stack(

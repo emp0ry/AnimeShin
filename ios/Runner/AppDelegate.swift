@@ -1,19 +1,35 @@
 import UIKit
 import Flutter
 import AVKit
+import AVFoundation
 
-// AVPlayer VC that reports position/rate on dismiss & owns observers.
+// AVPlayer VC that reports position/rate on dismiss & owns observers safely.
 class ReportingAVPlayerViewController: AVPlayerViewController {
+  // Bridge back to Flutter
   var channel: FlutterMethodChannel?
+
+  // KVO for item.status
   var statusObserver: NSKeyValueObservation?
+
+  // Periodic time observer token
   var timeObserverToken: Any?
 
+  // NotificationCenter observer for end-of-playback
+  var endObserver: NSObjectProtocol?
+
   deinit {
-    // Clean up observers if anything survives to deinit.
-    statusObserver?.invalidate()
+    // Remove periodic time observer to avoid leaks
     if let token = timeObserverToken {
       player?.removeTimeObserver(token)
       timeObserverToken = nil
+    }
+    // Invalidate KVO if still active
+    statusObserver?.invalidate()
+    statusObserver = nil
+    // Remove playback-end observer if set
+    if let eo = endObserver {
+      NotificationCenter.default.removeObserver(eo)
+      endObserver = nil
     }
   }
 
@@ -29,15 +45,15 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       "rate": rate,
       "wasPlaying": wasPlaying
     ])
-    // Remove periodic time observer to avoid leaks.
-    if let token = timeObserverToken {
-      player.removeTimeObserver(token)
-      timeObserverToken = nil
-    }
-    // Invalidate KVO if still active.
-    statusObserver?.invalidate()
-    statusObserver = nil
   }
+
+  // Prefer landscape; allow portrait too (prevents orientation glitches)
+  override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+    return [.landscapeLeft, .landscapeRight, .portrait]
+  }
+
+  // Hide home indicator while playing
+  override var prefersHomeIndicatorAutoHidden: Bool { true }
 }
 
 @main
@@ -46,6 +62,15 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+
+    // Configure audio session for video playback (prevents stalling / mutes)
+    do {
+      try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [])
+      try AVAudioSession.sharedInstance().setActive(true)
+    } catch {
+      print("AVAudioSession error: \(error)")
+    }
+
     let controller = window?.rootViewController as! FlutterViewController
     let channel = FlutterMethodChannel(name: "native_ios_player", binaryMessenger: controller.binaryMessenger)
 
@@ -54,34 +79,37 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       guard call.method == "present",
             let args = call.arguments as? [String: Any],
             let urlStr = args["url"] as? String,
-            let url = URL(string: urlStr)
-      else {
+            let url = URL(string: urlStr) else {
         result(FlutterError(code: "BAD_ARGS", message: "Missing url", details: nil))
         return
       }
 
+      // Initial state coming from Flutter
       let pos = (args["position"] as? Double) ?? 0.0
       let rate = (args["rate"] as? Double) ?? 1.0
       let title = (args["title"] as? String) ?? ""
-
-      // Optional auto-skip ranges
       let openingStart = args["openingStart"] as? Double
       let openingEnd   = args["openingEnd"]   as? Double
       let endingStart  = args["endingStart"]  as? Double
       let endingEnd    = args["endingEnd"]    as? Double
       let wasPlaying   = (args["wasPlaying"] as? Bool) ?? true
 
+      // Build player & item
       let item = AVPlayerItem(url: url)
       let player = AVPlayer(playerItem: item)
       player.automaticallyWaitsToMinimizeStalling = true
 
+      // Configure view controller
       let vc = ReportingAVPlayerViewController()
       vc.player = player
       vc.title = title
       vc.modalPresentationStyle = .fullScreen
       vc.channel = channel
+      vc.allowsPictureInPicturePlayback = false     // disable PiP to reduce UI complexity
+      vc.entersFullScreenWhenPlaybackBegins = true
+      vc.exitsFullScreenWhenPlaybackEnds = true
 
-      // Periodic observer for auto-skip opening/ending.
+      // Auto-skip opening/ending via periodic time observer
       var didSkipOpening = false
       var didSkipEnding = false
       vc.timeObserverToken = player.addPeriodicTimeObserver(
@@ -107,21 +135,20 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         }
       }
 
-      // Notify Flutter when playback completes AND auto-dismiss the native VC.
-      NotificationCenter.default.addObserver(
+      // Notify Flutter when playback completes AND auto-dismiss the native VC
+      vc.endObserver = NotificationCenter.default.addObserver(
         forName: .AVPlayerItemDidPlayToEndTime,
         object: item,
         queue: .main
       ) { [weak vc] _ in
-        // Dismiss the native player automatically.
         vc?.dismiss(animated: true, completion: {
-          // Tell Flutter that the item completed. Dart side will continue flow (next ep, etc.)
           channel.invokeMethod("ios_player_completed", arguments: nil)
         })
       }
 
+      // Present native player
       controller.present(vc, animated: true) {
-        // Helper: seek & play with the desired rate.
+        // Helper: seek & play with the desired rate when ready
         let startPlayback = {
           if pos > 0 {
             player.seek(
@@ -136,7 +163,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
           }
         }
 
-        // Start after item becomes ready. Use KVO and retain it in the VC.
+        // Start after item becomes ready (guard against early seeking)
         if item.status == .readyToPlay {
           startPlayback()
         } else {
