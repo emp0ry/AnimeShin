@@ -107,13 +107,17 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         }
       }
 
-      // Notify Flutter when playback completes.
+      // Notify Flutter when playback completes AND auto-dismiss the native VC.
       NotificationCenter.default.addObserver(
         forName: .AVPlayerItemDidPlayToEndTime,
         object: item,
         queue: .main
-      ) { _ in
-        channel.invokeMethod("ios_player_completed", arguments: nil)
+      ) { [weak vc] _ in
+        // Dismiss the native player automatically.
+        vc?.dismiss(animated: true, completion: {
+          // Tell Flutter that the item completed. Dart side will continue flow (next ep, etc.)
+          channel.invokeMethod("ios_player_completed", arguments: nil)
+        })
       }
 
       controller.present(vc, animated: true) {
