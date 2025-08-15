@@ -194,15 +194,6 @@ class _TileState extends State<_TileWidget> {
   }
 }
 
-// Derive Anilibria alias from Shikimori URL if item.anilibriaAlias is empty.
-String _slugFromShikiUrl(String? url) {
-  if (url == null || url.isEmpty) return '';
-  final uri = Uri.tryParse(url);
-  if (uri == null || uri.pathSegments.isEmpty) return '';
-  return uri.pathSegments.last;
-}
-
-
 class _TileContent extends StatefulWidget {
   const _TileContent(this.item, this.scoreFormat, this.onProgressUpdated);
 
