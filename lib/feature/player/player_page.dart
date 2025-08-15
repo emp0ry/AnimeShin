@@ -40,12 +40,10 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
-  // --- Platform channels --------------------------------------------------------
-  // iOS native player channel (implemented in AppDelegate.swift).
-  static const MethodChannel _iosNativePlayer =
-      MethodChannel('native_ios_player');
+  // --- iOS native player channel (used only when user taps "iOS Player") -----
+  static const MethodChannel _iosNativePlayer = MethodChannel('native_ios_player');
 
-  // --- Media -------------------------------------------------------------------
+  // --- Media ------------------------------------------------------------------
   late final Player _player;
   late final VideoController _video;
 
@@ -65,14 +63,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   StreamSubscription<Duration>? _subPos;
   StreamSubscription<bool>? _subCompleted;
   StreamSubscription<double>? _subRate;
-  Timer? _bannerTimer;
-  Timer? _autosaveTimer;
 
-  // Banners
   bool _bannerVisible = false;
   String _bannerText = '';
   Duration? _undoSeekFrom;
   DateTime? _autoSkipBlockedUntil;
+  Timer? _bannerTimer;
+  Timer? _autosaveTimer;
 
   // Quality
   String? _chosenUrl;
@@ -87,6 +84,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   late ProviderSubscription<PlayerPrefs> _prefsSub;
 
   // ---------- Platform helpers ----------
+
   bool get _isDesktop =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
@@ -95,8 +93,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   void _log(String msg) {
     // Scoped log with page identity for easier tracing across rebuilds.
-    debugPrint(
-        '[PlayerPage#${identityHashCode(this)} @${DateTime.now().toIso8601String()}] $msg');
+    debugPrint('[PlayerPage#${identityHashCode(this)} @${DateTime.now().toIso8601String()}] $msg');
   }
 
   // Safe setState: ignore updates when widget is unmounted or we're navigating away.
@@ -105,24 +102,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     setState(fn);
   }
 
-  // Cancel all streams/timers immediately.
   void _detachListeners() {
     _subPos?.cancel(); _subPos = null;
     _subCompleted?.cancel(); _subCompleted = null;
     _subRate?.cancel(); _subRate = null;
     _autosaveTimer?.cancel(); _autosaveTimer = null;
     _bannerTimer?.cancel(); _bannerTimer = null;
-  }
-
-  // Single idempotent teardown used for any kind of leave (system back, our nav, dispose).
-  Future<void> _stopAndRelease() async {
-    if (_navigatingAway) return; // already tearing down
-    _navigatingAway = true;
-    _detachListeners();
-    unawaited(_saveProgress()); // best-effort persist
-
-    try { await _player.stop(); } catch (_) {}
-    try { await _player.dispose(); } catch (_) {}
   }
 
   Future<void> _enterNativeFullscreen() async {
@@ -145,24 +130,61 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     } catch (_) {}
   }
 
-  bool get _libIsFullscreen =>
-      _controlsCtx != null && isFullscreen(_controlsCtx!);
+  bool get _libIsFullscreen => _controlsCtx != null && isFullscreen(_controlsCtx!);
 
   // ---------- Lifecycle ----------
+
   @override
   void initState() {
     super.initState();
 
-    // Prefer GPU VO on all platforms; it avoids texture black screens on many Android devices.
-    final vo = 'gpu';
+    // Choose a sane VO per platform.
+    final vo = switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'gpu',
+      TargetPlatform.iOS     => 'gpu',
+      TargetPlatform.windows ||
+      TargetPlatform.linux  ||
+      TargetPlatform.macOS   => 'gpu',
+      _                      => 'null',
+    };
 
-    _player = Player(
-      configuration: PlayerConfiguration(
-        vo: vo,
-        // Keep other defaults (osc=false, async=true, etc.)
-      ),
-    );
+    _player = Player(configuration: PlayerConfiguration(vo: vo));
     _video = VideoController(_player);
+
+    // iOS: listen to callbacks from native AVPlayerViewController.
+    _iosNativePlayer.setMethodCallHandler((call) async {
+      if (!mounted) return;
+      switch (call.method) {
+        case 'ios_player_dismissed': {
+          // Native AVPlayer was closed; sync position/rate back to our player.
+          final args = (call.arguments as Map?) ?? const {};
+          final double pos = (args['position'] as num?)?.toDouble() ?? 0.0;
+          final double rate = (args['rate'] as num?)?.toDouble() ?? 1.0;
+          final bool wasPlaying = (args['wasPlaying'] as bool?) ?? true;
+          try {
+            await _player.seek(Duration(milliseconds: (pos * 1000).round()));
+            await _player.setRate(rate);
+            if (wasPlaying) {
+              await _player.play();
+            }
+          } catch (_) {}
+          break;
+        }
+        case 'ios_player_completed': {
+          // Native reached the end; just return to our player (no native-next).
+          await _saveProgress(clearIfCompleted: true);
+          if (_autoNextEpisode) {
+            // We open the next inside our Flutter player (not native).
+            unawaited(_openNextEpisode());
+          } else {
+            _showBanner('Completed');
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    });
 
     // Preferences subscription — no awaits inside the callback.
     _prefsSub = ref.listenManual<PlayerPrefs>(
@@ -183,7 +205,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             final wasPlaying = _player.state.playing;
             _currentQuality = next.preferredQuality;
             _chosenUrl = newUrl;
-            // Re-open on the new URL off the microtask queue.
             unawaited(() async {
               await _openAt(newUrl, position: pos, play: wasPlaying);
               await _player.setRate(_speed);
@@ -194,53 +215,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       fireImmediately: true,
     );
 
-    // Handle callbacks coming from native iOS AVPlayerViewController.
-    _iosNativePlayer.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'ios_player_dismissed':
-          // Fired when the native player is dismissed (user closed fullscreen).
-          final double pos = (call.arguments?['position'] as num?)?.toDouble() ?? 0.0;
-          final double rate = (call.arguments?['rate'] as num?)?.toDouble() ?? 1.0;
-          final bool wasPlaying = (call.arguments?['wasPlaying'] as bool?) ?? true;
-
-          // Resume Flutter player at the same position & speed.
-          try {
-            await _player.seek(Duration(milliseconds: (pos * 1000).round()));
-            await _player.setRate(rate);
-            if (wasPlaying) {
-              await _player.play();
-            }
-          } catch (_) {}
-          break;
-
-        case 'ios_player_completed':
-          // Fired when native player reached the end.
-          // Persist progress & open next episode (it will re-enter fullscreen).
-          await _saveProgress(clearIfCompleted: true);
-          if (_autoNextEpisode) {
-            unawaited(_openNextEpisode());
-          } else {
-            _showBanner('Completed');
-          }
-          break;
-
-        default:
-          break;
-      }
-    });
-
     _init();
   }
 
   @override
   void dispose() {
-    // Safety net: if the widget is torn out without pop callback, still free resources.
-    unawaited(_stopAndRelease());
+    _log('dispose() start; _wasFullscreen=$_wasFullscreen, libIsFullscreen=$_libIsFullscreen');
+    _navigatingAway = true;
     _prefsSub.close();
+    _detachListeners();
+    unawaited(_saveProgress());
+    _player.dispose();
+    _log('dispose() done');
     super.dispose();
   }
 
   // ---------- Quality helpers ----------
+
   String? _pickUrlForQuality(String quality) {
     switch (quality) {
       case '1080p':
@@ -264,6 +255,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   // ---------- Bootstrap ----------
+
   Future<void> _init() async {
     await ref.read(playerPrefsProvider.notifier).ready();
 
@@ -288,8 +280,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     await _player.setRate(_speed);
 
-    _autosaveTimer =
-        Timer.periodic(const Duration(seconds: 5), (_) => _saveProgress());
+    _autosaveTimer = Timer.periodic(const Duration(seconds: 5), (_) => _saveProgress());
 
     _subPos = _player.stream.position.listen((pos) {
       _maybeAutoSkip(pos);
@@ -318,6 +309,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   // ---------- Persistence ----------
+
   Future<Duration> _restoreSavedPosition() async {
     final saved = await _playback.read(widget.args.alias, widget.args.ordinal);
     if (saved == null || saved <= 0) return Duration.zero;
@@ -334,12 +326,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (clearIfCompleted || isCompleted) {
       await _playback.clearEpisode(widget.args.alias, widget.args.ordinal);
     } else {
-      await _playback.save(
-          widget.args.alias, widget.args.ordinal, pos.inSeconds);
+      await _playback.save(widget.args.alias, widget.args.ordinal, pos.inSeconds);
     }
   }
 
   // ---------- Media helpers ----------
+
   Future<void> _openAt(
     String url, {
     required Duration position,
@@ -347,11 +339,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }) async {
     await _player.open(Media(url), play: play);
 
-    // Wait briefly for duration, then seek.
+    // Wait a bit for duration, then seek.
     final started = DateTime.now();
     while (_player.state.duration == Duration.zero &&
-        DateTime.now().difference(started) <
-            const Duration(milliseconds: 2000)) {
+        DateTime.now().difference(started) < const Duration(milliseconds: 2000)) {
       await Future.delayed(const Duration(milliseconds: 50));
     }
     if (position > Duration.zero) {
@@ -376,42 +367,33 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _currentQuality = label;
 
     await _openAt(url, position: pos, play: wasPlaying);
-    unawaited(ref
-        .read(playerPrefsProvider.notifier)
-        .setPreferredQuality(_currentQuality));
+    unawaited(ref.read(playerPrefsProvider.notifier).setPreferredQuality(_currentQuality));
     await _player.setRate(_speed);
 
     _safeSetState(() {});
   }
 
-  // ---------- iOS native fullscreen ----------
+  // ---------- iOS: present native AVPlayer on explicit user action ----------
+
   Future<void> _presentIOSNativePlayer() async {
-    // Guard: no URL, no native handoff.
+    if (defaultTargetPlatform != TargetPlatform.iOS) return;
     if (_chosenUrl == null || _chosenUrl!.isEmpty) return;
 
-    // Pause Flutter-side playback before handing off.
     final wasPlaying = _player.state.playing;
     final posSec = _player.state.position.inMilliseconds / 1000.0;
+
+    // Pause Flutter-side playback before handing off.
     await _player.pause();
 
-    // Prepare arguments for native AVPlayerViewController.
     final args = <String, dynamic>{
       'url': _chosenUrl!,
       'position': posSec,
       'rate': _speed,
       'title': widget.args.title,
-
-      // Opening/ending ranges so native side can auto-skip too.
-      // Use seconds; nulls are allowed.
       'openingStart': widget.args.openingStart,
       'openingEnd': widget.args.openingEnd,
       'endingStart': widget.args.endingStart,
       'endingEnd': widget.args.endingEnd,
-
-      // Whether we should auto-open next on completion (native will notify anyway).
-      'autoNext': _autoNextEpisode,
-
-      // Whether playback is currently running (to keep behavior consistent after return).
       'wasPlaying': wasPlaying,
     };
 
@@ -420,17 +402,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // After dismissal, native side will call back 'ios_player_dismissed' with position/rate/wasPlaying.
     } on PlatformException catch (e) {
       _log('iOS native player failed: ${e.code}: ${e.message}');
-      // Fallback: try lib fullscreen if native failed.
-      if (_controlsCtx != null && !_libIsFullscreen) {
-        try {
-          await enterFullscreen(_controlsCtx!);
-          _wasFullscreen = true;
-        } catch (_) {}
-      }
     }
   }
 
   // ---------- Auto-skip / next ----------
+
   void _maybeAutoSkip(Duration pos) {
     final dur = _player.state.duration;
     if (dur == Duration.zero) return;
@@ -446,8 +422,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       final s = widget.args.openingStart! + 1;
       final e = widget.args.openingEnd!;
       if (pos.inSeconds >= s && pos.inSeconds <= s + 5) {
-        _skipTo(Duration(seconds: s), Duration(seconds: e),
-            banner: 'Skipped Opening');
+        _skipTo(Duration(seconds: s), Duration(seconds: e), banner: 'Skipped Opening');
         return;
       }
     }
@@ -458,15 +433,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       final s = widget.args.endingStart! + 1;
       final e = widget.args.endingEnd!;
       if (pos.inSeconds >= s && pos.inSeconds <= s + 5) {
-        _skipTo(Duration(seconds: s), Duration(seconds: e),
-            banner: 'Skipped Ending');
+        _skipTo(Duration(seconds: s), Duration(seconds: e), banner: 'Skipped Ending');
         return;
       }
     }
   }
 
-  Future<void> _skipTo(Duration from, Duration to,
-      {required String banner}) async {
+  Future<void> _skipTo(Duration from, Duration to, {required String banner}) async {
     _undoSeekFrom = from;
     await _player.seek(to);
     _showBanner(banner, showUndo: true);
@@ -482,20 +455,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _openNextEpisode() async {
     if (_navigatingAway) return;
     _autoSkipBlockedUntil = null;
-
-    // Cache navigator BEFORE any await to avoid using BuildContext across async gaps.
-    final navigator = Navigator.of(context);
+    _log('_openNextEpisode() called');
 
     final wasFs = _wasFullscreen;
+    _log('_openNextEpisode(); wasFs=$wasFs');
+
     if (wasFs && _controlsCtx != null) {
+      _log('exiting only lib fullscreen');
       try { await exitFullscreen(_controlsCtx!); } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 60));
     }
 
     try {
+      _log('fetching next episode...');
       final raw = await _repo.fetchByAlias(alias: widget.args.alias);
       if (raw == null) {
-        _showBanner('Next episode not available');
+        _log('fetch returned null, aborting');
         return;
       }
       final rel = mapAniLibriaRelease(raw);
@@ -505,15 +480,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         (e) => e.ordinal == nextOrd,
         orElse: () => rel.episodes.last,
       );
+      _log('current=${widget.args.ordinal}, picked next=${next.ordinal}');
+
       if (next.ordinal == widget.args.ordinal) {
+        _log('no next episode available');
         _showBanner('Next episode not available');
         return;
       }
 
-      // Stop & free this page's player BEFORE pushing the next page.
-      await _stopAndRelease();
-      if (!mounted) return;
+      if (!mounted) {
+        _log('not mounted anymore, aborting');
+        return;
+      }
 
+      _navigatingAway = true;
+      _detachListeners();
+
+      final navigator = Navigator.of(context); // cache before async
+      _log('pushReplacement (startFullscreen=$wasFs)...');
       navigator.pushReplacement(
         MaterialPageRoute(
           builder: (_) => PlayerPage(
@@ -535,14 +519,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           ),
         ),
       );
+      _log('pushReplacement issued');
     } catch (e, st) {
-      _navigatingAway = false; // allow UI again if navigation failed
       _log('failed to open next episode: $e\n$st');
+      _navigatingAway = false;
       _showBanner('Failed to open next episode');
     }
   }
 
   // ---------- Banners ----------
+
   void _showBanner(
     String text, {
     bool showUndo = false,
@@ -564,6 +550,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   // ---------- UI ----------
+
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -572,28 +559,36 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     final actions = <Widget>[
+      // iOS native player button (explicit "Play in iOS Player")
+      if (defaultTargetPlatform == TargetPlatform.iOS)
+        Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            onPressed: _presentIOSNativePlayer,
+            icon: const Icon(Icons.ios_share),
+            label: const Text('iOS Player'),
+          ),
+        ),
+
       // Quality
       PopupMenuButton<String>(
         tooltip: 'Quality',
         onSelected: (q) async {
-          unawaited(
-              ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
+          unawaited(ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
           await _changeQuality(q);
         },
         itemBuilder: (_) {
           PopupMenuItem<String> item(String label) => PopupMenuItem<String>(
-                value: label,
-                child: Row(
-                  children: [
-                    if (_currentQuality == label)
-                      const Icon(Icons.check, size: 16)
-                    else
-                      const SizedBox(width: 16),
-                    const SizedBox(width: 8),
-                    Text(label),
-                  ],
-                ),
-              );
+            value: label,
+            child: Row(
+              children: [
+                if (_currentQuality == label) const Icon(Icons.check, size: 16) else const SizedBox(width: 16),
+                const SizedBox(width: 8),
+                Text(label),
+              ],
+            ),
+          );
           return [item('1080p'), item('720p'), item('480p')];
         },
         child: Row(
@@ -614,17 +609,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           unawaited(ref.read(playerPrefsProvider.notifier).setSpeed(r));
           await _player.setRate(r);
         },
-        itemBuilder: (_) => const <double>[
-          0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2
-        ].map<PopupMenuEntry<double>>(
-          (s) => PopupMenuItem<double>(value: s, child: Text('${s}x')),
-        ).toList(),
+        itemBuilder: (_) => const <double>[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+            .map<PopupMenuEntry<double>>((s) => PopupMenuItem<double>(value: s, child: Text('${s}x')))
+            .toList(),
         child: Row(
           children: [
             const Icon(Icons.speed),
             const SizedBox(width: 6),
-            Text(
-                '${_speed.toStringAsFixed(_speed == _speed.roundToDouble() ? 0 : 2)}x'),
+            Text('${_speed.toStringAsFixed(_speed == _speed.roundToDouble() ? 0 : 2)}x'),
             const SizedBox(width: 12),
           ],
         ),
@@ -640,9 +632,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             checked: _autoSkipOpening,
             onTap: () {
               _autoSkipOpening = !_autoSkipOpening;
-              unawaited(ref
-                  .read(playerPrefsProvider.notifier)
-                  .setAutoSkipOpening(_autoSkipOpening));
+              unawaited(ref.read(playerPrefsProvider.notifier).setAutoSkipOpening(_autoSkipOpening));
               _safeSetState(() {});
             },
             child: const Text('Auto-skip Opening'),
@@ -652,9 +642,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             checked: _autoSkipEnding,
             onTap: () {
               _autoSkipEnding = !_autoSkipEnding;
-              unawaited(ref
-                  .read(playerPrefsProvider.notifier)
-                  .setAutoSkipEnding(_autoSkipEnding));
+              unawaited(ref.read(playerPrefsProvider.notifier).setAutoSkipEnding(_autoSkipEnding));
               _safeSetState(() {});
             },
             child: const Text('Auto-skip Ending'),
@@ -664,9 +652,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             checked: _autoNextEpisode,
             onTap: () {
               _autoNextEpisode = !_autoNextEpisode;
-              unawaited(ref
-                  .read(playerPrefsProvider.notifier)
-                  .setAutoNextEpisode(_autoNextEpisode));
+              unawaited(ref.read(playerPrefsProvider.notifier).setAutoNextEpisode(_autoNextEpisode));
               _safeSetState(() {});
             },
             child: const Text('Auto next episode'),
@@ -687,19 +673,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               color: Colors.black.withValues(alpha: 0.65),
               borderRadius: BorderRadius.circular(10),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(_bannerText,
-                        style: const TextStyle(color: Colors.white)),
+                    Text(_bannerText, style: const TextStyle(color: Colors.white)),
                     if (_undoSeekFrom != null) ...[
                       const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: _undoSkip,
-                        child: const Text('UNDO'),
-                      ),
+                      TextButton(onPressed: _undoSkip, child: const Text('UNDO')),
                     ],
                   ],
                 ),
@@ -708,18 +689,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           )
         : const SizedBox.shrink();
 
-    // Use PopScope with non-deprecated onPopInvokedWithResult.
-    // IMPORTANT: cache Navigator BEFORE any async calls to avoid using context across async gaps.
+    // Use PopScope with non-deprecated onPopInvokedWithResult to support predictive back.
     return PopScope(
       canPop: true,
-      onPopInvokedWithResult: (didPop, result) {
-        final navigator = Navigator.maybeOf(context);
-        // Kick off teardown without awaiting so we don't hold the context.
-        unawaited(_stopAndRelease());
-
-        // If the route wasn't popped by the framework, try to pop it ourselves.
-        if (!didPop && navigator != null) {
-          navigator.maybePop();
+      onPopInvokedWithResult: (didPop, result) async {
+        // Stop & free the player whenever this route is actually popping.
+        if (didPop) {
+          await _stopAndRelease();
+        } else {
+          // If the framework decided not to pop, you may still try a soft pop.
+          final nav = Navigator.of(context); // cache nav before any await
+          await _stopAndRelease();
+          if (mounted) {
+            nav.maybePop();
+          }
         }
       },
       child: Scaffold(
@@ -733,72 +716,67 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-            // While tearing down, hide Video to avoid extra frames & callbacks.
-            if (!_navigatingAway)
-              Video(
-                controller: _video,
-                controls: (state) => _ControlsCtxBridge(
-                  state: state,
-                  onReady: (ctx) {
-                    if (_navigatingAway) return;
-                    _controlsCtx ??= ctx;
-                    _log(
-                        'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
+            // Use a tiny bridge to get a context INSIDE the controls subtree.
+            Video(
+              controller: _video,
+              controls: (state) => _ControlsCtxBridge(
+                state: state,
+                onReady: (ctx) {
+                  if (_navigatingAway) return;
+                  _controlsCtx ??= ctx;
+                  _log('controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
-                    if (widget.startFullscreen && !_startFsHandled) {
-                      _startFsHandled = true;
-                      WidgetsBinding.instance.endOfFrame.then((_) async {
-                        if (!mounted || _navigatingAway) return;
-                        final c = _controlsCtx;
-                        if (c == null || !c.mounted) return;
+                  if (widget.startFullscreen && !_startFsHandled) {
+                    _startFsHandled = true;
+                    WidgetsBinding.instance.endOfFrame.then((_) async {
+                      if (!mounted || _navigatingAway) return;
+                      final c = _controlsCtx;
+                      if (c == null || !c.mounted) return;
 
-                        // iOS: if we were asked to start in fullscreen, open native AVPlayer instead.
-                        if (defaultTargetPlatform == TargetPlatform.iOS) {
-                          await _presentIOSNativePlayer();
-                          return;
-                        }
-
-                        // Non-iOS: use lib fullscreen + native overlays (Android/desktop).
-                        if (!isFullscreen(c)) {
-                          try {
-                            await enterFullscreen(c); // lib fullscreen
-                            _wasFullscreen = true;
-                            await _enterNativeFullscreen(); // also request native
-                            _log('entered fullscreen on new page');
-                          } catch (_) {}
-                        }
-                      });
-                    }
-                  },
-                ),
-                onEnterFullscreen: () async {
-                  // Intercept fullscreen request.
-                  if (defaultTargetPlatform == TargetPlatform.iOS) {
-                    // iOS: present native player instead of lib fullscreen.
-                    await _presentIOSNativePlayer();
-                    return;
+                      // On iOS we now keep regular lib fullscreen by default.
+                      if (!isFullscreen(c)) {
+                        try {
+                          await enterFullscreen(c); // lib fullscreen
+                          _wasFullscreen = true;
+                          await _enterNativeFullscreen();
+                          _log('entered fullscreen on new page');
+                        } catch (_) {}
+                      }
+                    });
                   }
-                  // Other platforms: keep previous behavior.
-                  _log('onEnterFullscreen() fired (lib)');
-                  _wasFullscreen = true;
-                  if (!mounted || _navigatingAway) return;
-                  await _enterNativeFullscreen();
-                  _log('native fullscreen requested from onEnterFullscreen()');
-                },
-                onExitFullscreen: () async {
-                  // onExitFullscreen is not expected on iOS (we don't enter lib fullscreen there).
-                  _log('onExitFullscreen() fired (lib)');
-                  _wasFullscreen = false;
-                  if (!mounted || _navigatingAway) return;
-                  await _exitNativeFullscreen();
-                  _log('native fullscreen exit requested from onExitFullscreen()');
                 },
               ),
+              onEnterFullscreen: () async {
+                // Keep regular lib fullscreen on iOS too (native is optional via button).
+                _log('onEnterFullscreen() fired (lib)');
+                _wasFullscreen = true;
+                if (!mounted || _navigatingAway) return;
+                await _enterNativeFullscreen();
+                _log('native fullscreen requested from onEnterFullscreen()');
+              },
+              onExitFullscreen: () async {
+                _log('onExitFullscreen() fired (lib)');
+                _wasFullscreen = false;
+                if (!mounted || _navigatingAway) return;
+                await _exitNativeFullscreen();
+                _log('native fullscreen exit requested from onExitFullscreen()');
+              },
+            ),
             banner,
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _stopAndRelease() async {
+    // Ensure we won't schedule UI updates anymore.
+    _navigatingAway = true;
+    _detachListeners();
+    try {
+      await _player.pause();
+    } catch (_) {}
+    await _saveProgress();
   }
 }
 
