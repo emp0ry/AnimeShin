@@ -3,7 +3,7 @@ import Flutter
 import AVKit
 import AVFoundation
 
-// AVPlayer VC that reports position/rate on dismiss & owns observers safely.
+// AVPlayer VC that reports position/rate on real dismissal & owns observers safely.
 class ReportingAVPlayerViewController: AVPlayerViewController {
   // Bridge back to Flutter
   var channel: FlutterMethodChannel?
@@ -35,8 +35,17 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
-    // Send final position/rate back when user closes the controller.
-    guard let player = self.player else { return }
+
+    // Do NOT tell Flutter we were dismissed if PiP is currently active.
+    if #available(iOS 14.0, *), self.isPictureInPictureActive {
+      return
+    }
+
+    // Only report dismissal if the controller is actually going away.
+    // This avoids spurious callbacks during transitions.
+    let actuallyDismissing = self.isBeingDismissed || self.view.window == nil
+    guard actuallyDismissing, let player = self.player else { return }
+
     let pos = CMTimeGetSeconds(player.currentTime())
     let rate = Double(player.rate)
     let wasPlaying = player.rate > 0
@@ -58,13 +67,12 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, AVPlayerViewControllerDelegate {
-
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // Configure audio session for video playback (prevents stalling / mutes)
+    // Configure audio session for video playback (enables background/PiP audio)
     do {
       try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [])
       try AVAudioSession.sharedInstance().setActive(true)
@@ -105,7 +113,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       let item = AVPlayerItem(url: url)
       let player = AVPlayer(playerItem: item)
 
-      // IMPORTANT: prefer brief stalls over "catch-up" jumps that look like random skips
+      // Prefer brief stalls over "catch-up" jumps that look like random skips
       player.automaticallyWaitsToMinimizeStalling = false
 
       // Configure view controller
@@ -114,19 +122,19 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.title = title
       vc.modalPresentationStyle = .fullScreen
       vc.channel = channel
+      vc.delegate = self
 
-      // Enable PiP and auto-start PiP from inline
+      // Enable PiP
       vc.allowsPictureInPicturePlayback = true
       if #available(iOS 14.0, *) {
         vc.canStartPictureInPictureAutomaticallyFromInline = true
       }
-      vc.delegate = self
 
-      // Optionally: enter/exit fullscreen automatically
+      // Optional: auto fullscreen begin/end (fine for a modal VC)
       vc.entersFullScreenWhenPlaybackBegins = true
       vc.exitsFullScreenWhenPlaybackEnds = true
 
-      // Auto-skip opening/ending via periodic time observer
+      // Periodic observer for auto-skip opening/ending.
       var didSkipOpening = false
       var didSkipEnding = false
       vc.timeObserverToken = player.addPeriodicTimeObserver(
@@ -159,7 +167,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         object: item,
         queue: .main
       ) { [weak vc] _ in
-        if let isPiP = vc?.isPictureInPictureActive, isPiP {
+        if #available(iOS 14.0, *), vc?.isPictureInPictureActive == true {
           channel.invokeMethod("ios_player_completed", arguments: nil)
         } else {
           vc?.dismiss(animated: true, completion: {
@@ -206,13 +214,19 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // MARK: - AVPlayerViewControllerDelegate (PiP restore)
+  // MARK: - AVPlayerViewControllerDelegate (PiP behavior)
+
+  /// Let the system automatically dismiss the full-screen player when PiP starts.
+  func playerViewControllerShouldAutomaticallyDismissAtPictureInPictureStart(_ playerViewController: AVPlayerViewController) -> Bool {
+    return true
+  }
 
   /// Restore the player UI when PiP stops (so the user lands back in the player).
   func playerViewController(
     _ playerViewController: AVPlayerViewController,
     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
   ) {
+    // If the player VC isn't visible anymore, present it back on the root.
     if let root = self.window?.rootViewController,
        playerViewController.presentingViewController == nil {
       root.present(playerViewController, animated: true) {

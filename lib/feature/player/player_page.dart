@@ -124,6 +124,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
+  // Lifecycle guard flags
+  bool _isDisposed = false;
+
+  // Helper: only do player ops while the widget is alive & not navigating away.
+  bool get _alive => mounted && !_navigatingAway && !_isDisposed;
+
+
   void _log(String msg) {
     // Scoped log with page identity for easier tracing across rebuilds.
     debugPrint(
@@ -188,6 +195,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
   }
 
+  // Place near other helpers
+  Future<void> _setVolumeSafe(double v) async {
+    // Never call player methods if page is leaving or disposed
+    if (!_alive) return;
+    try {
+      await _player.setVolume(v);
+    } catch (e) {
+      _log('setVolume skipped (not alive): $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -226,14 +244,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         // Apply desktop volume from prefs when it changes externally.
         if (_isDesktop) {
           final prevVol = prev?.desktopVolume ?? _desktopVolume;
-          if ((prevVol - next.desktopVolume).abs() > 0.1) {
-            _desktopVolume = next.desktopVolume;
-            // Do not spam if player already at this volume.
-            if ((_player.state.volume - _desktopVolume).abs() > 0.1) {
-              unawaited(_player.setVolume(_desktopVolume));
-            }
-          } else {
-            _desktopVolume = next.desktopVolume;
+          _desktopVolume = next.desktopVolume;
+
+          // Bail if player is already gone
+          if (!_alive) return;
+
+          // Read current volume only while alive
+          final currentVol = _player.state.volume;
+
+          // Update volume only if it actually changed (debounce)
+          if ((prevVol - next.desktopVolume).abs() > 0.1 &&
+              (currentVol - _desktopVolume).abs() > 0.1) {
+            unawaited(_setVolumeSafe(_desktopVolume));
           }
         }
 
@@ -251,9 +273,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               final resume = pos + const Duration(milliseconds: 300);
               await _openAt(newUrl, position: resume, play: wasPlaying);
               if (_isDesktop) {
-                await _player.setVolume(_desktopVolume);
+                await _setVolumeSafe(_desktopVolume);
               }
-              await _player.setRate(_speed);
+              if (_alive) {
+                try { await _player.setRate(_speed); } catch (_) {}
+              }
             }());
           }
         }
@@ -282,10 +306,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             Duration(milliseconds: (posSec * 1000).round()),
             reason: 'ios_dismiss_restore',
           );
-          await _player.setRate(rate);
+          if (_alive) {
+            try { await _player.setRate(rate); } catch (_) {}
+          }
           _speed = rate;
-          if (wasPlaying) {
-            await _player.play();
+          if (wasPlaying && _alive) {
+            try { await _player.play(); } catch (_) {}
           }
           _safeSetState(() {});
           break;
@@ -307,12 +333,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   @override
   void dispose() {
+    // Mark as leaving & disposed ASAP so any pending futures bail out.
     _navigatingAway = true;
+    _isDisposed = true;
+
+    // Stop timers & streams first.
     _prefsSub.close();
     _detachListeners();
     unawaited(_saveProgress());
-    _player.dispose();
+
+    // Do NOT access player state asynchronously anymore.
+    try {
+      _player.dispose();
+    } catch (_) {}
+
+    // Break reference to now-deactivated controls subtree.
     _controlsCtx = null;
+
     super.dispose();
   }
 
@@ -367,9 +404,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Apply persisted desktop volume & speed right after the first open.
     if (_isDesktop) {
-      await _player.setVolume(_desktopVolume);
+      await _setVolumeSafe(_desktopVolume);
     }
-    await _player.setRate(_speed);
+    if (_alive) {
+      try { await _player.setRate(_speed); } catch (_) {}
+    }
 
     // Persist progress periodically.
     _autosaveTimer =
@@ -475,12 +514,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   /// Wrapper that marks an intentional seek so our jump-detector won't flag it.
   Future<void> _seekPlanned(Duration to, {String? reason}) async {
+    if (!_alive) return; // bail if page is leaving/disposed
     _plannedSeek = true;
     try {
       await _player.seek(to);
       _log('seek(planned) to=$to reason=${reason ?? "n/a"}');
+    } catch (e) {
+      // Avoid crashing if seek races with dispose
+      _log('seek skipped (not alive): $e');
     } finally {
-      // Small debounce prevents the next position event from being misclassified.
       await Future.delayed(const Duration(milliseconds: 50));
       _plannedSeek = false;
     }
@@ -492,19 +534,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     required Duration position,
     required bool play,
   }) async {
+    if (!_alive) return;
+
     // Do not force close; some CDNs misbehave & expose only the first HLS segment.
-    await _player.open(
-      Media(
-        url,
-        httpHeaders: const {
-          // Keep a desktop-like UA to avoid odd CDN variants.
-          'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-              '(KHTML, like Gecko) Chrome/126.0 Safari/537.36',
-        },
-      ),
-      play: play,
-    );
+    try {
+      await _player.open(
+        Media(
+          url,
+          httpHeaders: const {
+            // Keep a desktop-like UA to avoid odd CDN variants.
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                '(KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+          },
+        ),
+        play: play,
+      );
+    } catch (e) {
+      _log('open failed (not alive?): $e');
+      return;
+    }
+
+    if (!_alive) return;
 
     // Robust HLS settle: wait for either a valid duration OR first stable positions.
     final settle = Completer<void>();
@@ -516,6 +567,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     int posTicksOver500ms = 0;
 
     subDur = _player.stream.duration.listen((d) {
+      if (!_alive) {
+        if (!settle.isCompleted) settle.complete();
+        subDur.cancel();
+        return;
+      }
       if (d > Duration.zero) {
         hasDuration = true;
         if (!settle.isCompleted) {
@@ -525,6 +581,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     });
 
     subPos = _player.stream.position.listen((p) {
+      if (!_alive) {
+        if (!settle.isCompleted) settle.complete();
+        subDur.cancel();
+        return;
+      }
       if (p > const Duration(milliseconds: 500)) {
         posTicksOver500ms++;
         if (!hasDuration && posTicksOver500ms >= 2 && !settle.isCompleted) {
@@ -536,6 +597,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await Future.any([settle.future, timeout]);
     await subDur.cancel();
     await subPos.cancel();
+
+    if (!_alive) return;
 
     if (position > Duration.zero) {
       await _seekPlanned(position, reason: 'openAt_restore');
@@ -565,9 +628,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Re-apply persisted desktop volume after reopen.
     if (_isDesktop) {
-      await _player.setVolume(_desktopVolume);
+      await _setVolumeSafe(_desktopVolume);
     }
-    await _player.setRate(_speed);
+    if (_alive) {
+      try { await _player.setRate(_speed); } catch (_) {}
+    }
 
     _safeSetState(() {});
   }
@@ -606,8 +671,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           _wasFullscreen = true;
         } catch (_) {}
       }
-      if (wasPlaying) {
-        await _player.play();
+      if (wasPlaying && _alive) {
+        try { await _player.play(); } catch (_) {}
       }
     }
   }
@@ -819,7 +884,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         initialValue: _speed,
         onSelected: (r) async {
           unawaited(ref.read(playerPrefsProvider.notifier).setSpeed(r));
-          await _player.setRate(r);
+          if (_alive) {
+            try { await _player.setRate(r); } catch (_) {}
+          }
         },
         itemBuilder: (_) => const <double>[
           0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2
@@ -925,7 +992,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         _navigatingAway = true;
         _detachListeners();
 
-        await _player.stop();
+        if (!_isDisposed) {
+          try { await _player.stop(); } catch (_) {}
+        }
 
         if (didPop) return;
         if (!mounted || !navigator.mounted) return;

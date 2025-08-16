@@ -14,7 +14,7 @@ import 'package:animeshin/widget/input/score_label.dart';
 import 'package:animeshin/widget/text_rail.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 
-const _tileHeight = 140.0;
+const _tileHeight = 165.0;
 
 class CollectionList extends StatelessWidget {
   const CollectionList({
@@ -273,21 +273,33 @@ class __TileContentState extends State<_TileContent> {
                 overflow: TextOverflow.fade,
               ),
             ),
-            if (item.anilibriaAlias != null &&
-                item.anilibriaAlias!.trim().isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: FilledButton.icon(
-                  icon: const Icon(Ionicons.play),
-                  label: const Text('Watch'),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            WatchPage(alias: item.anilibriaAlias!.trim()),
+            if (item.anilibriaAlias != null && item.anilibriaAlias!.trim().isNotEmpty)
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  minimumSize: const Size(80, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => WatchPage(alias: item.anilibriaAlias!.trim()),
+                    ),
+                  );
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Ionicons.play, size: 16),
+                    SizedBox(width: 2),
+                    Text(
+                      'Watch',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
               ),
           ],
