@@ -8,6 +8,9 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
   // Bridge back to Flutter
   var channel: FlutterMethodChannel?
 
+  // Track PiP state without relying on unavailable APIs on older SDKs
+  var pipActive: Bool = false
+
   // KVO for item.status
   var statusObserver: NSKeyValueObservation?
 
@@ -36,13 +39,10 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
 
-    // Do NOT tell Flutter we were dismissed if PiP is currently active.
-    if #available(iOS 14.0, *), self.isPictureInPictureActive {
-      return
-    }
+    // If PiP is active, this is not a real dismissal of playback UI.
+    if pipActive { return }
 
     // Only report dismissal if the controller is actually going away.
-    // This avoids spurious callbacks during transitions.
     let actuallyDismissing = self.isBeingDismissed || self.view.window == nil
     guard actuallyDismissing, let player = self.player else { return }
 
@@ -67,6 +67,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, AVPlayerViewControllerDelegate {
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -124,7 +125,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.channel = channel
       vc.delegate = self
 
-      // Enable PiP
+      // Enable PiP (properties are gated at runtime by the system)
       vc.allowsPictureInPicturePlayback = true
       if #available(iOS 14.0, *) {
         vc.canStartPictureInPictureAutomaticallyFromInline = true
@@ -167,10 +168,11 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         object: item,
         queue: .main
       ) { [weak vc] _ in
-        if #available(iOS 14.0, *), vc?.isPictureInPictureActive == true {
+        guard let vc = vc else { return }
+        if vc.pipActive {
           channel.invokeMethod("ios_player_completed", arguments: nil)
         } else {
-          vc?.dismiss(animated: true, completion: {
+          vc.dismiss(animated: true, completion: {
             channel.invokeMethod("ios_player_completed", arguments: nil)
           })
         }
@@ -218,7 +220,26 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
   /// Let the system automatically dismiss the full-screen player when PiP starts.
   func playerViewControllerShouldAutomaticallyDismissAtPictureInPictureStart(_ playerViewController: AVPlayerViewController) -> Bool {
+    if let vc = playerViewController as? ReportingAVPlayerViewController {
+      vc.pipActive = true
+    }
     return true
+  }
+
+  func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+    (playerViewController as? ReportingAVPlayerViewController)?.pipActive = true
+  }
+
+  func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+    (playerViewController as? ReportingAVPlayerViewController)?.pipActive = true
+  }
+
+  func playerViewControllerWillStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+    (playerViewController as? ReportingAVPlayerViewController)?.pipActive = false
+  }
+
+  func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+    (playerViewController as? ReportingAVPlayerViewController)?.pipActive = false
   }
 
   /// Restore the player UI when PiP stops (so the user lands back in the player).
@@ -226,7 +247,6 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     _ playerViewController: AVPlayerViewController,
     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
   ) {
-    // If the player VC isn't visible anymore, present it back on the root.
     if let root = self.window?.rootViewController,
        playerViewController.presentingViewController == nil {
       root.present(playerViewController, animated: true) {
@@ -235,13 +255,5 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     } else {
       completionHandler(true)
     }
-  }
-
-  func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
-    // Optional: logging/analytics
-  }
-
-  func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
-    // Optional: logging/analytics
   }
 }
