@@ -1010,7 +1010,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           actions: actions,
         ),
         body: Padding(
-          padding: _isMobile && !_wasFullscreen ? const EdgeInsets.only(bottom: 32) : EdgeInsets.zero,
+          padding: _isMobile && !_wasFullscreen ? const EdgeInsets.only(bottom: 56, left: 56, right: 56) : EdgeInsets.zero,
           child: Stack(
             fit: StackFit.expand,
             children: [
