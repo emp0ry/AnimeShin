@@ -835,6 +835,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  Future<void> _handleLibExitFullscreen() async {
+    // Keep iOS no-op because we redirect to native player there.
+    if (_isIOS) return;
+    _wasFullscreen = false;
+    if (!_alive) return;
+    try {
+      await _exitNativeFullscreen(); // restore system overlays on desktop/Android
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final actions = <Widget>[
@@ -1024,22 +1034,33 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   onReady: (ctx) {
                     if (_navigatingAway) return;
                     _controlsCtx ??= ctx;
-                    _log(
-                        'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
+                    _log('controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
-                    // Start in fullscreen (lib) only for non-iOS platforms.
+                    // If user already entered lib fullscreen on iOS, immediately redirect to native.
+                    if (_isIOS && _iosFullscreenUsesNative && isFullscreen(ctx)) {
+                      // Defer to end of frame so exitFullscreen has a valid tree to work with.
+                      WidgetsBinding.instance.endOfFrame.then((_) async {
+                        if (!_alive) return;
+                        try { await exitFullscreen(ctx); } catch (_) {}
+                        // We exited lib FS ourselves; call the same cleanup path for non-iOS if ever needed.
+                        await _handleLibExitFullscreen();
+                        await _presentIOSNativePlayer();
+                      });
+                      return;
+                    }
+
+                    // Start in lib fullscreen for non-iOS only.
                     if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
                       _startFsHandled = true;
                       WidgetsBinding.instance.endOfFrame.then((_) async {
-                        if (!mounted || _navigatingAway) return;
+                        if (!_alive) return;
                         final c = _controlsCtx;
                         if (c == null || !c.mounted) return;
-
                         if (!isFullscreen(c)) {
                           try {
-                            await enterFullscreen(c); // lib fullscreen
+                            await enterFullscreen(c);
                             _wasFullscreen = true;
-                            await _enterNativeFullscreen(); // request native overlays (non-iOS)
+                            await _enterNativeFullscreen();
                             _log('entered fullscreen on new page');
                           } catch (_) {}
                         }
@@ -1048,46 +1069,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   },
                 ),
                 onEnterFullscreen: () async {
-                  if (_isIOS) {
-                    if (_iosFullscreenUsesNative) {
-                      // 1) Redirect lib fullscreen → native AVPlayer
-                      final c = _controlsCtx;
-                      if (c != null) {
-                        // Cancel lib fullscreen immediately to avoid the freeze
-                        try { await exitFullscreen(c); } catch (_) {}
-                      }
-                      await _presentIOSNativePlayer(); // opens our native VC; continues playing
-                    } else {
-                      // 2) Keep lib fullscreen, but force resume after transition
-                      _wasFullscreen = true;
-                      // media_kit sometimes drops rate to 0 during FS transition on iOS.
-                      // Kick playback back on at the end of the next frame.
-                      WidgetsBinding.instance.endOfFrame.then((_) async {
-                        if (!_alive) return;
-                        try {
-                          await _player.setRate(_speed);
-                          await _player.play();
-                        } catch (_) {}
-                      });
+                  if (_isIOS && _iosFullscreenUsesNative) {
+                    final c = _controlsCtx;
+                    if (c != null && c.mounted) {
+                      try { await exitFullscreen(c); } catch (_) {}
+                      await _handleLibExitFullscreen(); // keep state in sync if it toggled
+                      await _presentIOSNativePlayer();
                     }
-                    return; // prevent non-iOS branch
+                    return; // skip lib FS on iOS
                   }
 
-                  // Non-iOS: keep your existing behavior
+                  // Non-iOS branch stays the same
                   _log('onEnterFullscreen() fired (lib)');
                   _wasFullscreen = true;
-                  if (!mounted || _navigatingAway) return;
+                  if (!_alive) return;
                   await _enterNativeFullscreen();
-                  _log('native fullscreen requested from onEnterFullscreen()');
                 },
-
                 onExitFullscreen: () async {
-                  if (_isIOS) return; // nothing special for iOS
-                  _log('onExitFullscreen() fired (lib)');
-                  _wasFullscreen = false;
-                  if (!mounted || _navigatingAway) return;
-                  await _exitNativeFullscreen();
-                  _log('native fullscreen exit requested from onExitFullscreen()');
+                  await _handleLibExitFullscreen();
+                  _log('onExitFullscreen() handled');
                 },
               ),
               banner,
