@@ -13,6 +13,7 @@ class PlayerPrefs {
     required this.autoSkipOpening,
     required this.autoSkipEnding,
     required this.autoNextEpisode,
+    required this.desktopVolume,
   });
 
   // Playback
@@ -25,6 +26,7 @@ class PlayerPrefs {
   final bool autoSkipOpening;
   final bool autoSkipEnding;
   final bool autoNextEpisode;
+  final double desktopVolume;
 
   PlayerPrefs copyWith({
     double? speed,
@@ -34,6 +36,7 @@ class PlayerPrefs {
     bool? autoSkipOpening,
     bool? autoSkipEnding,
     bool? autoNextEpisode,
+    double? desktopVolume,
   }) {
     return PlayerPrefs(
       speed: speed ?? this.speed,
@@ -43,6 +46,7 @@ class PlayerPrefs {
       autoSkipOpening: autoSkipOpening ?? this.autoSkipOpening,
       autoSkipEnding: autoSkipEnding ?? this.autoSkipEnding,
       autoNextEpisode: autoNextEpisode ?? this.autoNextEpisode,
+      desktopVolume: desktopVolume ?? this.desktopVolume,
     );
   }
 }
@@ -56,6 +60,7 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefs> {
   static const _kAutoSkipOpening = 'player.auto.skip.opening.v3';
   static const _kAutoSkipEnding = 'player.auto.skip.ending.v3';
   static const _kAutoNextEpisode = 'player.auto.next.episode.v3';
+  static const _kDesktopVolume = 'player.desktop.volume.v3';
 
   late SharedPreferences _sp;
 
@@ -74,6 +79,7 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefs> {
       autoSkipOpening: true,
       autoSkipEnding: true,
       autoNextEpisode: true,
+      desktopVolume: 100.0,
     );
   }
 
@@ -87,6 +93,7 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefs> {
     final op = _sp.getBool(_kAutoSkipOpening) ?? true;
     final ed = _sp.getBool(_kAutoSkipEnding) ?? true;
     final nx = _sp.getBool(_kAutoNextEpisode) ?? true;
+    final dvl = _sp.getDouble(_kDesktopVolume) ?? 100.0;
 
     state = PlayerPrefs(
       speed: s,
@@ -96,6 +103,7 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefs> {
       autoSkipOpening: op,
       autoSkipEnding: ed,
       autoNextEpisode: nx,
+      desktopVolume: dvl,
     );
 
     if (!_loaded.isCompleted) _loaded.complete();
@@ -141,6 +149,11 @@ class PlayerPrefsNotifier extends Notifier<PlayerPrefs> {
   Future<void> setAutoNextEpisode(bool v) async {
     state = state.copyWith(autoNextEpisode: v);
     await _sp.setBool(_kAutoNextEpisode, v);
+  }
+
+  Future<void> setDesktopVolume(double v) async {
+    state = state.copyWith(desktopVolume: v);
+    await _sp.setDouble(_kDesktopVolume, v);
   }
 }
 

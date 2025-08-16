@@ -5,6 +5,7 @@ import 'package:animeshin/util/theming.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:url_launcher/url_launcher.dart'; // Launch external support page
 
 import '../collection/collection_models.dart';
 import '../collection/collection_provider.dart';
@@ -46,6 +47,25 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     } catch (e, st) {
       if (!mounted) return;
       setState(() => _release = AsyncError(e, st));
+    }
+  }
+
+  /// Opens AniLiberty support page in the system browser.
+  Future<void> _openSupport() async {
+    const url = 'https://anilibria.top/support';
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to open the support page')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open: $e')),
+      );
     }
   }
 
@@ -119,11 +139,18 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       appBar: AppBar(
         title: const Text('Watch'),
         actions: [
+          // Support button that opens AniLiberty support page
+          IconButton(
+            icon: const Icon(Ionicons.heart),
+            tooltip: 'Support AniLiberty',
+            onPressed: _openSupport,
+          ),
           IconButton(
             icon: const Icon(Ionicons.refresh),
             tooltip: 'Reload',
             onPressed: _load,
           ),
+          const SizedBox(width: 8), // Add a small right inset so actions aren't flush to the edge
         ],
       ),
       body: switch (rel) {
@@ -273,6 +300,7 @@ class _EpisodeTile extends StatelessWidget {
                               'Episode ${episode.ordinal}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              // If you have a custom TextTheme.of, keep it; otherwise use Theme.of(context).textTheme
                               style: TextTheme.of(context).titleMedium,
                             ),
                             const SizedBox(height: 4),
@@ -286,11 +314,11 @@ class _EpisodeTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        onPressed: onPlay,
-                        icon: const Icon(Ionicons.play),
-                        tooltip: 'Play',
-                      ),
+                      // IconButton.filledTonal(
+                      //   onPressed: onPlay,
+                      //   icon: const Icon(Ionicons.play),
+                      //   tooltip: 'Play',
+                      // ),
                     ],
                   ),
                 ),

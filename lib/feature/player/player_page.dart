@@ -66,6 +66,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   StreamSubscription<Duration>? _subPos;
   StreamSubscription<bool>? _subCompleted;
   StreamSubscription<double>? _subRate;
+  StreamSubscription<double>? _subVolume; // <- listen volume changes
 
   bool _bannerVisible = false;
   String _bannerText = '';
@@ -73,6 +74,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   DateTime? _autoSkipBlockedUntil;
   Timer? _bannerTimer;
   Timer? _autosaveTimer;
+  Timer? _volumePersistDebounce; // <- debounce saves to prefs
 
   // Quality
   String? _chosenUrl;
@@ -83,23 +85,44 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   bool _autoSkipOpening = true;
   bool _autoSkipEnding = true;
   bool _autoNextEpisode = true;
+  double _desktopVolume = 100.0;
 
   late ProviderSubscription<PlayerPrefs> _prefsSub;
+
+  // --- Jump detection / logging-only ------------------------------------------
+
+  Duration _lastPos = Duration.zero;
+  bool _plannedSeek = false;
+
+  // Keep as false; we only log jumps now.
+  final bool _autocorrectJumps = false;
+
+  // Left for diagnostics (no corrective actions are taken).
+  bool _reopeningGuard = false;
+  DateTime? _jumpWindowStartedAt;
+  int _consecutiveJumpCount = 0;
+  DateTime? _quarantineUntil;
+
+  bool get _inQuarantine =>
+      _quarantineUntil != null && DateTime.now().isBefore(_quarantineUntil!);
 
   // ---------- Platform helpers ----------
 
   bool get _isDesktop =>
       !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.linux ||
-          defaultTargetPlatform == TargetPlatform.macOS);
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.linux ||
+              defaultTargetPlatform == TargetPlatform.macOS);
+
+  bool get _isWindows =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   bool get _isMobile =>
       !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS);
 
-  bool get _isIOS => defaultTargetPlatform == TargetPlatform.iOS;
+  bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
   void _log(String msg) {
     // Scoped log with page identity for easier tracing across rebuilds.
@@ -120,10 +143,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _subCompleted = null;
     _subRate?.cancel();
     _subRate = null;
+    _subVolume?.cancel();
+    _subVolume = null;
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
     _bannerTimer?.cancel();
     _bannerTimer = null;
+    _volumePersistDebounce?.cancel();
+    _volumePersistDebounce = null;
   }
 
   Future<void> _enterNativeFullscreen() async {
@@ -148,18 +175,42 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     } catch (_) {}
   }
 
-  bool get _libIsFullscreen =>
-      _controlsCtx != null && isFullscreen(_controlsCtx!);
-
-  // ---------- Lifecycle ----------
+  // --- mpv property helper (NativePlayer only) --------------------------------
+  Future<void> _setMpv(String property, String value) async {
+    // IMPORTANT: _player must be constructed before this is called.
+    final platform = _player.platform;
+    if (platform is NativePlayer) {
+      try {
+        await platform.setProperty(property, value);
+      } catch (e) {
+        _log('setProperty("$property","$value") failed: $e');
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
 
-    final vo = 'gpu'; // Good default for all platforms incl. iOS/Android/desktop
-    _player = Player(configuration: PlayerConfiguration(vo: vo));
+    // 1) Create player first. Do NOT call _setMpv() before this point.
+    _player = Player(
+      configuration: PlayerConfiguration(
+        vo: 'gpu',
+        title: 'AnimeShin',
+        logLevel: MPVLogLevel.error, // keep only error-level from mpv core
+        bufferSize: _isWindows ? 128 * 1024 * 1024 : 64 * 1024 * 1024,
+        async: _isWindows ? false : true,
+      ),
+    );
     _video = VideoController(_player);
+
+    // 2) Safe mpv tweaks (HLS host-switch & log filtering).
+    unawaited(_setMpv(
+      'stream-lavf-o',
+      // Keep-alive off + safe reconnects. Avoid multiple_requests here.
+      'http_persistent=0:reconnect=1:reconnect_streamed=1:reconnect_on_http_error=4xx,5xx',
+    ));
+    unawaited(_setMpv('msg-level', 'ffmpeg=error'));
 
     // Preferences subscription — no awaits inside the callback.
     _prefsSub = ref.listenManual<PlayerPrefs>(
@@ -171,8 +222,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         _autoSkipEnding = next.autoSkipEnding;
         _autoNextEpisode = next.autoNextEpisode;
         _speed = next.speed;
+
+        // Apply desktop volume from prefs when it changes externally.
+        if (_isDesktop) {
+          final prevVol = prev?.desktopVolume ?? _desktopVolume;
+          if ((prevVol - next.desktopVolume).abs() > 0.1) {
+            _desktopVolume = next.desktopVolume;
+            // Do not spam if player already at this volume.
+            if ((_player.state.volume - _desktopVolume).abs() > 0.1) {
+              unawaited(_player.setVolume(_desktopVolume));
+            }
+          } else {
+            _desktopVolume = next.desktopVolume;
+          }
+        }
+
         _safeSetState(() {});
 
+        // If preferred quality changed, reopen at the same position.
         if (prev?.preferredQuality != next.preferredQuality) {
           final newUrl = _pickUrlForQuality(next.preferredQuality);
           if (newUrl != null && newUrl.isNotEmpty && newUrl != _chosenUrl) {
@@ -180,9 +247,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             final wasPlaying = _player.state.playing;
             _currentQuality = next.preferredQuality;
             _chosenUrl = newUrl;
-            // Re-open on the new URL off the microtask queue.
             unawaited(() async {
-              await _openAt(newUrl, position: pos, play: wasPlaying);
+              final resume = pos + const Duration(milliseconds: 300);
+              await _openAt(newUrl, position: resume, play: wasPlaying);
+              if (_isDesktop) {
+                await _player.setVolume(_desktopVolume);
+              }
               await _player.setRate(_speed);
             }());
           }
@@ -203,14 +273,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       if (!mounted) return;
       switch (call.method) {
         case 'ios_player_dismissed':
-          // User closed native AVPlayer — bring state back to Flutter player.
           final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
           final posSec = (map['position'] as num?)?.toDouble() ?? 0.0;
           final rate = (map['rate'] as num?)?.toDouble() ?? _speed;
           final wasPlaying = (map['wasPlaying'] as bool?) ?? true;
 
-          // Seek & match rate; resume only if it was playing in native.
-          await _player.seek(Duration(milliseconds: (posSec * 1000).round()));
+          await _seekPlanned(
+            Duration(milliseconds: (posSec * 1000).round()),
+            reason: 'ios_dismiss_restore',
+          );
           await _player.setRate(rate);
           _speed = rate;
           if (wasPlaying) {
@@ -220,7 +291,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           break;
 
         case 'ios_player_completed':
-          // AVPlayer reached end. The iOS VC auto-dismisses; we continue flow here.
           await _saveProgress(clearIfCompleted: true);
           if (_autoNextEpisode) {
             unawaited(_openNextEpisode());
@@ -237,13 +307,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   @override
   void dispose() {
-    _log('dispose() start; _wasFullscreen=$_wasFullscreen, libIsFullscreen=$_libIsFullscreen');
     _navigatingAway = true;
     _prefsSub.close();
     _detachListeners();
     unawaited(_saveProgress());
     _player.dispose();
-    _log('dispose() done');
+    _controlsCtx = null;
     super.dispose();
   }
 
@@ -281,6 +350,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _autoSkipOpening = prefs.autoSkipOpening;
     _autoSkipEnding = prefs.autoSkipEnding;
     _autoNextEpisode = prefs.autoNextEpisode;
+    _desktopVolume = prefs.desktopVolume;
 
     _currentQuality = _pickInitialQualityAndUrl();
 
@@ -295,12 +365,64 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       play: true,
     );
 
+    // Apply persisted desktop volume & speed right after the first open.
+    if (_isDesktop) {
+      await _player.setVolume(_desktopVolume);
+    }
     await _player.setRate(_speed);
 
+    // Persist progress periodically.
     _autosaveTimer =
         Timer.periodic(const Duration(seconds: 5), (_) => _saveProgress());
 
+    // Save desktop volume back to prefs when user changes it via controls.
+    _subVolume = _player.stream.volume.listen((v) {
+      if (!_isDesktop) return;
+      // mpv volume is 0..100.0; store as-is.
+      _desktopVolume = v;
+      _safeSetState(() {}); // update UI if you later show it
+      _volumePersistDebounce?.cancel();
+      _volumePersistDebounce = Timer(const Duration(milliseconds: 300), () {
+        unawaited(
+          ref.read(playerPrefsProvider.notifier).setDesktopVolume(_desktopVolume),
+        );
+      });
+    });
+
     _subPos = _player.stream.position.listen((pos) {
+      // Log-only jump detector: report suspicious forward leaps but do nothing.
+      final prev = _lastPos;
+      _lastPos = pos;
+
+      if (_player.state.duration != Duration.zero &&
+          !_plannedSeek &&
+          prev > Duration.zero &&
+          !_inQuarantine &&
+          !_player.state.buffering) {
+        final diff = pos - prev;
+
+        // Threshold raised to 3.5s to avoid timer hiccups on Windows.
+        if (diff > const Duration(milliseconds: 3500)) {
+          final now = DateTime.now();
+          if (_jumpWindowStartedAt == null ||
+              now.difference(_jumpWindowStartedAt!) > const Duration(seconds: 2)) {
+            _jumpWindowStartedAt = now;
+            _consecutiveJumpCount = 1;
+          } else {
+            _consecutiveJumpCount++;
+          }
+
+          final bigLeap = diff >= const Duration(seconds: 30);
+          final burst = _consecutiveJumpCount >= 3;
+
+          _log('! unexpected jump detected: +${diff.inMilliseconds}ms '
+              '(prev=$prev → now=$pos, bigLeap=$bigLeap, burst=$burst)');
+
+          // IMPORTANT: No corrective actions here (logging-only requirement).
+        }
+      }
+
+      // DO NOT force setVolume here. It causes fighting with user changes.
       _maybeAutoSkip(pos);
       _safeSetState(() {});
     });
@@ -351,30 +473,74 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   // ---------- Media helpers ----------
 
+  /// Wrapper that marks an intentional seek so our jump-detector won't flag it.
+  Future<void> _seekPlanned(Duration to, {String? reason}) async {
+    _plannedSeek = true;
+    try {
+      await _player.seek(to);
+      _log('seek(planned) to=$to reason=${reason ?? "n/a"}');
+    } finally {
+      // Small debounce prevents the next position event from being misclassified.
+      await Future.delayed(const Duration(milliseconds: 50));
+      _plannedSeek = false;
+    }
+  }
+
+  /// Open URL & robustly wait for HLS to settle before seeking.
   Future<void> _openAt(
     String url, {
     required Duration position,
     required bool play,
   }) async {
-    await _player.open(Media(url), play: play);
+    // Do not force close; some CDNs misbehave & expose only the first HLS segment.
+    await _player.open(
+      Media(
+        url,
+        httpHeaders: const {
+          // Keep a desktop-like UA to avoid odd CDN variants.
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        },
+      ),
+      play: play,
+    );
 
-    // Wait for non-zero duration via stream (up to 5s) to avoid early seek on HLS.
-    final completer = Completer<void>();
-    late final StreamSubscription sub;
-    sub = _player.stream.duration.listen((d) {
-      if (d > Duration.zero && !completer.isCompleted) {
-        completer.complete();
-        sub.cancel();
+    // Robust HLS settle: wait for either a valid duration OR first stable positions.
+    final settle = Completer<void>();
+    late final StreamSubscription subDur;
+    late final StreamSubscription subPos;
+
+    final timeout = Future<void>.delayed(const Duration(seconds: 12), () {});
+    bool hasDuration = false;
+    int posTicksOver500ms = 0;
+
+    subDur = _player.stream.duration.listen((d) {
+      if (d > Duration.zero) {
+        hasDuration = true;
+        if (!settle.isCompleted) {
+          settle.complete();
+        }
       }
     });
-    // Fallback timeout
-    unawaited(Future.delayed(const Duration(seconds: 5)).then((_) {
-      if (!completer.isCompleted) completer.complete();
-    }));
-    await completer.future;
+
+    subPos = _player.stream.position.listen((p) {
+      if (p > const Duration(milliseconds: 500)) {
+        posTicksOver500ms++;
+        if (!hasDuration && posTicksOver500ms >= 2 && !settle.isCompleted) {
+          settle.complete();
+        }
+      }
+    });
+
+    await Future.any([settle.future, timeout]);
+    await subDur.cancel();
+    await subPos.cancel();
 
     if (position > Duration.zero) {
-      await _player.seek(position);
+      await _seekPlanned(position, reason: 'openAt_restore');
+      await Future.delayed(const Duration(milliseconds: 60));
+      await _seekPlanned(position, reason: 'openAt_restore_confirm');
     }
   }
 
@@ -394,10 +560,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _chosenUrl = url;
     _currentQuality = label;
 
-    await _openAt(url, position: pos, play: wasPlaying);
-    unawaited(ref
-        .read(playerPrefsProvider.notifier)
-        .setPreferredQuality(_currentQuality));
+    final resume = pos + const Duration(milliseconds: 300);
+    await _openAt(url, position: resume, play: wasPlaying);
+
+    // Re-apply persisted desktop volume after reopen.
+    if (_isDesktop) {
+      await _player.setVolume(_desktopVolume);
+    }
     await _player.setRate(_speed);
 
     _safeSetState(() {});
@@ -431,14 +600,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // No further action here; callbacks will sync back on dismiss/completion.
     } on PlatformException catch (e) {
       _log('iOS native player failed: ${e.code}: ${e.message}');
-      // Fallback to lib fullscreen if native failed.
-      if (_controlsCtx != null && !_libIsFullscreen) {
+      if (_controlsCtx != null && !_wasFullscreen) {
         try {
           await enterFullscreen(_controlsCtx!);
           _wasFullscreen = true;
         } catch (_) {}
       }
-      // Resume playback in Flutter if native failed right away.
       if (wasPlaying) {
         await _player.play();
       }
@@ -450,6 +617,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   void _maybeAutoSkip(Duration pos) {
     final dur = _player.state.duration;
     if (dur == Duration.zero) return;
+    if (_reopeningGuard || _inQuarantine) return;
 
     if (_autoSkipBlockedUntil != null &&
         DateTime.now().isBefore(_autoSkipBlockedUntil!)) {
@@ -484,13 +652,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _skipTo(Duration from, Duration to,
       {required String banner}) async {
     _undoSeekFrom = from;
-    await _player.seek(to);
+    await _seekPlanned(to, reason: 'auto_skip');
     _showBanner(banner, showUndo: true);
   }
 
   Future<void> _undoSkip() async {
     if (_undoSeekFrom == null) return;
-    await _player.seek(_undoSeekFrom!);
+    await _seekPlanned(_undoSeekFrom!, reason: 'undo_skip');
     _undoSeekFrom = null;
     _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 10));
   }
@@ -574,10 +742,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // ---------- Banners ----------
 
   void _showBanner(
-    String text, {
-    bool showUndo = false,
-    Duration hideAfter = const Duration(seconds: 3),
-  }) {
+      String text, {
+        bool showUndo = false,
+        Duration hideAfter = const Duration(seconds: 3),
+      }) {
     if (_navigatingAway) return;
     _bannerTimer?.cancel();
     _bannerText = text;
@@ -621,18 +789,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         },
         itemBuilder: (_) {
           PopupMenuItem<String> item(String label) => PopupMenuItem<String>(
-                value: label,
-                child: Row(
-                  children: [
-                    if (_currentQuality == label)
-                      const Icon(Icons.check, size: 16)
-                    else
-                      const SizedBox(width: 16),
-                    const SizedBox(width: 8),
-                    Text(label),
-                  ],
-                ),
-              );
+            value: label,
+            child: Row(
+              children: [
+                if (_currentQuality == label)
+                  const Icon(Icons.check, size: 16)
+                else
+                  const SizedBox(width: 16),
+                const SizedBox(width: 8),
+                Text(label),
+              ],
+            ),
+          );
           return [item('1080p'), item('720p'), item('480p')];
         },
         child: Row(
@@ -656,7 +824,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         itemBuilder: (_) => const <double>[
           0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2
         ].map<PopupMenuEntry<double>>(
-          (s) => PopupMenuItem<double>(value: s, child: Text('${s}x')),
+              (s) => PopupMenuItem<double>(value: s, child: Text('${s}x')),
         ).toList(),
         child: Row(
           children: [
@@ -720,31 +888,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final banner = _bannerVisible
         ? Positioned(
-            right: 16,
-            top: 16,
-            child: Material(
-              color: Colors.black.withValues(alpha: 0.65),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_bannerText,
-                        style: const TextStyle(color: Colors.white)),
-                    if (_undoSeekFrom != null) ...[
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: _undoSkip,
-                        child: const Text('UNDO'),
-                      ),
-                    ],
-                  ],
+      right: 16,
+      top: 16,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_bannerText,
+                  style: const TextStyle(color: Colors.white)),
+              if (_undoSeekFrom != null) ...[
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: _undoSkip,
+                  child: const Text('UNDO'),
                 ),
-              ),
-            ),
-          )
+              ],
+            ],
+          ),
+        ),
+      ),
+    )
         : const SizedBox.shrink();
 
     // Predictive back: use onPopInvokedWithResult (non-deprecated).
@@ -759,10 +927,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
         await _player.stop();
 
-        // We do nothing if we have already been hit by the system
         if (didPop) return;
-
-        // Check both State and NavigatorState itself
         if (!mounted || !navigator.mounted) return;
 
         navigator.maybePop();
@@ -791,7 +956,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                     _log(
                         'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
-                    // Start in fullscreen (lib) only for non‑iOS platforms.
+                    // Start in fullscreen (lib) only for non-iOS platforms.
                     if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
                       _startFsHandled = true;
                       WidgetsBinding.instance.endOfFrame.then((_) async {
@@ -803,7 +968,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                           try {
                             await enterFullscreen(c); // lib fullscreen
                             _wasFullscreen = true;
-                            await _enterNativeFullscreen(); // request native overlays (non‑iOS)
+                            await _enterNativeFullscreen(); // request native overlays (non-iOS)
                             _log('entered fullscreen on new page');
                           } catch (_) {}
                         }
@@ -812,7 +977,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   },
                 ),
                 onEnterFullscreen: () async {
-                  // On iOS we use only the native player button; ignore lib fullscreen.
                   if (_isIOS) return;
                   _log('onEnterFullscreen() fired (lib)');
                   _wasFullscreen = true;

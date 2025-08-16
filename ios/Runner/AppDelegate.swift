@@ -57,7 +57,8 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 }
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, AVPlayerViewControllerDelegate {
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -71,11 +72,17 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       print("AVAudioSession error: \(error)")
     }
 
-    let controller = window?.rootViewController as! FlutterViewController
-    let channel = FlutterMethodChannel(name: "native_ios_player", binaryMessenger: controller.binaryMessenger)
+    guard let controller = window?.rootViewController as? FlutterViewController else {
+      return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    let channel = FlutterMethodChannel(
+      name: "native_ios_player",
+      binaryMessenger: controller.binaryMessenger
+    )
 
     // Handle "present" method to open native AVPlayer.
-    channel.setMethodCallHandler { (call, result) in
+    channel.setMethodCallHandler { [weak self] (call, result) in
       guard call.method == "present",
             let args = call.arguments as? [String: Any],
             let urlStr = args["url"] as? String,
@@ -97,7 +104,9 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       // Build player & item
       let item = AVPlayerItem(url: url)
       let player = AVPlayer(playerItem: item)
-      player.automaticallyWaitsToMinimizeStalling = true
+
+      // IMPORTANT: prefer brief stalls over "catch-up" jumps that look like random skips
+      player.automaticallyWaitsToMinimizeStalling = false
 
       // Configure view controller
       let vc = ReportingAVPlayerViewController()
@@ -105,7 +114,15 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.title = title
       vc.modalPresentationStyle = .fullScreen
       vc.channel = channel
-      vc.allowsPictureInPicturePlayback = false     // disable PiP to reduce UI complexity
+
+      // Enable PiP and auto-start PiP from inline
+      vc.allowsPictureInPicturePlayback = true
+      if #available(iOS 14.0, *) {
+        vc.canStartPictureInPictureAutomaticallyFromInline = true
+      }
+      vc.delegate = self
+
+      // Optionally: enter/exit fullscreen automatically
       vc.entersFullScreenWhenPlaybackBegins = true
       vc.exitsFullScreenWhenPlaybackEnds = true
 
@@ -135,15 +152,20 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         }
       }
 
-      // Notify Flutter when playback completes AND auto-dismiss the native VC
+      // Notify Flutter when playback completes.
+      // If PiP is active, do not dismiss VC here — let the system handle the UI.
       vc.endObserver = NotificationCenter.default.addObserver(
         forName: .AVPlayerItemDidPlayToEndTime,
         object: item,
         queue: .main
       ) { [weak vc] _ in
-        vc?.dismiss(animated: true, completion: {
+        if let isPiP = vc?.isPictureInPictureActive, isPiP {
           channel.invokeMethod("ios_player_completed", arguments: nil)
-        })
+        } else {
+          vc?.dismiss(animated: true, completion: {
+            channel.invokeMethod("ios_player_completed", arguments: nil)
+          })
+        }
       }
 
       // Present native player
@@ -182,5 +204,30 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // MARK: - AVPlayerViewControllerDelegate (PiP restore)
+
+  /// Restore the player UI when PiP stops (so the user lands back in the player).
+  func playerViewController(
+    _ playerViewController: AVPlayerViewController,
+    restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
+  ) {
+    if let root = self.window?.rootViewController,
+       playerViewController.presentingViewController == nil {
+      root.present(playerViewController, animated: true) {
+        completionHandler(true)
+      }
+    } else {
+      completionHandler(true)
+    }
+  }
+
+  func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+    // Optional: logging/analytics
+  }
+
+  func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+    // Optional: logging/analytics
   }
 }
