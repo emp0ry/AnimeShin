@@ -130,6 +130,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Helper: only do player ops while the widget is alive & not navigating away.
   bool get _alive => mounted && !_navigatingAway && !_isDisposed;
 
+  // Add this flag to _PlayerPageState:
+  static const bool _iosFullscreenUsesNative = true; // set false to keep lib FS
 
   void _log(String msg) {
     // Scoped log with page identity for easier tracing across rebuilds.
@@ -1046,15 +1048,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   },
                 ),
                 onEnterFullscreen: () async {
-                  if (_isIOS) return;
+                  if (_isIOS) {
+                    if (_iosFullscreenUsesNative) {
+                      // 1) Redirect lib fullscreen → native AVPlayer
+                      final c = _controlsCtx;
+                      if (c != null) {
+                        // Cancel lib fullscreen immediately to avoid the freeze
+                        try { await exitFullscreen(c); } catch (_) {}
+                      }
+                      await _presentIOSNativePlayer(); // opens our native VC; continues playing
+                    } else {
+                      // 2) Keep lib fullscreen, but force resume after transition
+                      _wasFullscreen = true;
+                      // media_kit sometimes drops rate to 0 during FS transition on iOS.
+                      // Kick playback back on at the end of the next frame.
+                      WidgetsBinding.instance.endOfFrame.then((_) async {
+                        if (!_alive) return;
+                        try {
+                          await _player.setRate(_speed);
+                          await _player.play();
+                        } catch (_) {}
+                      });
+                    }
+                    return; // prevent non-iOS branch
+                  }
+
+                  // Non-iOS: keep your existing behavior
                   _log('onEnterFullscreen() fired (lib)');
                   _wasFullscreen = true;
                   if (!mounted || _navigatingAway) return;
                   await _enterNativeFullscreen();
                   _log('native fullscreen requested from onEnterFullscreen()');
                 },
+
                 onExitFullscreen: () async {
-                  if (_isIOS) return;
+                  if (_isIOS) return; // nothing special for iOS
                   _log('onExitFullscreen() fired (lib)');
                   _wasFullscreen = false;
                   if (!mounted || _navigatingAway) return;
