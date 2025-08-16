@@ -11,14 +11,18 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
   // Track PiP state without relying on unavailable APIs on older SDKs
   var pipActive: Bool = false
 
-  // KVO for item.status
+  // Playback intent & seek bookkeeping
+  var desiredRate: Float = 1.0                 // last non-zero rate we should keep
+  var programmaticSeekInFlight: Bool = false   // true while our skip/seek is running
+  var wasPlayingRecentlyAt: Date?              // for user scrubs auto-resume heuristic
+
+  // KVO & notifications
   var statusObserver: NSKeyValueObservation?
-
-  // Periodic time observer token
+  var rateObserver: NSKeyValueObservation?
   var timeObserverToken: Any?
-
-  // NotificationCenter observer for end-of-playback
   var endObserver: NSObjectProtocol?
+  var timeJumpObserver: NSObjectProtocol?
+  var stalledObserver: NSObjectProtocol?
 
   deinit {
     // Remove periodic time observer to avoid leaks
@@ -29,10 +33,20 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     // Invalidate KVO if still active
     statusObserver?.invalidate()
     statusObserver = nil
-    // Remove playback-end observer if set
+    rateObserver?.invalidate()
+    rateObserver = nil
+    // Remove playback-end/timejump/stalled observers if set
     if let eo = endObserver {
       NotificationCenter.default.removeObserver(eo)
       endObserver = nil
+    }
+    if let tj = timeJumpObserver {
+      NotificationCenter.default.removeObserver(tj)
+      timeJumpObserver = nil
+    }
+    if let st = stalledObserver {
+      NotificationCenter.default.removeObserver(st)
+      stalledObserver = nil
     }
   }
 
@@ -125,7 +139,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.channel = channel
       vc.delegate = self
 
-      // Enable PiP (properties are gated at runtime by the system)
+      // Enable PiP
       vc.allowsPictureInPicturePlayback = true
       if #available(iOS 14.0, *) {
         vc.canStartPictureInPictureAutomaticallyFromInline = true
@@ -135,29 +149,78 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.entersFullScreenWhenPlaybackBegins = true
       vc.exitsFullScreenWhenPlaybackEnds = true
 
-      // Periodic observer for auto-skip opening/ending.
+      // Track last non-zero rate to preserve playback intent
+      vc.desiredRate = Float(rate)
+      vc.rateObserver = player.observe(\.rate, options: [.new, .initial]) { [weak vc] p, _ in
+        guard let vc = vc else { return }
+        if p.rate > 0 {
+          vc.desiredRate = p.rate
+          vc.wasPlayingRecentlyAt = Date()
+        }
+      }
+
+      // Auto-skip opening/ending via periodic time observer (with resume)
       var didSkipOpening = false
       var didSkipEnding = false
       vc.timeObserverToken = player.addPeriodicTimeObserver(
         forInterval: CMTime(seconds: 0.25, preferredTimescale: 600),
         queue: .main
-      ) { time in
+      ) { [weak vc] time in
+        guard let vc = vc else { return }
         let sec = CMTimeGetSeconds(time)
-        if let s = openingStart, let e = openingEnd, !didSkipOpening, sec >= s && sec <= s + 5.0 {
-          didSkipOpening = true
-          player.seek(
-            to: CMTime(seconds: e, preferredTimescale: 600),
+
+        func seekAndResume(to seconds: Double) {
+          vc.programmaticSeekInFlight = true
+          let target = CMTime(seconds: seconds, preferredTimescale: 600)
+          let rateToUse = (vc.player?.rate ?? 0) > 0 ? (vc.player?.rate ?? vc.desiredRate) : vc.desiredRate
+          vc.player?.seek(
+            to: target,
             toleranceBefore: .zero,
             toleranceAfter: .zero
-          )
+          ) { _ in
+            vc.programmaticSeekInFlight = false
+            if rateToUse > 0 {
+              vc.player?.playImmediately(atRate: rateToUse)
+            }
+          }
+        }
+
+        if let s = openingStart, let e = openingEnd, !didSkipOpening, sec >= s && sec <= s + 5.0 {
+          didSkipOpening = true
+          seekAndResume(to: e)
         }
         if let s = endingStart, let e = endingEnd, !didSkipEnding, sec >= s && sec <= s + 5.0 {
           didSkipEnding = true
-          player.seek(
-            to: CMTime(seconds: e, preferredTimescale: 600),
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
-          )
+          seekAndResume(to: e)
+        }
+      }
+
+      // User scrubbing auto-resume:
+      // If the item time jumps and we did NOT initiate the seek,
+      // and playback was active recently, resume at desiredRate.
+      vc.timeJumpObserver = NotificationCenter.default.addObserver(
+        forName: .AVPlayerItemTimeJumped,
+        object: item,
+        queue: .main
+      ) { [weak vc] _ in
+        guard let vc = vc else { return }
+        if vc.programmaticSeekInFlight { return } // ignore our own seeks
+        if let last = vc.wasPlayingRecentlyAt, Date().timeIntervalSince(last) < 1.0 {
+          if vc.desiredRate > 0 {
+            vc.player?.playImmediately(atRate: vc.desiredRate)
+          }
+        }
+      }
+
+      // Resume after stalls if user intended to play
+      vc.stalledObserver = NotificationCenter.default.addObserver(
+        forName: .AVPlayerItemPlaybackStalled,
+        object: item,
+        queue: .main
+      ) { [weak vc] _ in
+        guard let vc = vc else { return }
+        if vc.desiredRate > 0 {
+          vc.player?.playImmediately(atRate: vc.desiredRate)
         }
       }
 
@@ -183,12 +246,16 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         // Helper: seek & play with the desired rate when ready
         let startPlayback = {
           if pos > 0 {
+            vc.programmaticSeekInFlight = true
             player.seek(
               to: CMTime(seconds: pos, preferredTimescale: 600),
               toleranceBefore: .zero,
               toleranceAfter: .zero
             ) { _ in
-              if wasPlaying { player.playImmediately(atRate: Float(rate)) }
+              vc.programmaticSeekInFlight = false
+              if wasPlaying {
+                player.playImmediately(atRate: Float(rate))
+              }
             }
           } else {
             if wasPlaying { player.playImmediately(atRate: Float(rate)) }
