@@ -468,6 +468,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           // Keep local speed in sync with the native VC.
           _speed = rate;
 
+          // Mark episode as completed if user exited literally at the end.
+          if (_player.state.duration > Duration.zero &&
+            target >= _player.state.duration - const Duration(seconds: 1)) {
+            unawaited(_saveProgress(clearIfCompleted: true));
+          }
+
           // Robust restore (wait → double seek → rate → resume).
           await _restoreFromIOSDismiss(
             target: target,
