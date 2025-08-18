@@ -1,11 +1,12 @@
 // TODO: Add "skip" popup buttons if auto-skip is disabled.
-// TODO: Remember on windows volume on player
 
 import 'dart:async';
+import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ionicons/ionicons.dart';
 
 // media_kit
 import 'package:media_kit/media_kit.dart';
@@ -19,19 +20,25 @@ import 'package:animeshin/feature/player/player_prefs.dart';
 import 'package:animeshin/feature/watch/watch_types.dart';
 import 'package:animeshin/feature/watch/anilibria_mapper.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // desktop fullscreen
 import 'package:window_manager/window_manager.dart';
+
+// === Local HLS Proxy ===
+import 'package:animeshin/feature/player/local_hls_proxy.dart';
 
 class PlayerPage extends ConsumerStatefulWidget {
   const PlayerPage({
     super.key,
     required this.args,
+    required this.item,
     this.startupBannerText,
     this.startFullscreen = false,
   });
 
   final PlayerArgs args;
+  final Entry? item;
   final String? startupBannerText;
   final bool startFullscreen;
 
@@ -62,6 +69,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   final _repo = AnilibriaRepository();
   final _playback = const PlaybackStore();
 
+  // Local HLS proxy
+  final LocalHlsProxy _proxy = LocalHlsProxy();
+  bool _proxyReady = false; // set true after start()
+
   // Subs / timers
   StreamSubscription<Duration>? _subPos;
   StreamSubscription<bool>? _subCompleted;
@@ -77,7 +88,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Timer? _volumePersistDebounce; // <- debounce saves to prefs
 
   // Quality
-  String? _chosenUrl;
+  String? _chosenUrl; // stores the ORIGINAL remote HLS URL (master or media)
   String _currentQuality = '1080p';
 
   // Prefs (cached)
@@ -93,9 +104,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Duration _lastPos = Duration.zero;
   bool _plannedSeek = false;
-
-  // Keep as false; we only log jumps now.
-  final bool _autocorrectJumps = false;
 
   // Left for diagnostics (no corrective actions are taken).
   bool _reopeningGuard = false;
@@ -130,6 +138,74 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Helper: only do player ops while the widget is alive & not navigating away.
   bool get _alive => mounted && !_navigatingAway && !_isDisposed;
 
+  // Cursor overlay control
+  final CursorAutoHideController _cursorHideController = CursorAutoHideController();
+  OverlayEntry? _cursorOverlayEntry;
+  final ValueNotifier<bool> _cursorForceVisible = ValueNotifier<bool>(false);
+
+  void _insertCursorOverlayIfNeeded() {
+    if (!_isDesktop || _cursorOverlayEntry != null) return;
+    final ctx = _controlsCtx;
+    if (ctx == null || !ctx.mounted) return;
+
+    final overlay = Overlay.of(ctx);
+    if (!overlay.mounted) return;
+
+    _cursorOverlayEntry = OverlayEntry(
+      builder: (_) => Positioned.fill(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _cursorForceVisible,
+          builder: (_, force, __) {
+            return _CursorAutoHideOverlay(
+              idle: const Duration(seconds: 3),
+              forceVisible: force,
+              controller: _cursorHideController,
+            );
+          },
+        ),
+      ),
+    );
+    // overlay.insert(_cursorOverlayEntry!);
+
+    // // Kick countdown right after insertion
+    // _cursorHideController.kick();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _cursorOverlayEntry == null) return;
+      try {
+        overlay.insert(_cursorOverlayEntry!);
+        _cursorHideController.kick();
+      } catch (_) {
+      }
+    });
+  }
+
+  void _removeCursorOverlayIfAny() {
+    _cursorOverlayEntry?.remove();
+    _cursorOverlayEntry = null;
+  }
+
+  /// Opens AniLiberty support page in the system browser.
+  Future<void> _openSupport() async {
+    const url = 'https://anilibria.top/support';
+    final uri = Uri.parse(url);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to open the support page')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open: $e')),
+      );
+    }
+  }
+
+  void _hideCursorInstant() {
+    if (_isDesktop) _cursorHideController.hideNow();
+  }
 
   void _log(String msg) {
     // Scoped log with page identity for easier tracing across rebuilds.
@@ -233,7 +309,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Preferences subscription — no awaits inside the callback.
     _prefsSub = ref.listenManual<PlayerPrefs>(
       playerPrefsProvider,
-      (prev, next) {
+      (prev, next) async {
         if (!mounted || _navigatingAway) return;
 
         _autoSkipOpening = next.autoSkipOpening;
@@ -269,14 +345,31 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             final wasPlaying = _player.state.playing;
             _currentQuality = next.preferredQuality;
             _chosenUrl = newUrl;
+
+            // Ensure proxy is running before we generate proxied URL.
+            if (!_proxyReady) {
+              try {
+                await _proxy.start();
+                _proxyReady = true;
+              } catch (e) {
+                _log('proxy start failed in prefs listener: $e');
+              }
+            }
+
+            final toOpen = _proxyReady
+                ? _proxy.playlistUrl(Uri.parse(newUrl)).toString()
+                : newUrl;
+
             unawaited(() async {
               final resume = pos + const Duration(milliseconds: 300);
-              await _openAt(newUrl, position: resume, play: wasPlaying);
+              await _openAt(toOpen, position: resume, play: wasPlaying);
               if (_isDesktop) {
                 await _setVolumeSafe(_desktopVolume);
               }
               if (_alive) {
-                try { await _player.setRate(_speed); } catch (_) {}
+                try {
+                  await _player.setRate(_speed);
+                } catch (_) {}
               }
             }());
           }
@@ -307,11 +400,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             reason: 'ios_dismiss_restore',
           );
           if (_alive) {
-            try { await _player.setRate(rate); } catch (_) {}
+            try {
+              await _player.setRate(rate);
+            } catch (_) {}
           }
           _speed = rate;
           if (wasPlaying && _alive) {
-            try { await _player.play(); } catch (_) {}
+            try {
+              await _player.play();
+            } catch (_) {}
           }
           _safeSetState(() {});
           break;
@@ -319,6 +416,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         case 'ios_player_completed':
           await _saveProgress(clearIfCompleted: true);
           if (_autoNextEpisode) {
+            _hideCursorInstant();
             unawaited(_openNextEpisode());
           } else {
             _showBanner('Completed');
@@ -342,6 +440,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _detachListeners();
     unawaited(_saveProgress());
 
+    // Stop proxy (safe to call even if not running).
+    unawaited(_proxy.stop());
+
     // Do NOT access player state asynchronously anymore.
     try {
       _player.dispose();
@@ -349,6 +450,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Break reference to now-deactivated controls subtree.
     _controlsCtx = null;
+
+    _removeCursorOverlayIfAny();
+    _cursorForceVisible.dispose();
 
     super.dispose();
   }
@@ -372,7 +476,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final pref = ref.read(playerPrefsProvider).preferredQuality;
     final url = _pickUrlForQuality(pref);
     if (url != null && url.isNotEmpty) {
-      _chosenUrl = url;
+      _chosenUrl = url; // store remote (original) URL
     }
     return pref;
   }
@@ -396,8 +500,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       return;
     }
 
+    // Start local proxy BEFORE building proxied URL to avoid LateInitializationError.
+    if (!_proxyReady) {
+      try {
+        await _proxy.start();
+        _proxyReady = true;
+      } catch (e) {
+        _log('proxy start failed: $e');
+      }
+    }
+
+    // Build proxied URL (no trimming, no t=..., to keep absolute progress bar)
+    final toOpen = _proxyReady
+        ? _proxy.playlistUrl(Uri.parse(_chosenUrl!)).toString()
+        : _chosenUrl!;
+
     await _openAt(
-      _chosenUrl!,
+      toOpen,
+      // We still perform a normal seek — progress bar remains absolute.
       position: await _restoreSavedPosition(),
       play: true,
     );
@@ -405,9 +525,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Apply persisted desktop volume & speed right after the first open.
     if (_isDesktop) {
       await _setVolumeSafe(_desktopVolume);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+      _cursorForceVisible.value = false; // no force
+      _cursorHideController.kick();      // start the single 3s countdown
+    });
     }
     if (_alive) {
-      try { await _player.setRate(_speed); } catch (_) {}
+      try {
+        await _player.setRate(_speed);
+      } catch (_) {}
     }
 
     // Persist progress periodically.
@@ -423,7 +549,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _volumePersistDebounce?.cancel();
       _volumePersistDebounce = Timer(const Duration(milliseconds: 300), () {
         unawaited(
-          ref.read(playerPrefsProvider.notifier).setDesktopVolume(_desktopVolume),
+          ref
+              .read(playerPrefsProvider.notifier)
+              .setDesktopVolume(_desktopVolume),
         );
       });
     });
@@ -444,7 +572,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         if (diff > const Duration(milliseconds: 3500)) {
           final now = DateTime.now();
           if (_jumpWindowStartedAt == null ||
-              now.difference(_jumpWindowStartedAt!) > const Duration(seconds: 2)) {
+              now.difference(_jumpWindowStartedAt!) >
+                  const Duration(seconds: 2)) {
             _jumpWindowStartedAt = now;
             _consecutiveJumpCount = 1;
           } else {
@@ -470,6 +599,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       if (!done) return;
       unawaited(_saveProgress(clearIfCompleted: true));
       if (_autoNextEpisode) {
+        _hideCursorInstant();
         unawaited(_openNextEpisode());
       } else {
         _showBanner('Completed');
@@ -483,7 +613,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     });
 
     if (widget.startupBannerText?.isNotEmpty == true) {
-      _showBanner(widget.startupBannerText!);
+      _showBanner(widget.startupBannerText!, affectCursor: false);
     }
   }
 
@@ -623,15 +753,30 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _chosenUrl = url;
     _currentQuality = label;
 
+    // Ensure proxy is running
+    if (!_proxyReady) {
+      try {
+        await _proxy.start();
+        _proxyReady = true;
+      } catch (e) {
+        _log('proxy start failed in changeQuality: $e');
+      }
+    }
+
+    final toOpen =
+        _proxyReady ? _proxy.playlistUrl(Uri.parse(url)).toString() : url;
+
     final resume = pos + const Duration(milliseconds: 300);
-    await _openAt(url, position: resume, play: wasPlaying);
+    await _openAt(toOpen, position: resume, play: wasPlaying);
 
     // Re-apply persisted desktop volume after reopen.
     if (_isDesktop) {
       await _setVolumeSafe(_desktopVolume);
     }
     if (_alive) {
-      try { await _player.setRate(_speed); } catch (_) {}
+      try {
+        await _player.setRate(_speed);
+      } catch (_) {}
     }
 
     _safeSetState(() {});
@@ -648,6 +793,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await _player.pause();
 
     final args = <String, dynamic>{
+      // IMPORTANT: pass the ORIGINAL remote URL to native iOS player.
       'url': _chosenUrl!,
       'position': _player.state.position.inSeconds.toDouble(),
       'rate': _speed,
@@ -672,7 +818,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         } catch (_) {}
       }
       if (wasPlaying && _alive) {
-        try { await _player.play(); } catch (_) {}
+        try {
+          await _player.play();
+        } catch (_) {}
       }
     }
   }
@@ -718,7 +866,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       {required String banner}) async {
     _undoSeekFrom = from;
     await _seekPlanned(to, reason: 'auto_skip');
-    _showBanner(banner, showUndo: true);
+    _showBanner(banner, affectCursor: false);
+    _hideCursorInstant();
   }
 
   Future<void> _undoSkip() async {
@@ -730,6 +879,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Future<void> _openNextEpisode() async {
     if (_navigatingAway) return;
+    _hideCursorInstant();
     _autoSkipBlockedUntil = null;
     _log('_openNextEpisode() called');
 
@@ -791,6 +941,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               endingStart: next.endingStart,
               endingEnd: next.endingEnd,
             ),
+            item: widget.item,
             startupBannerText: 'Now playing: Episode ${next.ordinal}',
             startFullscreen: wasFs,
           ),
@@ -806,15 +957,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   // ---------- Banners ----------
 
-  void _showBanner(
-      String text, {
-        bool showUndo = false,
-        Duration hideAfter = const Duration(seconds: 3),
-      }) {
+  void _showBanner(String text, { Duration hideAfter = const Duration(seconds: 3), bool affectCursor = true}) {
     if (_navigatingAway) return;
     _bannerTimer?.cancel();
     _bannerText = text;
     _bannerVisible = true;
+
+    // Only force cursor visible if requested.
+    _cursorForceVisible.value = affectCursor;
+
     _safeSetState(() {});
     _bannerTimer = Timer(hideAfter, _hideBanner);
   }
@@ -823,7 +974,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (!_bannerVisible) return;
     _bannerVisible = false;
     _undoSeekFrom = null;
+
+    _cursorForceVisible.value = false;
+
     _safeSetState(() {});
+    Future.delayed(const Duration(milliseconds: 1), _cursorHideController.kick);
   }
 
   // ---------- UI ----------
@@ -903,7 +1058,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           ],
         ),
       ),
-
       // Preferences toggles
       PopupMenuButton<String>(
         tooltip: 'Preferences',
@@ -951,6 +1105,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           child: Icon(Icons.settings),
         ),
       ),
+      // Support button that opens AniLiberty support page
+      IconButton(
+        icon: const Icon(Ionicons.heart),
+        tooltip: 'Support AniLiberty',
+        onPressed: _openSupport,
+      ),
+      const SizedBox(width: 2), // Add a small right inset so actions aren't flush to the edge
     ];
 
     final banner = _bannerVisible
@@ -982,6 +1143,98 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     )
         : const SizedBox.shrink();
 
+    Widget wrapDesktopCursorHider(Widget child) {
+      if (!_isDesktop) return child;
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          child,
+          Positioned.fill(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _cursorForceVisible,
+              builder: (_, force, __) {
+                return _CursorAutoHideOverlay(
+                  idle: const Duration(seconds: 3),
+                  forceVisible: force,
+                  controller: _cursorHideController,
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    Widget buildPlayerStack() {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          // Use a tiny bridge to get a context INSIDE the controls subtree.
+          Video(
+            controller: _video,
+            controls: (state) => _ControlsCtxBridge(
+              state: state,
+              onReady: (ctx) {
+                if (_navigatingAway) return;
+                _controlsCtx ??= ctx;
+                _log(
+                    'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
+
+                // Start in fullscreen (lib) only for non-iOS platforms.
+                if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
+                  _startFsHandled = true;
+                  WidgetsBinding.instance.endOfFrame.then((_) async {
+                    if (!mounted || _navigatingAway) return;
+                    final c = _controlsCtx;
+                    if (c == null || !c.mounted) return;
+
+                    if (!isFullscreen(c)) {
+                      try {
+                        await enterFullscreen(c); // lib fullscreen
+                        _wasFullscreen = true;
+                        await _enterNativeFullscreen();
+                        _insertCursorOverlayIfNeeded();
+                        _cursorHideController.kick();
+                        // await _enterNativeFullscreen(); // request native overlays (non-iOS)
+                        _log('entered fullscreen on new page');
+                      } catch (_) {}
+                    }
+                  });
+                }
+              },
+            ),
+            onEnterFullscreen: () async {
+              if (_isIOS) return;
+              _log('onEnterFullscreen() fired (lib)');
+              _wasFullscreen = true;
+              if (!mounted || _navigatingAway) return;
+              await _enterNativeFullscreen();
+
+              // Insert cursor overlay on desktop while fullscreen is active.
+              _insertCursorOverlayIfNeeded();
+              _cursorHideController.kick();
+
+              _log('native fullscreen requested from onEnterFullscreen()');
+            },
+            onExitFullscreen: () async {
+              if (_isIOS) return;
+              _log('onExitFullscreen() fired (lib)');
+              _wasFullscreen = false;
+              if (!mounted || _navigatingAway) return;
+              await _exitNativeFullscreen();
+
+              // Remove cursor overlay when leaving fullscreen.
+              _removeCursorOverlayIfAny();
+
+              _log('native fullscreen exit requested from onExitFullscreen()');
+            },
+          ),
+          banner,
+        ],
+      );
+    }
+
     // Predictive back: use onPopInvokedWithResult (non-deprecated).
     return PopScope(
       canPop: true,
@@ -1004,66 +1257,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: AppBar(
-          title: Text(widget.args.title),
+          // title: Text(widget.args.title),
+          title: Text('Episode ${widget.args.ordinal}'),
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
+          centerTitle: false,
+          titleSpacing: 0,
           actions: actions,
         ),
         body: Padding(
-          padding: _isMobile && !_wasFullscreen ? const EdgeInsets.only(bottom: 56, left: 56, right: 56) : EdgeInsets.zero,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Use a tiny bridge to get a context INSIDE the controls subtree.
-              Video(
-                controller: _video,
-                controls: (state) => _ControlsCtxBridge(
-                  state: state,
-                  onReady: (ctx) {
-                    if (_navigatingAway) return;
-                    _controlsCtx ??= ctx;
-                    _log(
-                        'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
-
-                    // Start in fullscreen (lib) only for non-iOS platforms.
-                    if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
-                      _startFsHandled = true;
-                      WidgetsBinding.instance.endOfFrame.then((_) async {
-                        if (!mounted || _navigatingAway) return;
-                        final c = _controlsCtx;
-                        if (c == null || !c.mounted) return;
-
-                        if (!isFullscreen(c)) {
-                          try {
-                            await enterFullscreen(c); // lib fullscreen
-                            _wasFullscreen = true;
-                            await _enterNativeFullscreen(); // request native overlays (non-iOS)
-                            _log('entered fullscreen on new page');
-                          } catch (_) {}
-                        }
-                      });
-                    }
-                  },
-                ),
-                onEnterFullscreen: () async {
-                  if (_isIOS) return;
-                  _log('onEnterFullscreen() fired (lib)');
-                  _wasFullscreen = true;
-                  if (!mounted || _navigatingAway) return;
-                  await _enterNativeFullscreen();
-                  _log('native fullscreen requested from onEnterFullscreen()');
-                },
-                onExitFullscreen: () async {
-                  if (_isIOS) return;
-                  _log('onExitFullscreen() fired (lib)');
-                  _wasFullscreen = false;
-                  if (!mounted || _navigatingAway) return;
-                  await _exitNativeFullscreen();
-                  _log('native fullscreen exit requested from onExitFullscreen()');
-                },
-              ),
-              banner,
-            ],
+          padding: _isMobile && !_wasFullscreen
+              ? const EdgeInsets.only(bottom: 56, left: 56, right: 56)
+              : EdgeInsets.zero,
+          child: wrapDesktopCursorHider(
+            buildPlayerStack(),
           ),
         ),
       ),
@@ -1106,5 +1313,118 @@ class _ControlsCtxBridgeState extends State<_ControlsCtxBridge> {
     // NOTE: If you need to hide the fullscreen button on iOS,
     // switch to custom controls and omit the fullscreen action.
     return AdaptiveVideoControls(widget.state);
+  }
+}
+
+/// Controller to restart cursor auto-hide countdown from outside.
+class CursorAutoHideController {
+  final ValueNotifier<int> _tick = ValueNotifier<int>(0);
+  final ValueNotifier<int> _hideNowTick = ValueNotifier<int>(0);
+  void kick() => _tick.value++;
+  void hideNow() => _hideNowTick.value++;
+}
+
+// Transparent overlay that auto-hides the mouse cursor after [idle].
+// Lives inside the video controls Overlay while fullscreen is active.
+class _CursorAutoHideOverlay extends StatefulWidget {
+  const _CursorAutoHideOverlay({
+    this.idle = const Duration(seconds: 3),
+    this.forceVisible = false,
+    this.controller,
+  });
+
+  final Duration idle;
+  final bool forceVisible;
+  final CursorAutoHideController? controller;
+  @override
+  State<_CursorAutoHideOverlay> createState() => _CursorAutoHideOverlayState();
+}
+
+class _CursorAutoHideOverlayState extends State<_CursorAutoHideOverlay> {
+  bool _visible = true;
+  Timer? _t;
+  VoidCallback? _controllerSub;
+  VoidCallback? _hideNowSub;
+
+  // Start/Restart countdown
+  void _bump() {
+    _t?.cancel();
+    if (!_visible) setState(() => _visible = true);
+    if (widget.forceVisible) return; // keep visible while overlays are shown
+    _t = Timer(widget.idle, () {
+      if (!mounted) return;
+      setState(() => _visible = false);
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _bump(); // start countdown on mount
+    // Subscribe to external kicks
+    _controllerSub = () => _bump();
+    widget.controller?._tick.addListener(_controllerSub!);
+
+    // Instantly hide the cursor on command
+    _hideNowSub = () {
+      _t?.cancel();
+      if (_visible) setState(() => _visible = false);
+    };
+    widget.controller?._hideNowTick.addListener(_hideNowSub!);
+  }
+
+  @override
+  void didUpdateWidget(covariant _CursorAutoHideOverlay old) {
+    super.didUpdateWidget(old);
+    // Rewire controller listener if controller instance changed
+    if (old.controller != widget.controller) {
+      if (old.controller != null && _controllerSub != null) {
+        old.controller!._tick.removeListener(_controllerSub!);
+        old.controller!._hideNowTick.removeListener(_hideNowSub!);
+      }
+      if (widget.controller != null) {
+        widget.controller!._tick.addListener(_controllerSub!);
+        widget.controller!._hideNowTick.addListener(_hideNowSub!);
+      }
+    }
+
+    // When forceVisible turns ON -> show cursor now.
+    if (widget.forceVisible && !_visible) {
+      setState(() => _visible = true);
+    }
+    // When forceVisible turns OFF -> do nothing here.
+    // IMPORTANT: The parent will decide when to start the countdown (via controller.kick()).
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    if (widget.controller != null) {
+      if (_controllerSub != null) {
+        widget.controller!._tick.removeListener(_controllerSub!);
+      }
+      if (_hideNowSub != null) {
+        widget.controller!._hideNowTick.removeListener(_hideNowSub!); // NEW
+      }
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerHover: (_) => _bump(),
+      onPointerMove: (_) => _bump(),
+      onPointerDown: (_) => _bump(),
+      onPointerSignal: (_) => _bump(),
+      child: MouseRegion(
+        opaque: false,
+        cursor: (widget.forceVisible || _visible)
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.none,
+        child: const SizedBox.expand(),
+      ),
+    );
   }
 }

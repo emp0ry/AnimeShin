@@ -16,8 +16,9 @@ import 'anilibria_mapper.dart';
 import '../player/player_page.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
-  const WatchPage({super.key, required this.alias});
+  const WatchPage({super.key, required this.alias, required this.item});
   final String alias;
+  final Entry? item;
 
   @override
   ConsumerState<WatchPage> createState() => _WatchPageState();
@@ -108,7 +109,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     return ep.clamp(1, maxOrdinal);
   }
 
-  void _openPlayer(AniRelease release, int ordinal) {
+  void _openPlayer(AniRelease release, int ordinal, Entry? item) {
     final ep = release.episodes.firstWhere((e) => e.ordinal == ordinal);
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -126,6 +127,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             endingStart: ep.endingStart,
             endingEnd: ep.endingEnd,
           ),
+          item: item,
         ),
       ),
     );
@@ -139,16 +141,16 @@ class _WatchPageState extends ConsumerState<WatchPage> {
       appBar: AppBar(
         title: const Text('Watch'),
         actions: [
+          IconButton(
+            icon: const Icon(Ionicons.refresh),
+            tooltip: 'Reload',
+            onPressed: _load,
+          ),
           // Support button that opens AniLiberty support page
           IconButton(
             icon: const Icon(Ionicons.heart),
             tooltip: 'Support AniLiberty',
             onPressed: _openSupport,
-          ),
-          IconButton(
-            icon: const Icon(Ionicons.refresh),
-            tooltip: 'Reload',
-            onPressed: _load,
           ),
           const SizedBox(width: 8), // Add a small right inset so actions aren't flush to the edge
         ],
@@ -157,7 +159,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         AsyncData(:final value) => _Body(
             release: value,
             entry: _findMatchingEntry(ref),
-            onPlay: (e) => _openPlayer(value, e.ordinal),
+            onPlay: (e) => _openPlayer(value, e.ordinal, widget.item),
           ),
         AsyncError(:final error) => Center(
             child: Text(
@@ -176,7 +178,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                   release: rel.value,
                   entry: _findMatchingEntry(ref),
                 );
-                _openPlayer(rel.value, i);
+                _openPlayer(rel.value, i, widget.item);
               },
             )
           : null,

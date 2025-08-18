@@ -383,13 +383,20 @@ class CollectionNotifier
         ref.read(persistenceProvider).options.imageQuality,
       );
 
+      final options = ref.watch(persistenceProvider.select((s) => s.options));
+      // These fields are UI switches, we must re-apply them manually here
+      entry.ruTitleState = options.ruTitle;
+      entry.anilibriaEpDubState = options.anilibriaEpDub;
+
       if (oldEntry != null) {
         entry.shikimoriUrl = oldEntry.shikimoriUrl;
         entry.lastAniLibriaEpisode = oldEntry.lastAniLibriaEpisode;
         entry.anilibriaAlias = oldEntry.anilibriaAlias;
+        entry.titles
+          ..clear()
+          ..addAll(oldEntry.titles);
       }
 
-      final options = ref.watch(persistenceProvider.select((s) => s.options));
       if (options.scheduleNotification) {
         await NotificationSystem.scheduleNotificationForEntry(entry);
       }

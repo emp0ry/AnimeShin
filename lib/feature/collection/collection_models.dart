@@ -520,7 +520,7 @@ class Entry {
   }
 
   final int mediaId;
-  final List<String> titles;
+  List<String> titles;
   final String imageUrl;
   final MediaFormat? format;
   final ReleaseStatus? releaseStatus;

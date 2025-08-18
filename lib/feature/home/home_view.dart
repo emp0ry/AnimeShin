@@ -64,7 +64,7 @@ class _HomeViewState extends ConsumerState<HomeView>
   void initState() {
     super.initState();
     final persistence = ref.read(persistenceProvider);
-
+    
     _tabCtrl.index = persistence.options.homeTab.index;
     if (widget.tab != null) _tabCtrl.index = widget.tab!.index;
 

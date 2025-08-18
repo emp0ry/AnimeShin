@@ -76,6 +76,35 @@ class _TileState extends State<_TileWidget> {
   void _optimisticInc() => setState(() => widget.entry.progress += 1);
   void _optimisticDec() => setState(() => widget.entry.progress -= 1);
 
+  void _persistWithUndo({
+    required BuildContext context,
+    required Future<String?> Function() persist,
+    required Future<void> Function() undoOptimistic,
+  }) {
+    // Run after the current frame so we don't block the animation.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Close the slidable smoothly
+      Slidable.of(context)?.close();
+      // Medium haptic after the animation feels nicer
+      HapticFeedback.mediumImpact();
+
+      // Fire-and-forget persist; if it fails, revert.
+      final err = await persist();
+      if (err != null) {
+        await undoOptimistic();
+        return;
+      }
+
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+    });
+  }
+
+  Future<String?> _saveProgress() async {
+    if (widget.onProgressUpdated == null) return null;
+    return widget.onProgressUpdated!(widget.entry, false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -91,9 +120,15 @@ class _TileState extends State<_TileWidget> {
           dismissible: DismissiblePane(
             confirmDismiss: () {
               if (!_canDecrement) return Future.value(false);
-
-              HapticFeedback.mediumImpact();    // start haptic
               _optimisticDec();                 // instant UI update
+              _persistWithUndo(
+                context: context,
+                persist: _saveProgress,         // async, runs post-frame
+                undoOptimistic: () async {      // revert path
+                  setState(() => widget.entry.progress += 1);
+                  await _saveProgress();
+                },
+              );
 
               return Future.value(false);       // never actually dismiss
             },
@@ -104,8 +139,15 @@ class _TileState extends State<_TileWidget> {
             SlidableAction(
               onPressed: (_) {
                 if (!_canDecrement) return;
-                HapticFeedback.mediumImpact();
                 _optimisticDec();
+                _persistWithUndo(
+                  context: context,
+                  persist: _saveProgress,
+                  undoOptimistic: () async {
+                    setState(() => widget.entry.progress += 1);
+                    await _saveProgress();
+                  },
+                );
               },
               icon: Ionicons.remove,
               backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
@@ -124,9 +166,15 @@ class _TileState extends State<_TileWidget> {
           dismissible: DismissiblePane(
             confirmDismiss: () {
               if (!_canIncrement) return Future.value(false);
-
-              HapticFeedback.mediumImpact();
               _optimisticInc();
+              _persistWithUndo(
+                context: context,
+                persist: _saveProgress,
+                undoOptimistic: () async {
+                  setState(() => widget.entry.progress -= 1);
+                  await _saveProgress();
+                },
+              );
 
               return Future.value(false);
             },
@@ -137,8 +185,15 @@ class _TileState extends State<_TileWidget> {
             SlidableAction(
               onPressed: (_) {
                 if (!_canIncrement) return;
-                HapticFeedback.mediumImpact();
                 _optimisticInc();
+                _persistWithUndo(
+                  context: context,
+                  persist: _saveProgress,
+                  undoOptimistic: () async {
+                    setState(() => widget.entry.progress -= 1);
+                    await _saveProgress();
+                  },
+                );
               },
               icon: Ionicons.add,
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -283,7 +338,7 @@ class __TileContentState extends State<_TileContent> {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => WatchPage(alias: item.anilibriaAlias!.trim()),
+                      builder: (_) => WatchPage(alias: item.anilibriaAlias!.trim(), item: item),
                     ),
                   );
                 },
