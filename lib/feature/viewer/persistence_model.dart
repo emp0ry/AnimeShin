@@ -10,7 +10,7 @@ import 'package:animeshin/feature/home/home_model.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/util/theming.dart';
 
-const appVersion = '2.2.2';
+const appVersion = '2.2.3';
 
 class Persistence {
   const Persistence({
@@ -199,6 +199,7 @@ class Options {
     required this.collectionPreviewItemView,
     required this.ruTitle,
     required this.anilibriaEpDub,
+    required this.anilibriaWatch,
     required this.scheduleNotification,
   });
 
@@ -219,6 +220,7 @@ class Options {
         collectionPreviewItemView: CollectionItemView.detailed,
         ruTitle: true,
         anilibriaEpDub: true,
+        anilibriaWatch: true,
         scheduleNotification: true,
       );
 
@@ -248,6 +250,7 @@ class Options {
         ),
         ruTitle: map['ruTitle'] ?? true,
         anilibriaEpDub: map['anilibriaEpDub'] ?? true,
+        anilibriaWatch: map['anilibriaWatch'] ?? true,
         scheduleNotification: map['scheduleNotification'] ?? true,
       );
 
@@ -267,6 +270,7 @@ class Options {
   final CollectionItemView collectionPreviewItemView;
   final bool ruTitle;
   final bool anilibriaEpDub;
+  final bool anilibriaWatch;
   final bool scheduleNotification;
 
   Options copyWith({
@@ -286,6 +290,7 @@ class Options {
     CollectionItemView? collectionPreviewItemView,
     bool? ruTitle,
     bool? anilibriaEpDub,
+    bool? anilibriaWatch,
     bool? scheduleNotification,
   }) =>
       Options(
@@ -305,6 +310,7 @@ class Options {
         collectionPreviewItemView: collectionPreviewItemView ?? this.collectionPreviewItemView,
         ruTitle: ruTitle ?? this.ruTitle,
         anilibriaEpDub: anilibriaEpDub ?? this.anilibriaEpDub,
+        anilibriaWatch: anilibriaWatch ?? this.anilibriaWatch,
         scheduleNotification: scheduleNotification ?? this.scheduleNotification,
       );
 
@@ -325,6 +331,7 @@ class Options {
         'collectionPreviewItemView': collectionPreviewItemView.index,
         'ruTitle': ruTitle,
         'anilibriaEpDub': anilibriaEpDub,
+        'anilibriaWatch': anilibriaWatch,
         'scheduleNotification': scheduleNotification,
       };
 }

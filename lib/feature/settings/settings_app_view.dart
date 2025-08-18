@@ -145,13 +145,23 @@ class SettingsAppSubview extends ConsumerWidget {
               ),
             ),
             StatefulSwitchListTile(
-              title: const Text('AniLibriа Dub Indicator'),
+              title: const Text('AniLiberty Dub Indicator'),
               subtitle: const Text(
-                'Show whether each episode is dubbed in AniLibriа when viewing anime details.',
+                'Show whether each episode is dubbed in AniLiberty when viewing anime details.',
               ),
               value: options.anilibriaEpDub,
               onChanged: (v) => update(
                 options.copyWith(anilibriaEpDub: v),
+              ),
+            ),
+            StatefulSwitchListTile(
+              title: const Text('AniLiberty Watch'),
+              subtitle: const Text(
+                'Show a Watch button to play episodes dubbed from AniLiberty.',
+              ),
+              value: options.anilibriaWatch,
+              onChanged: (v) => update(
+                options.copyWith(anilibriaWatch: v),
               ),
             ),
           ],

@@ -448,6 +448,7 @@ class Entry {
     required this.watchEnd,
     required this.ruTitleState,
     required this.anilibriaEpDubState,
+    required this.anilibriaWatchState,
     required this.anilibriaAlias,
   });
 
@@ -515,6 +516,7 @@ class Entry {
       watchEnd: DateTimeExtension.fromFuzzyDate(map['completedAt']),
       ruTitleState: map['ruTitleState'] ?? false,
       anilibriaEpDubState: map['anilibriaEpDubState'] ?? false,
+      anilibriaWatchState: map['anilibriaWatchState'] ?? false,
       anilibriaAlias: anilibriaAlias
     );
   }
@@ -546,6 +548,7 @@ class Entry {
   DateTime? watchEnd;
   bool? ruTitleState;
   bool? anilibriaEpDubState;
+  bool? anilibriaWatchState;
   String? anilibriaAlias;
 }
 

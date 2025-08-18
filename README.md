@@ -4,9 +4,9 @@
 
 <h1 align="center">AnimeShin</h1>
 <p align="center">
-  A modern, unofficial AniList client with Russian titles and AniLiberty voice-over tracking.
+  A modern, unofficial AniList client with Russian titles, AniLiberty voice-over tracking, and episode watching for AniLiberty dubs.
   <br>
-  Track anime & manga, update progress with gestures, get notified about new episodes and dubs — all in one place.
+  Track anime & manga, update progress with gestures, watch dubbed episodes, and get notified about new releases and dubs — all in one place.
 </p>
 
 <p align="center">
@@ -38,6 +38,9 @@
 - **🗣 AniLiberty Dub Checker**  
   Indicates whether the latest episode is dubbed directly in your library.
 
+- **▶️ AniLiberty Watch**  
+  Watch AniLiberty-dubbed episodes directly from the app.
+
 - **🔗 Extra Links**  
   Direct links to Shikimori and AniLiberty release pages.
 
@@ -58,7 +61,7 @@
   Android, iOS, Windows — macOS & Linux planned.
 
 - **⚙️ Settings**  
-  Toggle options for AniLibria latest episode dub display, Russian title visibility, and scheduled new episode air notifications.
+  Toggle options for AniLiberty dub display, AniLiberty watch button, Russian title visibility, and scheduled new episode air notifications.
 
 ---
 
@@ -83,6 +86,7 @@
 
 ## 📈 Roadmap
 
+- Full stable anime player  
 - macOS & Linux support  
 - Notifications for new AniLiberty dubs  
 - Import/export of watchlist and progress  

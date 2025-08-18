@@ -328,7 +328,8 @@ class __TileContentState extends State<_TileContent> {
                 overflow: TextOverflow.fade,
               ),
             ),
-            if (item.anilibriaAlias != null && item.anilibriaAlias!.trim().isNotEmpty)
+            if (item.anilibriaAlias != null && item.anilibriaAlias!.trim().isNotEmpty
+                && widget.item.anilibriaWatchState != null && widget.item.anilibriaWatchState!)
               FilledButton(
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),

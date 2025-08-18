@@ -55,6 +55,7 @@ class CollectionNotifier
       for (final e in l['entries']) {
         e['ruTitleState'] = options.ruTitle;
         e['anilibriaEpDubState'] = options.anilibriaEpDub;
+        e['anilibriaWatchState'] = options.anilibriaWatch;
       }
     }
     // ---------- STEP A: Fill Russian titles from Shikimori ----------
@@ -387,6 +388,7 @@ class CollectionNotifier
       // These fields are UI switches, we must re-apply them manually here
       entry.ruTitleState = options.ruTitle;
       entry.anilibriaEpDubState = options.anilibriaEpDub;
+      entry.anilibriaWatchState = options.anilibriaWatch;
 
       if (oldEntry != null) {
         entry.shikimoriUrl = oldEntry.shikimoriUrl;
