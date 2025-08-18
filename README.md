@@ -148,7 +148,7 @@ flutter build windows
 ## 🙏 Credits
 
 Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https://github.com/lotusprey/otraku) — the inspiration for AnimeShin.  
-Thanks to [AniLiberty](https://aniliberty.pro/) for providing voice-over releases and [Shikimori](https://shikimori.one/) for Russian titles & metadata.
+Thanks to [AniLiberty](https://anilibria.top/) for providing voice-over releases and [Shikimori](https://shikimori.one/) for Russian titles & metadata.
 
 ## 🔒 Privacy & Policy
 
