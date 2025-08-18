@@ -220,6 +220,7 @@ class LocalHlsProxy {
     }
 
     // Walk again to rewrite only URI lines & keep #EXTINF lines before them.
+    // ignore: unused_local_variable
     double? currentDur;
     for (int i = 0; i < lines.length; i++) {
       final raw = lines[i].trimRight();

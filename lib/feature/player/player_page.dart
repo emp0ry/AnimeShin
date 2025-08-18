@@ -143,6 +143,75 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   OverlayEntry? _cursorOverlayEntry;
   final ValueNotifier<bool> _cursorForceVisible = ValueNotifier<bool>(false);
 
+  // Place near other helpers
+  Future<void> _restoreFromIOSDismiss({
+    required Duration target,
+    required double rate,
+    required bool wasPlaying,
+  }) async {
+    if (!_alive) return;
+
+    // Wait until the player reports either a valid duration or stable positions.
+    final settle = Completer<void>();
+    late final StreamSubscription subDur;
+    late final StreamSubscription subPos;
+
+    bool hasDuration = false;
+    int posTicksOver500ms = 0;
+
+    // Safety timeout — don't hang forever.
+    final timeout = Future<void>.delayed(const Duration(seconds: 8), () {});
+
+    subDur = _player.stream.duration.listen((d) {
+      if (!_alive) {
+        if (!settle.isCompleted) settle.complete();
+        subDur.cancel();
+        return;
+      }
+      if (d > Duration.zero) {
+        hasDuration = true;
+        if (!settle.isCompleted) settle.complete();
+      }
+    });
+
+    subPos = _player.stream.position.listen((p) {
+      if (!_alive) {
+        if (!settle.isCompleted) settle.complete();
+        subPos.cancel();
+        return;
+      }
+      // If duration is still zero, use position ticks heuristic as a fallback.
+      if (p > const Duration(milliseconds: 500)) {
+        posTicksOver500ms++;
+        if (!hasDuration && posTicksOver500ms >= 2 && !settle.isCompleted) {
+          settle.complete();
+        }
+      }
+    });
+
+    await Future.any([settle.future, timeout]);
+    await subDur.cancel();
+    await subPos.cancel();
+
+    if (!_alive) return;
+
+    // Block auto-skip for a short window so we don't immediately jump again.
+    _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 3));
+
+    // Do the "double seek" for extra reliability (like in _openAt).
+    await _seekPlanned(target, reason: 'ios_dismiss_restore');
+    await Future.delayed(const Duration(milliseconds: 80));
+    await _seekPlanned(target, reason: 'ios_dismiss_restore_confirm');
+
+    // Re-apply rate (the native VC may have changed it).
+    try { await _player.setRate(rate); } catch (_) {}
+
+    // Resume only after we are at the right place.
+    if (wasPlaying && _alive) {
+      try { await _player.play(); } catch (_) {}
+    }
+  }
+
   void _insertCursorOverlayIfNeeded() {
     if (!_isDesktop || _cursorOverlayEntry != null) return;
     final ctx = _controlsCtx;
@@ -395,22 +464,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           final rate = (map['rate'] as num?)?.toDouble() ?? _speed;
           final wasPlaying = (map['wasPlaying'] as bool?) ?? true;
 
-          await _seekPlanned(
-            Duration(milliseconds: (posSec * 1000).round()),
-            reason: 'ios_dismiss_restore',
-          );
-          if (_alive) {
-            try {
-              await _player.setRate(rate);
-            } catch (_) {}
-          }
+          final target = Duration(milliseconds: (posSec * 1000).round());
+          // Keep local speed in sync with the native VC.
           _speed = rate;
-          if (wasPlaying && _alive) {
-            try {
-              await _player.play();
-            } catch (_) {}
-          }
-          _safeSetState(() {});
+
+          // Robust restore (wait → double seek → rate → resume).
+          await _restoreFromIOSDismiss(
+            target: target,
+            rate: rate,
+            wasPlaying: wasPlaying,
+          );
+
+          _safeSetState(() {}); // refresh any UI that shows speed/position
           break;
 
         case 'ios_player_completed':
@@ -1178,8 +1243,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               onReady: (ctx) {
                 if (_navigatingAway) return;
                 _controlsCtx ??= ctx;
-                _log(
-                    'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
+                _log('controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
                 // Start in fullscreen (lib) only for non-iOS platforms.
                 if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
