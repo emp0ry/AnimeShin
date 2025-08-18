@@ -95,7 +95,7 @@
 - Notifications for new AniLiberty dubs  
 - Import/export of watchlist and progress  
 - Home screen widgets  
-- Full Russian UI localization
+- Full Russian UI localization  
 
 ---
 
