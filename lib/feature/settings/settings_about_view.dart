@@ -76,7 +76,7 @@ class SettingsAboutSubview extends StatelessWidget {
                 title: const Text('Privacy Policy'),
                 onTap: () => SnackBarExtension.launch(
                   context,
-                  'https://youtu.be/dQw4w9WgXcQ?si=9srQZl2pMumjxJiW',
+                  'https://github.com/emp0ry/AnimeShin/blob/main/PRIVACY_POLICY.md',
                 ),
               ),
               const ListTile(
