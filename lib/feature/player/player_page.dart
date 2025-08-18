@@ -2,6 +2,8 @@
 
 import 'dart:async';
 import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/collection/collection_provider.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -104,6 +106,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Duration _lastPos = Duration.zero;
   bool _plannedSeek = false;
+  // --- Auto-skip guard flags (Android-friendly) ---
+  bool _openingSkipped = false;
+  bool _endingSkipped  = false;
 
   // Left for diagnostics (no corrective actions are taken).
   bool _reopeningGuard = false;
@@ -143,6 +148,121 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   OverlayEntry? _cursorOverlayEntry;
   final ValueNotifier<bool> _cursorForceVisible = ValueNotifier<bool>(false);
 
+  // Mirrors effective progress; updated locally after successful persist
+  int? _knownProgress;
+
+  // Prevents double increment for the same episode
+  bool _autoIncDoneForThisEp = false;
+  int? _autoIncGuardForOrdinal;
+
+  final Duration _tailGuardMinutes = Duration(minutes: 3);
+
+  int _progressBaselineForOrdinal(int ordinal, int? raw) {
+    final safeRaw = raw ?? 0;
+    final baseline = ordinal > 0 ? ordinal - 1 : 0;
+    return safeRaw < baseline ? baseline : safeRaw;
+  }
+
+  // Build the record tag required by collectionProvider
+  CollectionTag _buildCollectionTag({required bool ofAnime}) {
+    final viewerId = ref.read(viewerIdProvider);
+    if (viewerId == null) {
+      // Defensive: if user is not loaded yet, just fallback (no crash).
+      // You can also early-return and skip remote persist in _persistAniListProgress.
+      return (userId: 0, ofAnime: ofAnime);
+    }
+    return (userId: viewerId, ofAnime: ofAnime);
+  }
+
+  /// Persist progress to AniList via collection provider.
+  /// Do NOT permanently mutate widget.item; provider will publish fresh Entry.
+  Future<String?> _persistAniListProgress(int newProgress, {bool setAsCurrent = false}) async {
+    if (widget.item == null) return null;
+
+    final tag = _buildCollectionTag(ofAnime: true);
+    if (tag.userId == 0) return null; // skip if viewer not ready
+
+    final notifier = ref.read(collectionProvider(tag).notifier);
+
+    final tmp = widget.item!;
+    final prev = tmp.progress;
+    final max = tmp.progressMax;
+    final next = (newProgress).clamp(0, (max ?? 1 << 20)); // clamp just in case
+    tmp.progress = next;
+
+    final err = await notifier.saveEntryProgress(tmp, setAsCurrent);
+
+    tmp.progress = prev;
+    if (err == null) _knownProgress = next;
+    return err;
+  }
+
+  /// Bump progress when near the end of the current episode.
+  /// Conditions:
+  ///  - Only if current + 1 == ordinal
+  ///  - Trigger at 5s before ED if known, otherwise when <= 5 min left
+  ///  - Never increment twice for the same episode
+  Future<void> _maybeAutoIncrementProgress(Duration pos) async {
+    final item = widget.item;
+    final ordinal = widget.args.ordinal;
+    if (item == null || ordinal <= 0) return;
+
+    final duration = _player.state.duration;
+    if (duration == Duration.zero) return;
+
+    // Use local mirror when available
+    final current = _progressBaselineForOrdinal(ordinal, _knownProgress ?? item.progress);
+    final max = item.progressMax;
+
+    // If already reached/surpassed this episode, never increment again
+    if (current >= ordinal) {
+      _autoIncDoneForThisEp = true;
+      _autoIncGuardForOrdinal = ordinal;
+      return;
+    }
+
+    // Only when catching up exactly one episode (e.g., from 4 -> 5)
+    final shouldBeNext = (current + 1) == ordinal;
+    if (!shouldBeNext) {
+      // Reset guard if user navigates to a different episode
+      _autoIncDoneForThisEp = false;
+      _autoIncGuardForOrdinal = null;
+      return;
+    }
+
+    // Prevent duplicate increments for this ordinal
+    if (_autoIncDoneForThisEp && _autoIncGuardForOrdinal == ordinal) return;
+
+    // Decide threshold
+    bool passedThreshold = false;
+    final endingStart = widget.args.endingStart;
+    if (endingStart != null && endingStart > 0) {
+      final triggerAtMs = endingStart * 1000 - 5000; // 5s before ED
+      passedThreshold = triggerAtMs > 0
+          ? pos.inMilliseconds >= triggerAtMs
+          : (duration - pos) <= _tailGuardMinutes;
+    } else {
+      passedThreshold = (duration - pos) <= _tailGuardMinutes;
+    }
+    if (!passedThreshold) return;
+
+    final next = (current + 1).clamp(0, max ?? 1 << 20);
+
+    // Arm guard BEFORE awaiting to avoid double runs on next ticks
+    _autoIncDoneForThisEp = true;
+    _autoIncGuardForOrdinal = ordinal;
+
+    final err = await _persistAniListProgress(next, setAsCurrent: false);
+    if (mounted && err != null) {
+      // Allow retry if failed
+      _autoIncDoneForThisEp = false;
+      _autoIncGuardForOrdinal = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update progress: $err')),
+      );
+    }
+  }
+
   // Place near other helpers
   Future<void> _restoreFromIOSDismiss({
     required Duration target,
@@ -150,6 +270,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     required bool wasPlaying,
   }) async {
     if (!_alive) return;
+
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
 
     // Wait until the player reports either a valid duration or stable positions.
     final settle = Completer<void>();
@@ -194,6 +318,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await subPos.cancel();
 
     if (!_alive) return;
+
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
 
     // Block auto-skip for a short window so we don't immediately jump again.
     _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 3));
@@ -278,8 +406,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   void _log(String msg) {
     // Scoped log with page identity for easier tracing across rebuilds.
-    debugPrint(
-        '[PlayerPage#${identityHashCode(this)} @${DateTime.now().toIso8601String()}] $msg');
+    debugPrint('[PlayerPage#${identityHashCode(this)} @${DateTime.now().toIso8601String()}] $msg');
   }
 
   // Safe setState: ignore updates when widget is unmounted or we're navigating away.
@@ -344,6 +471,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _setVolumeSafe(double v) async {
     // Never call player methods if page is leaving or disposed
     if (!_alive) return;
+
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
+
     try {
       await _player.setVolume(v);
     } catch (e) {
@@ -354,6 +486,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   void initState() {
     super.initState();
+
+    _knownProgress = _progressBaselineForOrdinal(widget.args.ordinal, _knownProgress);
 
     // 1) Create player first. Do NOT call _setMpv() before this point.
     _player = Player(
@@ -393,6 +527,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
           // Bail if player is already gone
           if (!_alive) return;
+
+          // Reset auto-skip flags for a fresh media open (quality change / next episode).
+          _openingSkipped = false;
+          _endingSkipped = false;
 
           // Read current volume only while alive
           final currentVol = _player.state.volume;
@@ -458,20 +596,37 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _iosNativePlayer.setMethodCallHandler((call) async {
       if (!mounted) return;
       switch (call.method) {
-        case 'ios_player_dismissed':
+        case 'ios_player_dismissed': {
           final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
           final posSec = (map['position'] as num?)?.toDouble() ?? 0.0;
           final rate = (map['rate'] as num?)?.toDouble() ?? _speed;
           final wasPlaying = (map['wasPlaying'] as bool?) ?? true;
 
+          // Target position where native VC was dismissed.
           final target = Duration(milliseconds: (posSec * 1000).round());
+
           // Keep local speed in sync with the native VC.
           _speed = rate;
 
-          // Mark episode as completed if user exited literally at the end.
+          // If user exited literally at the end, persist local playback clear.
           if (_player.state.duration > Duration.zero &&
-            target >= _player.state.duration - const Duration(seconds: 1)) {
+              target >= _player.state.duration - const Duration(seconds: 1)) {
             unawaited(_saveProgress(clearIfCompleted: true));
+
+            // Also bump AniList progress if we were exactly catching up this episode.
+            if (widget.item != null) {
+              final ord = widget.args.ordinal;
+              final current = _progressBaselineForOrdinal(ord, _knownProgress ?? widget.item?.progress);
+
+              // If current+1==ordinal, we were watching the next episode; finalize to 'ord'.
+              if (current + 1 == ord) {
+                // Arm local guard to avoid double increment on next ticks.
+                _autoIncDoneForThisEp = true;
+                _autoIncGuardForOrdinal = ord;
+
+                unawaited(_persistAniListProgress(ord, setAsCurrent: false));
+              }
+            }
           }
 
           // Robust restore (wait → double seek → rate → resume).
@@ -483,7 +638,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
           _safeSetState(() {}); // refresh any UI that shows speed/position
           break;
-
+        }
         case 'ios_player_completed':
           await _saveProgress(clearIfCompleted: true);
           if (_autoNextEpisode) {
@@ -663,12 +818,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       // DO NOT force setVolume here. It causes fighting with user changes.
       _maybeAutoSkip(pos);
+
+      // Try to bump AniList progress when near the ending / tail of the episode
+      unawaited(_maybeAutoIncrementProgress(pos));
+
       _safeSetState(() {});
     });
 
     _subCompleted = _player.stream.completed.listen((done) {
       if (!done) return;
       unawaited(_saveProgress(clearIfCompleted: true));
+
+      // Ensure AniList progress is bumped on completion as well
+      if (widget.item != null) {
+        final ord = widget.args.ordinal;
+        final current = _progressBaselineForOrdinal(ord, _knownProgress ?? widget.item?.progress);
+        if (current + 1 == ord) {
+          unawaited(_persistAniListProgress(ord, setAsCurrent: false));
+        }
+      }
+
       if (_autoNextEpisode) {
         _hideCursorInstant();
         unawaited(_openNextEpisode());
@@ -716,6 +885,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   /// Wrapper that marks an intentional seek so our jump-detector won't flag it.
   Future<void> _seekPlanned(Duration to, {String? reason}) async {
     if (!_alive) return; // bail if page is leaving/disposed
+
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
+
     _plannedSeek = true;
     try {
       await _player.seek(to);
@@ -737,6 +911,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }) async {
     if (!_alive) return;
 
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
+
     // Do not force close; some CDNs misbehave & expose only the first HLS segment.
     try {
       await _player.open(
@@ -757,6 +935,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     if (!_alive) return;
+
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
 
     // Robust HLS settle: wait for either a valid duration OR first stable positions.
     final settle = Completer<void>();
@@ -800,6 +982,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await subPos.cancel();
 
     if (!_alive) return;
+
+    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    _openingSkipped = false;
+    _endingSkipped = false;
 
     if (position > Duration.zero) {
       await _seekPlanned(position, reason: 'openAt_restore');
@@ -901,31 +1087,43 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   void _maybeAutoSkip(Duration pos) {
     final dur = _player.state.duration;
     if (dur == Duration.zero) return;
-    if (_reopeningGuard || _inQuarantine) return;
+    if (_reopeningGuard || _inQuarantine || _plannedSeek) return;
 
+    // Respect temporary block (e.g., right after undo or iOS restore).
     if (_autoSkipBlockedUntil != null &&
         DateTime.now().isBefore(_autoSkipBlockedUntil!)) {
       return;
     }
 
+    final p = pos.inSeconds;
+
+    // --- Opening skip ---
     if (_autoSkipOpening &&
+        !_openingSkipped &&
         widget.args.openingStart != null &&
         widget.args.openingEnd != null) {
+      // +1 sec to avoid re-trigger if landed exactly at start
       final s = widget.args.openingStart! + 1;
       final e = widget.args.openingEnd!;
-      if (pos.inSeconds >= s && pos.inSeconds <= s + 5) {
+      // Trigger ANYTIME while we are inside [s, e)
+      if (p >= s && p < e) {
+        _openingSkipped = true;
         _skipTo(Duration(seconds: s), Duration(seconds: e),
             banner: 'Skipped Opening');
-        return;
+        return; // do not evaluate ED on the same tick
       }
     }
 
+    // --- Ending skip ---
     if (_autoSkipEnding &&
+        !_endingSkipped &&
         widget.args.endingStart != null &&
         widget.args.endingEnd != null) {
       final s = widget.args.endingStart! + 1;
       final e = widget.args.endingEnd!;
-      if (pos.inSeconds >= s && pos.inSeconds <= s + 5) {
+      // Trigger ANYTIME while we are inside [s, e)
+      if (p >= s && p < e) {
+        _endingSkipped = true;
         _skipTo(Duration(seconds: s), Duration(seconds: e),
             banner: 'Skipped Ending');
         return;
@@ -933,9 +1131,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
   }
 
-  Future<void> _skipTo(Duration from, Duration to,
-      {required String banner}) async {
+  Future<void> _skipTo(Duration from, Duration to, {required String banner}) async {
     _undoSeekFrom = from;
+    // Small block to avoid immediate re-check storms on Andro
+    // id
+    _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 2));
+
     await _seekPlanned(to, reason: 'auto_skip');
     _showBanner(banner, affectCursor: false);
     _hideCursorInstant();
@@ -946,6 +1147,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await _seekPlanned(_undoSeekFrom!, reason: 'undo_skip');
     _undoSeekFrom = null;
     _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 10));
+
+    _openingSkipped = false;
+    _endingSkipped = false;
   }
 
   Future<void> _openNextEpisode() async {
@@ -994,6 +1198,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       _navigatingAway = true;
       _detachListeners();
+
+      _autoIncDoneForThisEp = false;
+      _autoIncGuardForOrdinal = null;
 
       _log('pushReplacement (startFullscreen=$wasFs)...');
       Navigator.of(context).pushReplacement(
