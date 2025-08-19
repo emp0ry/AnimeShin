@@ -157,6 +157,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   final Duration _tailGuardMinutes = Duration(minutes: 3);
 
+  // Clamp any absolute seek target to [0, duration] safely.
+  Duration _clampSeekAbsolute(Duration target) {
+    // If player has no duration yet, just prevent negatives.
+    final d = _player.state.duration;
+    if (d == Duration.zero) {
+      return target.isNegative ? Duration.zero : target;
+    }
+
+    // Bound to [0, d].
+    if (target.isNegative) return Duration.zero;
+    if (target > d) return d;
+    return target;
+  }
+
   int _progressBaselineForOrdinal(int ordinal, int? raw) {
     final safeRaw = raw ?? 0;
     final baseline = ordinal > 0 ? ordinal - 1 : 0;
@@ -197,11 +211,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     return err;
   }
 
-  /// Bump progress when near the end of the current episode.
-  /// Conditions:
-  ///  - Only if current + 1 == ordinal
-  ///  - Trigger at 5s before ED if known, otherwise when <= 5 min left
-  ///  - Never increment twice for the same episode
   Future<void> _maybeAutoIncrementProgress(Duration pos) async {
     final item = widget.item;
     final ordinal = widget.args.ordinal;
@@ -210,30 +219,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final duration = _player.state.duration;
     if (duration == Duration.zero) return;
 
-    // Use local mirror when available
     final current = _progressBaselineForOrdinal(ordinal, _knownProgress ?? item.progress);
     final max = item.progressMax;
 
-    // If already reached/surpassed this episode, never increment again
-    if (current >= ordinal) {
+    // If we are not moving forward, do nothing; never decrement progress.
+    if (ordinal <= current) {
       _autoIncDoneForThisEp = true;
       _autoIncGuardForOrdinal = ordinal;
-      return;
-    }
-
-    // Only when catching up exactly one episode (e.g., from 4 -> 5)
-    final shouldBeNext = (current + 1) == ordinal;
-    if (!shouldBeNext) {
-      // Reset guard if user navigates to a different episode
-      _autoIncDoneForThisEp = false;
-      _autoIncGuardForOrdinal = null;
       return;
     }
 
     // Prevent duplicate increments for this ordinal
     if (_autoIncDoneForThisEp && _autoIncGuardForOrdinal == ordinal) return;
 
-    // Decide threshold
+    // Decide threshold: 5s before ED if tagged; otherwise by tail guard (e.g., 3 min)
     bool passedThreshold = false;
     final endingStart = widget.args.endingStart;
     if (endingStart != null && endingStart > 0) {
@@ -246,9 +245,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
     if (!passedThreshold) return;
 
-    final next = (current + 1).clamp(0, max ?? 1 << 20);
+    // We jumped forward (e.g., from 5 to watching 8) -> set progress to 'ordinal'
+    final next = ordinal.clamp(0, max ?? 1 << 20);
 
-    // Arm guard BEFORE awaiting to avoid double runs on next ticks
+    // Arm guard BEFORE awaiting to avoid double runs
     _autoIncDoneForThisEp = true;
     _autoIncGuardForOrdinal = ordinal;
 
@@ -260,6 +260,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update progress: $err')),
       );
+    } else {
+      _knownProgress = next; // mirror locally on success
     }
   }
 
@@ -326,10 +328,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Block auto-skip for a short window so we don't immediately jump again.
     _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 3));
 
-    // Do the "double seek" for extra reliability (like in _openAt).
-    await _seekPlanned(target, reason: 'ios_dismiss_restore');
-    await Future.delayed(const Duration(milliseconds: 80));
-    await _seekPlanned(target, reason: 'ios_dismiss_restore_confirm');
+    final tgt = _clampSeekAbsolute(target);
+    await _seekPlanned(tgt, reason: 'ios_dismiss_restore');
+    if ((_player.state.position - tgt).abs() > const Duration(milliseconds: 250)) {
+      await _seekPlanned(tgt, reason: 'ios_dismiss_restore_confirm');
+    }
 
     // Re-apply rate (the native VC may have changed it).
     try { await _player.setRate(rate); } catch (_) {}
@@ -487,7 +490,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   void initState() {
     super.initState();
 
-    _knownProgress = _progressBaselineForOrdinal(widget.args.ordinal, _knownProgress);
+    final raw = widget.item?.progress; // real stored progress
+    _knownProgress = _progressBaselineForOrdinal(widget.args.ordinal, raw);
 
     // 1) Create player first. Do NOT call _setMpv() before this point.
     _player = Player(
@@ -618,8 +622,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               final ord = widget.args.ordinal;
               final current = _progressBaselineForOrdinal(ord, _knownProgress ?? widget.item?.progress);
 
-              // If current+1==ordinal, we were watching the next episode; finalize to 'ord'.
-              if (current + 1 == ord) {
+              if (ord > current) {
                 // Arm local guard to avoid double increment on next ticks.
                 _autoIncDoneForThisEp = true;
                 _autoIncGuardForOrdinal = ord;
@@ -833,7 +836,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       if (widget.item != null) {
         final ord = widget.args.ordinal;
         final current = _progressBaselineForOrdinal(ord, _knownProgress ?? widget.item?.progress);
-        if (current + 1 == ord) {
+        if (ord > current) {
           unawaited(_persistAniListProgress(ord, setAsCurrent: false));
         }
       }
@@ -890,10 +893,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _openingSkipped = false;
     _endingSkipped = false;
 
+    // Clamp the requested position.
+    final tgt = _clampSeekAbsolute(to);
+
     _plannedSeek = true;
     try {
-      await _player.seek(to);
-      _log('seek(planned) to=$to reason=${reason ?? "n/a"}');
+      await _player.seek(tgt);
+      _log('seek(planned) to=$tgt reason=${reason ?? "n/a"}');
     } catch (e) {
       // Avoid crashing if seek races with dispose
       _log('seek skipped (not alive): $e');
@@ -966,7 +972,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     subPos = _player.stream.position.listen((p) {
       if (!_alive) {
         if (!settle.isCompleted) settle.complete();
-        subDur.cancel();
+        subPos.cancel();
         return;
       }
       if (p > const Duration(milliseconds: 500)) {
@@ -987,10 +993,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _openingSkipped = false;
     _endingSkipped = false;
 
-    if (position > Duration.zero) {
-      await _seekPlanned(position, reason: 'openAt_restore');
-      await Future.delayed(const Duration(milliseconds: 60));
-      await _seekPlanned(position, reason: 'openAt_restore_confirm');
+    // if (position > Duration.zero) {
+    //   await _seekPlanned(position, reason: 'openAt_restore');
+    //   await Future.delayed(const Duration(milliseconds: 60));
+    //   await _seekPlanned(position, reason: 'openAt_restore_confirm');
+    // }
+
+    final tgt = _clampSeekAbsolute(position);
+    if (tgt > Duration.zero) {
+      await _seekPlanned(tgt, reason: 'openAt_restore');
+      if ((_player.state.position - tgt).abs() > const Duration(milliseconds: 250)) {
+        await _seekPlanned(tgt, reason: 'openAt_restore_confirm');
+      }
     }
   }
 
@@ -1132,24 +1146,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   Future<void> _skipTo(Duration from, Duration to, {required String banner}) async {
-    _undoSeekFrom = from;
-    // Small block to avoid immediate re-check storms on Andro
-    // id
+    _undoSeekFrom = _clampSeekAbsolute(from);
     _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 2));
-
-    await _seekPlanned(to, reason: 'auto_skip');
+    await _seekPlanned(_clampSeekAbsolute(to), reason: 'auto_skip');
     _showBanner(banner, affectCursor: false);
     _hideCursorInstant();
   }
 
   Future<void> _undoSkip() async {
     if (_undoSeekFrom == null) return;
-    await _seekPlanned(_undoSeekFrom!, reason: 'undo_skip');
+    await _seekPlanned(_clampSeekAbsolute(_undoSeekFrom!), reason: 'undo_skip');
     _undoSeekFrom = null;
     _autoSkipBlockedUntil = DateTime.now().add(const Duration(seconds: 10));
-
     _openingSkipped = false;
-    _endingSkipped = false;
+    _endingSkipped  = false;
   }
 
   Future<void> _openNextEpisode() async {
