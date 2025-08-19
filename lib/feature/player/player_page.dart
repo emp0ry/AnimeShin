@@ -49,6 +49,24 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
+  // ---- Fake wrap-to-end heal tuning ----
+  // Consider "near start" if previous position <= this value.
+  final Duration _wrapNearStart = const Duration(seconds: 4);
+  // Consider "near end" if current position >= (duration - this value).
+  final Duration _wrapNearEnd = const Duration(seconds: 7);
+  // Consider it a big forward jump if delta >= this value.
+  final Duration _wrapBigJump = const Duration(seconds: 8);
+  // Retry cadence & count to firmly snap back to zero if backend keeps wrapping.
+  final Duration _wrapHealRetryDelay = const Duration(milliseconds: 120);
+  final int _wrapHealMaxRetries = 4;
+
+  // Internal guard for healing loop.
+  bool _wrapHealing = false;
+  int _wrapHealAttempts = 0;
+
+  // Blocks local & remote progress updates during healing.
+  DateTime? _progressSaveBlockedUntil;
+
   // --- Platform / channels -----------------------------------------------------
 
   static const MethodChannel _iosNativePlayer =
@@ -212,6 +230,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   Future<void> _maybeAutoIncrementProgress(Duration pos) async {
+    // Skip auto-increment while a temporary save block is active.
+    if (_progressSaveBlockedUntil != null &&
+        DateTime.now().isBefore(_progressSaveBlockedUntil!)) {
+      return;
+    }
+
     final item = widget.item;
     final ordinal = widget.args.ordinal;
     if (item == null || ordinal <= 0) return;
@@ -595,6 +619,67 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _init();
   }
 
+  // Try to heal "underflow -> wrap-to-end" by snapping back to zero a few times.
+  // This is robust against rapid repeated key presses that cause multiple wraps.
+  void _maybeHealWrapToStart(Duration prev, Duration pos) {
+    if (_plannedSeek) return;
+    final d = _player.state.duration;
+    if (d == Duration.zero) return;
+
+    // Heuristic trigger: we were near the start, suddenly landed near the end,
+    // and the jump was large enough to be suspicious.
+    final nearStart     = prev <= _wrapNearStart;
+    final jumpedToTail  = pos >= (d - _wrapNearEnd);
+    final bigForward    = (pos - prev) >= _wrapBigJump;
+
+    if (!(nearStart && jumpedToTail && bigForward)) return;
+
+    // Start a short "no-save" window while we heal.
+    _progressSaveBlockedUntil = DateTime.now().add(const Duration(seconds: 2));
+
+    if (_wrapHealing) {
+      // Already healing — just extend the block window and let the loop continue.
+      return;
+    }
+
+    _wrapHealing = true;
+    _wrapHealAttempts = 0;
+
+    // Inner function to retry snap-to-zero until it sticks or attempts are exhausted.
+    void kick() {
+      if (!_alive) {
+        _wrapHealing = false;
+        return;
+      }
+      _wrapHealAttempts++;
+
+      // Planned seek so jump-detector won't flag it.
+      unawaited(_seekPlanned(Duration.zero, reason: 'heal_underflow_wrap'));
+
+      // Schedule a check after a short delay.
+      Timer(_wrapHealRetryDelay, () {
+        if (!_alive) {
+          _wrapHealing = false;
+          return;
+        }
+        final dNow = _player.state.duration;
+        final pNow = _player.state.position;
+        final stillAtTail = dNow > Duration.zero && pNow >= (dNow - _wrapNearEnd);
+
+        if (stillAtTail && _wrapHealAttempts < _wrapHealMaxRetries) {
+          // Try again.
+          kick();
+        } else {
+          // Done (either healed or gave up); leave the no-save window to expire naturally.
+          _wrapHealing = false;
+        }
+      });
+    }
+
+    // Fire the first attempt immediately.
+    kick();
+  }
+
   void _maybeAttachIOSCallbacks() {
     if (!_isIOS) return;
     _iosNativePlayer.setMethodCallHandler((call) async {
@@ -822,6 +907,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // DO NOT force setVolume here. It causes fighting with user changes.
       _maybeAutoSkip(pos);
 
+      _maybeHealWrapToStart(prev, pos);
+
       // Try to bump AniList progress when near the ending / tail of the episode
       unawaited(_maybeAutoIncrementProgress(pos));
 
@@ -870,6 +957,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Future<void> _saveProgress({bool clearIfCompleted = false}) async {
     if (_navigatingAway) return;
+
+    // Do not persist while a temporary "heal" block is active.
+    if (_progressSaveBlockedUntil != null &&
+        DateTime.now().isBefore(_progressSaveBlockedUntil!)) {
+      return;
+    }
+
     final pos = _player.state.position;
     final dur = _player.state.duration;
     if (dur.inSeconds <= 0) return;
