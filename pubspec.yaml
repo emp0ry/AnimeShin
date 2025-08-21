@@ -1,6 +1,6 @@
 name: animeshin
 
-version: 2.3.0
+version: 2.3.1
 
 description: Unofficial multi-platform AniList application integrated with AniLiberty.
 
@@ -86,6 +86,7 @@ dependencies:
   share_plus: ^11.1.0
   intl: ^0.20.2
   xml: ^6.6.1
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

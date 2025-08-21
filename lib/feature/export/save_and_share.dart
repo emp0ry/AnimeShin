@@ -1,47 +1,53 @@
 import 'dart:typed_data';
-import 'dart:io' show Platform, Process;
+import 'dart:io' show Platform, Process, File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
-/// iOS: share sheet (user can pick "Save to Files / Open in Folder")
-/// Android: SAF "Save to..." dialog (choose folder & name)
+/// iOS: share sheet using a real temp file (keeps the filename, no extra text.txt)
+/// Android: SAF "Save to..." dialog
 /// Desktop/Web: native "Save As..." dialog
-/// Returns absolute path when saved (Android/Desktop/Web), or null when shared/cancelled.
 Future<String?> saveBytesChooseLocation(
   BuildContext context, {
   required String filename,      // e.g. 'export.json'
   required Uint8List bytes,
   required String mimeType,      // e.g. 'application/json'
-  required String fileExtension, // e.g. 'json' (no dot)
-  String? shareText,             // used on iOS share
-  bool revealAfterSave = false,  // desktop only; default off
+  required String fileExtension, // e.g. 'json'
+  String? shareText,             // ignored on iOS to avoid extra text.txt
+  bool revealAfterSave = false,
 }) async {
-  // Capture context-derived things BEFORE awaits.
   final messenger = ScaffoldMessenger.maybeOf(context);
   final origin = _computeShareOrigin(context);
 
   try {
-    // --- iOS: share sheet ---
+    // --- iOS: Share a real file (NO 'text' param) ---
     if (!kIsWeb && Platform.isIOS) {
+      final tmpDir = await getTemporaryDirectory();
+      final tmpPath = p.join(tmpDir.path, filename);
+      // Overwrite if exists.
+      await File(tmpPath).writeAsBytes(bytes, flush: true);
+
       await SharePlus.instance.share(
         ShareParams(
-          text: shareText ?? 'Export file',
-          files: [XFile.fromData(bytes, name: filename, mimeType: mimeType)],
-          sharePositionOrigin: origin, // iPad/Mac popover anchor
+          // DO NOT set 'text' on iOS to avoid extra text.txt
+          files: [XFile(tmpPath, mimeType: mimeType)],
+          sharePositionOrigin: origin,
+          // subject: shareText, // optional; Files may ignore it
         ),
       );
-      return null; // sharing doesn't return a path
+      return null; // Shared; no path returned by iOS share sheet
     }
 
-    // --- Android: SAF "Create document" dialog ---
+    // --- Android: SAF "Create document" (user picks folder & name) ---
     if (!kIsWeb && Platform.isAndroid) {
       final params = SaveFileDialogParams(
         data: bytes,
         fileName: filename,
-        mimeTypesFilter: [mimeType], // optional hint for SAF
+        mimeTypesFilter: [mimeType],
       );
       final savedPath = await FlutterFileDialog.saveFile(params: params);
       if (savedPath == null) {
@@ -106,36 +112,17 @@ Future<void> _revealFile(String absPath) async {
   } catch (_) {}
 }
 
-// Helpers using the new behavior:
+// Helpers unchanged — iOS will share, Android/Desktop will save.
+Future<String?> saveMalXml(BuildContext c, String name, Uint8List b) =>
+    saveBytesChooseLocation(c,
+      filename: name, bytes: b,
+      mimeType: 'application/xml', fileExtension: 'xml',
+      shareText: 'MyAnimeList XML export',
+      revealAfterSave: false);
 
-Future<String?> saveMalXml(
-  BuildContext context,
-  String filename,
-  Uint8List bytes,
-) {
-  return saveBytesChooseLocation(
-    context,
-    filename: filename,
-    bytes: bytes,
-    mimeType: 'application/xml',
-    fileExtension: 'xml',
-    shareText: 'MyAnimeList XML export',
-    revealAfterSave: false,
-  );
-}
-
-Future<String?> saveShikiJson(
-  BuildContext context,
-  String filename,
-  Uint8List bytes,
-) {
-  return saveBytesChooseLocation(
-    context,
-    filename: filename,
-    bytes: bytes,
-    mimeType: 'application/json',
-    fileExtension: 'json',
-    shareText: 'Shikimori JSON export',
-    revealAfterSave: false,
-  );
-}
+Future<String?> saveShikiJson(BuildContext c, String name, Uint8List b) =>
+    saveBytesChooseLocation(c,
+      filename: name, bytes: b,
+      mimeType: 'application/json', fileExtension: 'json',
+      shareText: 'Shikimori JSON export',
+      revealAfterSave: false);
