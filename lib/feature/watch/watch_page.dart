@@ -1,11 +1,12 @@
 import 'dart:ui';
 
+import 'package:animeshin/feature/watch/animevost_mapper.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
+import 'package:animeshin/repository/animevost/animevost_repository.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:url_launcher/url_launcher.dart'; // Launch external support page
 
 import '../collection/collection_models.dart';
 import '../collection/collection_provider.dart';
@@ -16,16 +17,17 @@ import 'anilibria_mapper.dart';
 import '../player/player_page.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
-  const WatchPage({super.key, required this.alias, required this.item});
-  final String alias;
+  const WatchPage({super.key, required this.id, required this.item, required this.sync, required this.animeVoice});
+  final int id;
   final Entry? item;
+  final bool sync;
+  final AnimeVoice animeVoice;
 
   @override
   ConsumerState<WatchPage> createState() => _WatchPageState();
 }
 
 class _WatchPageState extends ConsumerState<WatchPage> {
-  late final _repo = AnilibriaRepository();
   AsyncValue<AniRelease>? _release;
 
   @override
@@ -36,37 +38,41 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   }
 
   Future<void> _load() async {
-    try {
-      final json = await _repo.fetchByAlias(alias: widget.alias);
-      if (!mounted) return;
-      if (json == null) {
-        setState(() => _release = const AsyncError('Not found', StackTrace.empty));
-        return;
+    switch (widget.animeVoice) {
+      case AnimeVoice.aniliberty: {
+        try {
+          final anilibertyRepo = AnilibriaRepository();
+          final json = await anilibertyRepo.fetchById(id: widget.id);
+          if (!mounted) return;
+          if (json == null) {
+            setState(() => _release = const AsyncError('Not found', StackTrace.empty));
+            return;
+          }
+          final mapped = mapAniLibriaRelease(json);
+          setState(() => _release = AsyncData(mapped));
+        } catch (e, st) {
+          if (!mounted) return;
+          setState(() => _release = AsyncError(e, st));
+        }
+        break;
       }
-      final mapped = mapAniLibriaRelease(json);
-      setState(() => _release = AsyncData(mapped));
-    } catch (e, st) {
-      if (!mounted) return;
-      setState(() => _release = AsyncError(e, st));
-    }
-  }
-
-  /// Opens AniLiberty support page in the system browser.
-  Future<void> _openSupport() async {
-    const url = 'https://anilibria.top/support';
-    final uri = Uri.parse(url);
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to open the support page')),
-        );
+      case AnimeVoice.animevost: {
+        try {
+          final animevostRepo = AnimeVostRepository();
+          final items = await animevostRepo.fetchPlaylist(widget.id);
+          if (!mounted) return;
+          if (items.isEmpty) {
+            setState(() => _release = const AsyncError('Not found', StackTrace.empty));
+            return;
+          }
+          final mapped = mapAnimeVostRelease(items, widget.id, '');
+          setState(() => _release = AsyncData(mapped));
+        } catch (e, st) {
+          if (!mounted) return;
+          setState(() => _release = AsyncError(e, st));
+        }
+        break;
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to open: $e')),
-      );
     }
   }
 
@@ -79,21 +85,11 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     final collection = collectionAsync.valueOrNull;
     if (collection == null) return null;
 
-    bool aliasMatches(Entry e) =>
-        (e.anilibriaAlias ?? '').isNotEmpty && e.anilibriaAlias == widget.alias;
-
-    String slugFromShikiUrl(String? url) {
-      if (url == null || url.isEmpty) return '';
-      final uri = Uri.tryParse(url);
-      if (uri == null) return '';
-      final seg = uri.pathSegments;
-      if (seg.length < 2) return '';
-      return seg.last;
-    }
+    bool aliasMatches(Entry e) => (e.anilibriaId! != 0 && e.anilibriaId == widget.id)
+                                  || (widget.item!.malId != 0 && e.malId != 0 && widget.item!.malId == e.malId);
 
     for (final e in collection.list.entries) {
       if (aliasMatches(e)) return e;
-      if (slugFromShikiUrl(e.shikimoriUrl) == widget.alias) return e;
     }
     return null;
   }
@@ -109,15 +105,15 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     return ep.clamp(1, maxOrdinal);
   }
 
-  void _openPlayer(AniRelease release, int ordinal, Entry? item) {
+  void _openPlayer(AniRelease release, int ordinal, Entry? item, bool sync, AnimeVoice animeVoice) {
     final ep = release.episodes.firstWhere((e) => e.ordinal == ordinal);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PlayerPage(
           args: PlayerArgs(
-            alias: release.alias,
+            id: release.id,
             ordinal: ordinal,
-            title: release.title ?? release.alias,
+            title: release.title ?? '',
             url480: ep.hls480,
             url720: ep.hls720,
             url1080: ep.hls1080,
@@ -128,6 +124,9 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             endingEnd: ep.endingEnd,
           ),
           item: item,
+          sync: sync,
+          animeVoice: animeVoice,
+          startWithProxy: widget.animeVoice == AnimeVoice.aniliberty,
         ),
       ),
     );
@@ -149,8 +148,10 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           // Support button that opens AniLiberty support page
           IconButton(
             icon: const Icon(Ionicons.heart),
-            tooltip: 'Support AniLiberty',
-            onPressed: _openSupport,
+            tooltip: 'Support voiceover authors',
+            onPressed: () async {
+              await openSupport(widget.animeVoice, context);
+            },
           ),
           const SizedBox(width: 8), // Add a small right inset so actions aren't flush to the edge
         ],
@@ -159,7 +160,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         AsyncData(:final value) => _Body(
             release: value,
             entry: _findMatchingEntry(ref),
-            onPlay: (e) => _openPlayer(value, e.ordinal, widget.item),
+            onPlay: (e) => _openPlayer(value, e.ordinal, widget.item, widget.sync, widget.animeVoice),
           ),
         AsyncError(:final error) => Center(
             child: Text(
@@ -178,7 +179,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                   release: rel.value,
                   entry: _findMatchingEntry(ref),
                 );
-                _openPlayer(rel.value, i, widget.item);
+                _openPlayer(rel.value, i, widget.item, widget.sync, widget.animeVoice);
               },
             )
           : null,
@@ -199,8 +200,7 @@ class _PlayFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final next =
-        entry == null ? 1 : (entry!.progress <= 0 ? 1 : entry!.progress + 1);
+    final next = entry == null ? 1 : (entry!.progress <= 0 ? 1 : entry!.progress + 1);
     final max = release.episodes.isEmpty ? next : release.episodes.last.ordinal;
     final clamped = next.clamp(1, max);
 

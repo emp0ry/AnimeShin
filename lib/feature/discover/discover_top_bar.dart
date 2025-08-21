@@ -108,6 +108,7 @@ class DiscoverTopBarTrailingContent extends StatelessWidget {
                   ),
                 _ => const SizedBox(width: Theming.offset),
               },
+              const SizedBox(width: 8),
             ],
           ),
         );

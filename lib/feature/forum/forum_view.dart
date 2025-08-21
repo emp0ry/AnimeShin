@@ -66,6 +66,7 @@ class _ForumViewState extends ConsumerState<ForumView> {
             onPressed: () => showForumFilterSheet(context, ref),
           ),
         ),
+        const SizedBox(width: 8),
       ]),
       child: PagedView(
         provider: forumProvider,

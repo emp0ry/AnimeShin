@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'package:animeshin/feature/export/export_button.dart';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -279,6 +280,7 @@ class UserHeader extends StatelessWidget {
               builder: (context) => const _AccountPicker(),
             ),
           ),
+          ExportButton(),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Ionicons.cog_outline),

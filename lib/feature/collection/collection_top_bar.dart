@@ -82,6 +82,7 @@ class CollectionTopBarTrailingContent extends StatelessWidget {
                 )
               else
                 filterIcon,
+              const SizedBox(width: 8),
             ],
           ),
         );

@@ -256,7 +256,7 @@ class CollectionNotifier
     // Fetch all aliases in batches (repo already splits by limit internally)
     final anilibriaData = await anilibriaRepo.fetchListByAliases(
       aliases: aliases.toList(),
-      include: const ['episodes', 'alias'],
+      include: const ['episodes', 'alias', 'id'],
       exclude: const [
         // keep payload small
         'name',
@@ -307,6 +307,10 @@ class CollectionNotifier
 
           if (aniItem['alias'].toString().isNotEmpty) {
             media['anilibriaAlias'] = aniItem['alias'];
+          }
+
+          if (aniItem['id'].toString().isNotEmpty) {
+            media['anilibriaId'] = aniItem['id'];
           }
 
           final episodes = aniItem['episodes'] as List<dynamic>?;
@@ -394,9 +398,15 @@ class CollectionNotifier
         entry.shikimoriUrl = oldEntry.shikimoriUrl;
         entry.lastAniLibriaEpisode = oldEntry.lastAniLibriaEpisode;
         entry.anilibriaAlias = oldEntry.anilibriaAlias;
+        entry.anilibriaId = oldEntry.anilibriaId;
         entry.titles
           ..clear()
           ..addAll(oldEntry.titles);
+
+        entry.titleEnglish = oldEntry.titleEnglish;
+        entry.titleRomaji = oldEntry.titleRomaji;
+        entry.titleNative = oldEntry.titleNative;
+        entry.titleRussian = oldEntry.titleRussian;
       }
 
       if (options.scheduleNotification) {

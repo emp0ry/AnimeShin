@@ -188,6 +188,7 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
             ),
           ),
         ),
+        const SizedBox(width: 8),
       ];
 
   void _toggleSubscription() async {

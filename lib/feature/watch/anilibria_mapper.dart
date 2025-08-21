@@ -3,14 +3,14 @@ import 'watch_types.dart';
 /// Map Anilibria REST v1 release json to our models.
 /// Expected shape is the full object from /api/v1/anime/releases/{alias}
 AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
-  String _abs(String base, String path) {
+  String abs_(String base, String path) {
     if (path.startsWith('http')) return path;
     if (!base.endsWith('/')) base = '$base/';
     if (path.startsWith('/')) path = path.substring(1);
     return '$base$path';
   }
 
-  String? _readTitle(Map<String, dynamic> map) {
+  String? readTitle(Map<String, dynamic> map) {
     final name = map['name'];
     if (name is Map && name['main'] is String && (name['main'] as String).trim().isNotEmpty) {
       return name['main'] as String;
@@ -22,8 +22,8 @@ AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
   }
 
   final id = (json['id'] as num?)?.toInt() ?? 0;
-  final alias = (json['alias'] ?? '').toString();
-  final title = _readTitle(json);
+  // final alias = (json['alias'] ?? '').toString();
+  final title = readTitle(json);
 
   String? posterUrl;
   final poster = json['poster'];
@@ -31,7 +31,7 @@ AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
     final optimized = poster['optimized'];
     final posterMap = optimized is Map ? optimized : poster;
     if (posterMap['src'] is String) {
-      posterUrl = _abs('https://anilibria.top', posterMap['src'] as String);
+      posterUrl = abs_('https://anilibria.top', posterMap['src'] as String);
     }
   }
 
@@ -40,7 +40,7 @@ AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
   for (final item in episodesJson) {
     if (item is! Map) continue;
 
-    int? _int(dynamic x) {
+    int? int_(dynamic x) {
       if (x == null) return null;
       if (x is num) return x.toInt();
       if (x is String) return int.tryParse(x);
@@ -54,22 +54,22 @@ AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
       final optimized = preview['optimized'];
       final previewMap = optimized is Map ? optimized : preview;
       if (previewMap['src'] is String) {
-        previewSrc = _abs('https://anilibria.top', previewMap['src'] as String);
+        previewSrc = abs_('https://anilibria.top', previewMap['src'] as String);
       }
     }
 
     episodes.add(AniEpisode(
-      id: (item['id'] ?? '').toString(),
-      ordinal: _int(item['ordinal']) ?? 0,
+      // id: (item['id'] ?? '').toString(),
+      ordinal: int_(item['ordinal']) ?? 0,
       name: (item['name'] as String?)?.trim(),
       hls480: (item['hls_480'] as String?)?.trim(),
       hls720: (item['hls_720'] as String?)?.trim(),
       hls1080: (item['hls_1080'] as String?)?.trim(),
-      duration: _int(item['duration']),
-      openingStart: _int((item['opening'] as Map?)?['start']),
-      openingEnd: _int((item['opening'] as Map?)?['stop']),
-      endingStart: _int((item['ending'] as Map?)?['start']),
-      endingEnd: _int((item['ending'] as Map?)?['stop']),
+      duration: int_(item['duration']),
+      openingStart: int_((item['opening'] as Map?)?['start']),
+      openingEnd: int_((item['opening'] as Map?)?['stop']),
+      endingStart: int_((item['ending'] as Map?)?['start']),
+      endingEnd: int_((item['ending'] as Map?)?['stop']),
       previewSrc: previewSrc,
     ));
   }
@@ -78,7 +78,6 @@ AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
 
   return AniRelease(
     id: id,
-    alias: alias,
     title: title,
     posterUrl: posterUrl,
     episodes: episodes,

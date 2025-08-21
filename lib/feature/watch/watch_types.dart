@@ -5,14 +5,12 @@ import 'package:flutter/foundation.dart';
 class AniRelease {
   const AniRelease({
     required this.id,
-    required this.alias,
     required this.title,
     required this.posterUrl,
     required this.episodes,
   });
 
   final int id;
-  final String alias;
   final String? title;
   final String? posterUrl; // not used for tiles (tiles use episode.preview)
   final List<AniEpisode> episodes;
@@ -29,7 +27,6 @@ class AniRelease {
 @immutable
 class AniEpisode {
   const AniEpisode({
-    required this.id,
     required this.ordinal,
     required this.name,
     required this.hls480,
@@ -43,7 +40,6 @@ class AniEpisode {
     required this.previewSrc,       // absolute url to preview image
   });
 
-  final String id;
   final int ordinal;
   final String? name;
   final String? hls480;
@@ -60,7 +56,7 @@ class AniEpisode {
 /// Arguments passed from WatchPage -> PlayerPage.
 class PlayerArgs {
   const PlayerArgs({
-    required this.alias,
+    required this.id,
     required this.ordinal,
     required this.title,
     this.url480,
@@ -73,7 +69,7 @@ class PlayerArgs {
     this.endingEnd,
   });
 
-  final String alias;
+  final int id;
   final int ordinal;
   final String title;
 
@@ -88,3 +84,5 @@ class PlayerArgs {
   final int? endingStart;
   final int? endingEnd;
 }
+
+enum AnimeVoice {aniliberty, animevost}

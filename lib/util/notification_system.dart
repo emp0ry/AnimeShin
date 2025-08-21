@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/util/routes.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -177,7 +178,7 @@ class NotificationSystem {
         await cancelEpisodeNotification(entry.titles[0], entry.nextEpisode ?? 1);
       }
     } catch (e) {
-      print('Failed to schedule notification for entry: $e');
+      debugPrint('Failed to schedule notification for entry: $e');
     }
   }
 

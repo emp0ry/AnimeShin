@@ -1,4 +1,7 @@
 import 'package:animeshin/feature/watch/watch_page.dart';
+import 'package:animeshin/feature/watch/watch_types.dart';
+import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
+import 'package:animeshin/repository/animevost/animevost_repository.dart';
 import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +17,7 @@ import 'package:animeshin/widget/input/score_label.dart';
 import 'package:animeshin/widget/text_rail.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 
-const _tileHeight = 165.0;
+const _tileHeight = 150.0;
 
 class CollectionList extends StatelessWidget {
   const CollectionList({
@@ -277,13 +280,6 @@ class __TileContentState extends State<_TileContent> {
 
     final textRailItems = <String, bool>{};
 
-    
-    if (widget.item.titles.last.isNotEmpty && widget.item.ruTitleState != null && widget.item.ruTitleState!) {
-      if (russianRegex.hasMatch(widget.item.titles.last)) {
-        textRailItems['${widget.item.titles.last}\n'] = false;
-      }
-    }
-
     if (widget.item.format != null) {
       textRailItems[widget.item.format!.label] = false;
     }
@@ -314,6 +310,281 @@ class __TileContentState extends State<_TileContent> {
       textRailItems[key] = true;
     }
 
+    final menuAnchorKey = GlobalKey();
+
+    Future<void> openSearchMenu() async {
+      Future<List<Map<String, dynamic>>> searchAniLiberty() async {
+        final shikimoriRepo = ShikimoriRestRepository();
+        try {
+          final aniLibriaRepo = AnilibriaRepository();
+
+          final malId = widget.item.malId;
+          if (malId == 0) return const [];
+
+          final shikiData = await shikimoriRepo.fetchByMalId(malId, ofAnime: true);
+          if (shikiData == null) return const [];
+
+          final ru = shikiData['russian']?.toString().trim();
+          final items = await aniLibriaRepo.searchByTitle(
+            ru!,
+            ['id', 'name.main'],
+            null,
+          );
+
+          if (items.isEmpty) return const [];
+
+          final converted = items.map((item) {
+            return {
+              'id': item['id'],
+              'name': item['name']['main'],
+            };
+          }).toList();
+
+          debugPrint('AniLiberty: ${converted.toString()}');
+          shikimoriRepo.dispose();
+
+          return converted;
+        } catch (e, st) {
+          debugPrint('AniLiberty Search failed: $e\n$st');
+          shikimoriRepo.dispose();
+          return const [];
+        }
+      }
+
+      Future<List<Map<String, dynamic>>> searchAnimeVost() async {
+        final shikimoriRepo = ShikimoriRestRepository();
+        try {
+          final animeVostRepo = AnimeVostRepository();
+
+          final malId = widget.item.malId;
+          if (malId == 0) return const [];
+
+          final shikiData = await shikimoriRepo.fetchByMalId(malId, ofAnime: true);
+          if (shikiData == null) return const [];
+
+          final ru = shikiData['russian']?.toString().trim();
+          final items = await animeVostRepo.searchByTitle(ru!);
+          if (items.isEmpty) return const [];
+
+          debugPrint('AnimeVost: ${items.toString()}');
+          shikimoriRepo.dispose();
+          return items;
+        } catch (e, st) {
+          debugPrint('AniLiberty Search failed: $e\n$st');
+          shikimoriRepo.dispose();
+          return const [];
+        }
+      }
+
+      // --- Capture contexts & geometry BEFORE any awaits ---
+      final ctx = context; // State.context
+      final overlay = Overlay.of(ctx);
+      final anchorCtx = menuAnchorKey.currentContext;
+      if (anchorCtx == null) return;
+
+      final box = anchorCtx.findRenderObject() as RenderBox?;
+      final overlayBox = overlay.context.findRenderObject() as RenderBox?;
+      if (box == null || overlayBox == null) return;
+
+      final position = RelativeRect.fromRect(
+        Rect.fromPoints(
+          box.localToGlobal(Offset.zero, ancestor: overlayBox),
+          box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlayBox),
+        ),
+        Offset.zero & overlayBox.size,
+      );
+
+      // Do both at once
+      final results = await Future.wait([
+        searchAniLiberty().catchError((_) => <Map<String, dynamic>>[]),
+        searchAnimeVost().catchError((_) => <Map<String, dynamic>>[]),
+      ]);
+
+      final aniLibertyList = results[0];
+      final animeVostList = results[1];
+
+      if (!mounted || !ctx.mounted) return;
+
+      // --- Level 1 menu: sources with counts ---
+      final topItems = <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'aniliberty',
+          child: Row(
+            children: [
+              const Icon(Ionicons.film_outline, size: 16),
+              const SizedBox(width: 8),
+              const Text('AniLiberty'),
+              const Spacer(),
+              Text('(${aniLibertyList.length})'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'animevost',
+          child: Row(
+            children: [
+              const Icon(Ionicons.film_outline, size: 16),
+              const SizedBox(width: 8),
+              const Text('AnimeVost'),
+              const Spacer(),
+              Text('(${animeVostList.length})'),
+            ],
+          ),
+        ),
+      ];
+
+      final selectedSource = await showMenu<String>(
+        context: ctx,
+        position: position,
+        items: topItems,
+      );
+
+      if (!mounted || !ctx.mounted || selectedSource == null) return;
+
+      // --- Level 2 menu: results for the chosen source ---
+      List<Map<String, dynamic>> chosenList;
+      String sourceKey;
+      switch (selectedSource) {
+        case 'aniliberty':
+          chosenList = aniLibertyList;
+          sourceKey = 'aniliberty';
+          break;
+        case 'animevost':
+          chosenList = animeVostList;
+          sourceKey = 'animevost';
+          break;
+        default:
+          return;
+      }
+
+      if (chosenList.isEmpty) return;
+
+      // Build entries like: Result 1..N with ellipsis for long names
+      final resultItems = <PopupMenuEntry<String>>[];
+      for (var i = 0; i < chosenList.length; i++) {
+        final name = (chosenList[i]['name'] as String?)?.trim() ?? '';
+        resultItems.add(
+          PopupMenuItem<String>(
+            value: '$sourceKey:$i', // encode source + index
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Ionicons.play, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      final selectedItem = await showMenu<String>(
+        context: ctx,
+        position: position,
+        items: resultItems,
+      );
+
+      if (!mounted || !ctx.mounted || selectedItem == null) return;
+
+      // --- Handle final selection ---
+      final parts = selectedItem.split(':');
+      if (parts.length != 2) return;
+      final selSource = parts[0];
+      final selIndex = int.tryParse(parts[1]) ?? -1;
+      if (selIndex < 0 || selIndex >= chosenList.length) return;
+
+      final picked = chosenList[selIndex];
+
+      if (selSource == 'aniliberty') {
+        final id = picked['id'] as int? ?? 0;
+        if (id == 0) return;
+        Navigator.of(ctx).push(
+          MaterialPageRoute(
+            builder: (_) => WatchPage(
+              id: id,
+              item: widget.item,
+              sync: false,
+              animeVoice: AnimeVoice.aniliberty,
+            ),
+          ),
+        );
+      } else if (selSource == 'animevost') {
+        final id = picked['id'] as int? ?? 0;
+        if (id == 0) return;
+        Navigator.of(ctx).push(
+          MaterialPageRoute(
+            builder: (_) => WatchPage(
+              id: id,
+              item: widget.item,
+              sync: false,
+              animeVoice: AnimeVoice.animevost,
+            ),
+          ),
+        );
+      }
+    }
+
+    Widget buildWatchButton() {
+      final canWatchDirect =
+          (widget.item.anilibriaAlias?.trim().isNotEmpty ?? false) &&
+          (widget.item.anilibriaWatchState ?? false);
+
+      if (canWatchDirect) {
+        return FilledButton(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            minimumSize: const Size(80, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => WatchPage(
+                id: widget.item.anilibriaId!,
+                item: widget.item,
+                sync: true,
+                animeVoice: AnimeVoice.aniliberty,
+              ),
+            ));
+          },
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Ionicons.play, size: 16),
+              SizedBox(width: 2),
+              Text('Watch', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        );
+      }
+
+      // Search -> async -> show popup menu
+      return Container(
+        key: menuAnchorKey, // anchor to compute menu position
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            minimumSize: const Size(80, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: openSearchMenu,
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Ionicons.play, size: 16),
+              SizedBox(width: 2),
+              Text('Search', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,42 +596,22 @@ class __TileContentState extends State<_TileContent> {
             Expanded(
               child: Text(
                 item.titles[0],
-                overflow: TextOverflow.fade,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
               ),
             ),
-            if (item.anilibriaAlias != null && item.anilibriaAlias!.trim().isNotEmpty
-                && widget.item.anilibriaWatchState != null && widget.item.anilibriaWatchState!)
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  minimumSize: const Size(80, 36),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => WatchPage(alias: item.anilibriaAlias!.trim(), item: item),
-                    ),
-                  );
-                },
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Ionicons.play, size: 16),
-                    SizedBox(width: 2),
-                    Text(
-                      'Watch',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (!widget.item.format.toString().endsWith('manga') && widget.item.malId != 0)
+              buildWatchButton(),
           ],
         ),
         const SizedBox(height: 5),
+        if (widget.item.titles.last.isNotEmpty && widget.item.ruTitleState != null && widget.item.ruTitleState! && widget.item.titleRussian != null)
+          Text(
+            widget.item.titleRussian!,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
+            style: TextTheme.of(context).labelSmall
+          ),
         TextRail(textRailItems),
 
         // Progress bar

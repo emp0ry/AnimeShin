@@ -54,12 +54,6 @@ class SettingsAboutSubview extends StatelessWidget {
               ),
               const SizedBox(height: 30),
               ListTile(
-                leading: const Icon(Ionicons.logo_discord),
-                title: const Text('Discord'),
-                onTap: () => SnackBarExtension.launch(
-                    context, 'https://discord.gg/MuDyaVuA9E'),
-              ),
-              ListTile(
                 leading: const Icon(Ionicons.logo_github),
                 title: const Text('Source Code'),
                 onTap: () => SnackBarExtension.launch(

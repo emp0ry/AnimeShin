@@ -73,8 +73,7 @@ class FullCollection extends Collection {
   ) {
     final maps = map['lists'] as List<dynamic>;
     final lists = <EntryList>[];
-    final metaData =
-        map['user']['mediaListOptions'][ofAnime ? 'animeList' : 'mangaList'];
+    final metaData = map['user']['mediaListOptions'][ofAnime ? 'animeList' : 'mangaList'];
     bool splitCompleted = metaData['splitCompletedSectionByFormat'] ?? false;
 
     for (final String section in metaData['sectionOrder']) {
@@ -422,6 +421,7 @@ int Function(Entry, Entry) _entryComparator(EntrySort s) => switch (s) {
 class Entry {
   Entry._({
     required this.mediaId,
+    required this.malId,
     required this.titles,
     required this.shikimoriUrl,
     required this.lastAniLibriaEpisode,
@@ -450,24 +450,33 @@ class Entry {
     required this.anilibriaEpDubState,
     required this.anilibriaWatchState,
     required this.anilibriaAlias,
+    required this.anilibriaId,
+
+    required this.titleEnglish,
+    required this.titleRomaji,
+    required this.titleNative,
+    required this.titleRussian,
+    required this.titleShikimoriRomaji
   });
 
   factory Entry(Map<String, dynamic> map, ImageQuality imageQuality) {
     final titles = <String>[map['media']['title']['userPreferred']];
+
+    final String? english = map['media']['title']['english'];
+    final String? romaji = map['media']['title']['romaji'];
+    final String? native = map['media']['title']['native'];
+    final String? russian = map['media']['title']['russian'];
+    final String? shikimoriRomaji = map['media']['title']['shikimoriRomaji'];
+
     String shikimoriUrl = '';
     String anilibriaAlias = '';
-    if (map['media']['title']['english'] != null) {
-      titles.add(map['media']['title']['english']);
-    }
-    if (map['media']['title']['romaji'] != null) {
-      titles.add(map['media']['title']['romaji']);
-    }
-    if (map['media']['title']['native'] != null) {
-      titles.add(map['media']['title']['native']);
-    }
-    if (map['media']['title']['russian'] != null) {
-      titles.add(map['media']['title']['russian']);
-    }
+
+    if (english != null) titles.add(english);
+    if (romaji  != null) titles.add(romaji);
+    if (native  != null) titles.add(native);
+    if (russian  != null) titles.add(russian);
+    if (shikimoriRomaji  != null) titles.add(shikimoriRomaji);
+
     if (map['media']['shikimoriUrl'] != null) {
       shikimoriUrl = map['media']['shikimoriUrl'].toString();
     }
@@ -482,12 +491,21 @@ class Entry {
       tagIds.add(t['id']);
     }
 
-    final int? lastAniLibriaEpisode = map['media']?['anilibriaLastEpisode'] is int
+    final int lastAniLibriaEpisode = map['media']?['anilibriaLastEpisode'] is int
         ? map['media']['anilibriaLastEpisode'] as int
-        : null;
+        : 0;
+
+    final int malId = map['media']?['idMal'] is int
+        ? map['media']['idMal'] as int
+        : 0;
+
+    final int anilibriaId = map['media']?['anilibriaId'] is int
+        ? map['media']['anilibriaId'] as int
+        : 0;
 
     return Entry._(
       mediaId: map['media']['id'],
+      malId: malId,
       titles: titles,
       shikimoriUrl: shikimoriUrl,
       lastAniLibriaEpisode: lastAniLibriaEpisode,
@@ -517,11 +535,18 @@ class Entry {
       ruTitleState: map['ruTitleState'] ?? false,
       anilibriaEpDubState: map['anilibriaEpDubState'] ?? false,
       anilibriaWatchState: map['anilibriaWatchState'] ?? false,
-      anilibriaAlias: anilibriaAlias
+      anilibriaAlias: anilibriaAlias,
+      anilibriaId: anilibriaId,
+      titleEnglish: english,
+      titleRomaji: romaji,
+      titleNative: native,
+      titleRussian: russian,
+      titleShikimoriRomaji: shikimoriRomaji,
     );
   }
 
   final int mediaId;
+  final int malId;
   List<String> titles;
   final String imageUrl;
   final MediaFormat? format;
@@ -550,6 +575,12 @@ class Entry {
   bool? anilibriaEpDubState;
   bool? anilibriaWatchState;
   String? anilibriaAlias;
+  int? anilibriaId;
+  String? titleEnglish;
+  String? titleRomaji;
+  String? titleNative;
+  String? titleRussian;
+  String? titleShikimoriRomaji;
 }
 
 enum ListStatus {

@@ -1,5 +1,12 @@
 import 'dart:convert';
+import 'package:animeshin/repository/get_valid_url.dart';
 import 'package:http/http.dart' as http;
+
+const aniLibertyUrls = [
+  'https://aniliberty.top',
+  'https:/anilibria.top',
+  'https://anilibria.wtf',
+];
 
 /// Normalizes a title for comparison (strip non [a-z0-9], lowercase).
 String normalizeTitle(String title) {
@@ -13,8 +20,8 @@ String toKebabCase(String input) => input
 
 class AnilibriaRepository {
   // Base endpoints for the new anilibria.top API
-  static const _listBase = 'https://anilibria.top/api/v1/anime/releases/list';
-  static const _byAliasBase = 'https://anilibria.top/api/v1/anime/releases';
+  static const _listBase = '/api/v1/anime/releases/list';
+  static const _byAliasBase = '/api/v1/anime/releases';
 
   /// Builds query parameters for include/exclude lists.
   /// The API expects CSV for both.
@@ -54,7 +61,8 @@ class AnilibriaRepository {
         ...common,
       };
 
-      final uri = Uri.parse(_listBase).replace(queryParameters: params);
+      final chosenBase = await pickApiBaseUrl(aniLibertyUrls);
+      final uri = Uri.parse(chosenBase!+_listBase).replace(queryParameters: params);
       final response = await http.get(uri);
       if (response.statusCode != 200) {
         throw Exception('Failed to load Anilibria list');
@@ -79,7 +87,8 @@ class AnilibriaRepository {
         ...common,
       };
 
-      final uri = Uri.parse(_listBase).replace(queryParameters: params);
+      final chosenBase = await pickApiBaseUrl(aniLibertyUrls);
+      final uri = Uri.parse(chosenBase!+_listBase).replace(queryParameters: params);
       final response = await http.get(uri);
       if (response.statusCode != 200) {
         throw Exception('Failed to load Anilibria list');
@@ -94,40 +103,56 @@ class AnilibriaRepository {
     return allResult;
   }
 
-  /// Search for a single alias by english title using aniliberty search.
-  ///
-  /// NOTE: Kept as-is (uses aniliberty search endpoint) — unchanged behavior.
-  Future<String?> searchAliasByEnglishTitle({
-    required String englishTitle,
-    List<String>? include,
-    List<String>? exclude,
+  /// Search for a alias by title using aniliberty search.
+  Future<String?> searchAliasByTitle({
+    required String title,
   }) async {
-    final normalizedQuery = normalizeTitle(englishTitle);
-
     final params = <String, String>{
-      'query': englishTitle,
-      // include/exclude are not standard on this endpoint, but we pass-through
-      if (include != null && include.isNotEmpty) 'include': include.join(','),
-      if (exclude != null && exclude.isNotEmpty) 'exclude': exclude.join(','),
+      'query': title,
+      'include': 'alias',
     };
 
     final uri = Uri.parse(
-      'https://aniliberty.top/api/v1/app/search/releases',
+      'https://anilibria.top/api/v1/app/search/releases',
     ).replace(queryParameters: params);
 
     final response = await http.get(uri);
     if (response.statusCode != 200) return null;
 
-    final list = json.decode(response.body) as List<dynamic>;
+    final list = json.decode(response.body);
     for (final item in list) {
-      final name = item['name'] as Map<String, dynamic>;
-      final english = normalizeTitle((name['english'] ?? '').toString());
-      final alternative = normalizeTitle((name['alternative'] ?? '').toString());
-      if (english == normalizedQuery || alternative == normalizedQuery) {
-        return item['alias'] as String?;
-      }
+      return item['alias'] as String?;
     }
     return null;
+  }
+
+  /// Search AniLiberty by [title] and return a list of maps:
+  Future<List<Map<String, dynamic>>> searchByTitle(String title,  List<String>? include, List<String>? exclude, {Map<String, String>? headers}) async {
+    final common = _withIncludeExclude(include: include, exclude: exclude);
+    
+    final params = <String, String>{
+      'query': title,
+      ...common,
+    };
+
+    final uri = Uri.parse(
+      'https://anilibria.top/api/v1/app/search/releases',
+    ).replace(queryParameters: params);
+
+    final response = await http.get(uri);
+    if (response.statusCode != 200) return const [];
+
+      // Decode as UTF-8 to avoid mojibake on Cyrillic titles
+      final body = utf8.decode(response.bodyBytes);
+
+      final decoded = json.decode(body);
+      if (decoded is! List) return const [];
+
+      // Strongly cast each element to Map<String, dynamic>
+      return decoded
+          .whereType<Map>() // filter non-maps just in case
+          .map((e) => e.map((k, v) => MapEntry(k.toString(), v)))
+          .toList();
   }
 
   /// Fetch single release by alias from anilibria.top
@@ -143,7 +168,8 @@ class AnilibriaRepository {
     List<String>? exclude,
   }) async {
     // Build URL like /anime/releases/{alias}
-    final base = '$_byAliasBase/$alias';
+    final chosenBase = await pickApiBaseUrl(aniLibertyUrls);
+    final base = '$chosenBase$_byAliasBase/$alias';
     final params = _withIncludeExclude(include: include, exclude: exclude);
     final uri = Uri.parse(base).replace(queryParameters: params);
 
@@ -151,6 +177,28 @@ class AnilibriaRepository {
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
       throw Exception('Failed to load Anilibria release for alias: $alias');
+    }
+
+    final body = json.decode(response.body);
+    if (body is Map<String, dynamic>) return body;
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> fetchById({
+    required int id,
+    List<String>? include,
+    List<String>? exclude,
+  }) async {
+    // Build URL like /anime/releases/{alias}
+    final chosenBase = await pickApiBaseUrl(aniLibertyUrls);
+    final base = '$chosenBase$_byAliasBase/$id';
+    final params = _withIncludeExclude(include: include, exclude: exclude);
+    final uri = Uri.parse(base).replace(queryParameters: params);
+
+    final response = await http.get(uri);
+    if (response.statusCode == 404) return null;
+    if (response.statusCode != 200) {
+      throw Exception('Failed to load Anilibria release for id: $id');
     }
 
     final body = json.decode(response.body);

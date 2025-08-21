@@ -282,6 +282,7 @@ class _Delegate extends SliverPersistentHeaderDelegate {
                   )
               : null,
         ),
+        const SizedBox(width: 8),
       ],
     );
 

@@ -4,6 +4,9 @@ import 'dart:async';
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/collection/collection_provider.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
+import 'package:animeshin/feature/watch/animevost_mapper.dart';
+import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/get_valid_url.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,14 +38,20 @@ class PlayerPage extends ConsumerStatefulWidget {
     super.key,
     required this.args,
     required this.item,
+    required this.sync,
+    required this.animeVoice,
     this.startupBannerText,
     this.startFullscreen = false,
+    this.startWithProxy = true,
   });
 
   final PlayerArgs args;
   final Entry? item;
+  final bool sync;
   final String? startupBannerText;
   final bool startFullscreen;
+  final bool startWithProxy;
+  final AnimeVoice animeVoice;
 
   @override
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
@@ -86,7 +95,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   bool _navigatingAway = false;
 
   // Repo / persistence
-  final _repo = AnilibriaRepository();
+  final _anilibriaRepo = AnilibriaRepository();
+  final _animevostRepo = AnimeVostRepository();
   final _playback = const PlaybackStore();
 
   // Local HLS proxy
@@ -209,7 +219,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   /// Persist progress to AniList via collection provider.
   /// Do NOT permanently mutate widget.item; provider will publish fresh Entry.
   Future<String?> _persistAniListProgress(int newProgress, {bool setAsCurrent = false}) async {
-    if (widget.item == null) return null;
+    if (widget.item == null || !widget.sync) return null;
 
     final tag = _buildCollectionTag(ofAnime: true);
     if (tag.userId == 0) return null; // skip if viewer not ready
@@ -408,25 +418,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _cursorOverlayEntry = null;
   }
 
-  /// Opens AniLiberty support page in the system browser.
-  Future<void> _openSupport() async {
-    const url = 'https://anilibria.top/support';
-    final uri = Uri.parse(url);
-    try {
-      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to open the support page')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to open: $e')),
-      );
-    }
-  }
-
   void _hideCursorInstant() {
     if (_isDesktop) _cursorHideController.hideNow();
   }
@@ -517,7 +508,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final raw = widget.item?.progress; // real stored progress
     _knownProgress = _progressBaselineForOrdinal(widget.args.ordinal, raw);
 
-    // 1) Create player first. Do NOT call _setMpv() before this point.
+    // Create player first. Do NOT call _setMpv() before this point.
     _player = Player(
       configuration: PlayerConfiguration(
         vo: 'gpu',
@@ -529,7 +520,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     );
     _video = VideoController(_player);
 
-    // 2) Safe mpv tweaks (HLS host-switch & log filtering).
+    // Safe mpv tweaks (HLS host-switch & log filtering).
     unawaited(_setMpv(
       'stream-lavf-o',
       // Keep-alive off + safe reconnects. Avoid multiple_requests here.
@@ -591,7 +582,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               }
             }
 
-            final toOpen = _proxyReady
+            final toOpen = _proxyReady && widget.startWithProxy
                 ? _proxy.playlistUrl(Uri.parse(newUrl)).toString()
                 : newUrl;
 
@@ -774,16 +765,46 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // ---------- Quality helpers ----------
 
   String? _pickUrlForQuality(String quality) {
+    // Helper: treat null, "", "   ", and "null" (string) as absent.
+    bool isPresent(String? s) {
+      final v = s?.trim();
+      return v != null && v.isNotEmpty && v.toLowerCase() != 'null';
+    }
+
+    // Build candidate list by preference order.
+    List<String?> candidates;
     switch (quality) {
       case '1080p':
-        return widget.args.url1080 ?? widget.args.url720 ?? widget.args.url480;
+        candidates = [widget.args.url1080, widget.args.url720, widget.args.url480];
+        break;
       case '720p':
-        return widget.args.url720 ?? widget.args.url1080 ?? widget.args.url480;
+        candidates = [widget.args.url720, widget.args.url480, widget.args.url1080];
+        break;
       case '480p':
-        return widget.args.url480 ?? widget.args.url720 ?? widget.args.url1080;
+        candidates = [widget.args.url480, widget.args.url720, widget.args.url1080];
+        break;
       default:
-        return widget.args.url1080 ?? widget.args.url720 ?? widget.args.url480;
+        // Fallback: highest → lowest
+        candidates = [widget.args.url1080, widget.args.url720, widget.args.url480];
+        break;
     }
+
+    // Pick the first present candidate.
+    for (final c in candidates) {
+      if (isPresent(c)) {
+        final chosen = c!.trim();
+        _log('[pickUrl] quality="$quality" chose: $chosen');
+        return chosen;
+      }
+    }
+
+    // Log full context to catch mismatched args, empty strings, etc.
+    _log('[pickUrl] RETURN NULL. quality="$quality" '
+        'args#${identityHashCode(widget.args)} '
+        '1080="${widget.args.url1080}" '
+        '720="${widget.args.url720}" '
+        '480="${widget.args.url480}"');
+    return null;
   }
 
   String _pickInitialQualityAndUrl() {
@@ -825,7 +846,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     // Build proxied URL (no trimming, no t=..., to keep absolute progress bar)
-    final toOpen = _proxyReady
+    final toOpen = _proxyReady && widget.startWithProxy
         ? _proxy.playlistUrl(Uri.parse(_chosenUrl!)).toString()
         : _chosenUrl!;
 
@@ -950,7 +971,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // ---------- Persistence ----------
 
   Future<Duration> _restoreSavedPosition() async {
-    final saved = await _playback.read(widget.args.alias, widget.args.ordinal);
+    final saved = await _playback.read(widget.animeVoice, widget.args.id, widget.args.ordinal);
     if (saved == null || saved <= 0) return Duration.zero;
     return Duration(seconds: saved);
   }
@@ -970,10 +991,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final isCompleted = pos.inMilliseconds >= (dur.inMilliseconds * 0.98);
     if (clearIfCompleted || isCompleted) {
-      await _playback.clearEpisode(widget.args.alias, widget.args.ordinal);
+      await _playback.clearEpisode(widget.animeVoice, widget.args.id, widget.args.ordinal);
     } else {
-      await _playback.save(
-          widget.args.alias, widget.args.ordinal, pos.inSeconds);
+      await _playback.save(widget.animeVoice, widget.args.id, widget.args.ordinal, pos.inSeconds);
     }
   }
 
@@ -1128,8 +1148,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
     }
 
-    final toOpen =
-        _proxyReady ? _proxy.playlistUrl(Uri.parse(url)).toString() : url;
+    final toOpen = _proxyReady && widget.startWithProxy ? _proxy.playlistUrl(Uri.parse(url)).toString() : url;
 
     final resume = pos + const Duration(milliseconds: 300);
     await _openAt(toOpen, position: resume, play: wasPlaying);
@@ -1275,12 +1294,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     try {
       _log('fetching next episode...');
-      final raw = await _repo.fetchByAlias(alias: widget.args.alias);
-      if (raw == null) {
-        _log('fetch returned null, aborting');
-        return;
+
+      AniRelease rel;
+
+      switch (widget.animeVoice) {
+        case AnimeVoice.aniliberty: {
+          final raw = await _anilibriaRepo.fetchById(id: widget.args.id);
+          if (raw == null) {
+            _log('fetch returned null, aborting');
+            return;
+          }
+          rel = mapAniLibriaRelease(raw);
+          break;
+        }
+        case AnimeVoice.animevost: {
+          final raw = await _animevostRepo.fetchPlaylist(widget.args.id);
+          if (raw.isEmpty) {
+            _log('fetch returned null, aborting');
+            return;
+          }
+          rel = mapAnimeVostRelease(raw, widget.args.id, '');
+        }
       }
-      final rel = mapAniLibriaRelease(raw);
 
       final nextOrd = widget.args.ordinal + 1;
       final next = rel.episodes.firstWhere(
@@ -1311,9 +1346,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         MaterialPageRoute(
           builder: (_) => PlayerPage(
             args: PlayerArgs(
-              alias: rel.alias,
+              id: rel.id,
               ordinal: next.ordinal,
-              title: rel.title ?? rel.alias,
+              title: rel.title ?? '',
               url480: next.hls480,
               url720: next.hls720,
               url1080: next.hls1080,
@@ -1324,8 +1359,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               endingEnd: next.endingEnd,
             ),
             item: widget.item,
+            sync: widget.sync,
+            animeVoice: widget.animeVoice,
             startupBannerText: 'Now playing: Episode ${next.ordinal}',
             startFullscreen: wasFs,
+            startWithProxy: widget.animeVoice == AnimeVoice.aniliberty,
           ),
         ),
       );
@@ -1490,8 +1528,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // Support button that opens AniLiberty support page
       IconButton(
         icon: const Icon(Ionicons.heart),
-        tooltip: 'Support AniLiberty',
-        onPressed: _openSupport,
+        tooltip: 'Support voiceover authors',
+        onPressed: () async {
+          await openSupport(widget.animeVoice, context);
+        },
       ),
       const SizedBox(width: 2), // Add a small right inset so actions aren't flush to the edge
     ];
@@ -1806,6 +1846,53 @@ class _CursorAutoHideOverlayState extends State<_CursorAutoHideOverlay> {
             : SystemMouseCursors.none,
         child: const SizedBox.expand(),
       ),
+    );
+  }
+}
+
+Future<void> openSupport(AnimeVoice voice, BuildContext context) async {
+  // Fallback URLs per provider.
+  final urls = switch (voice) {
+    AnimeVoice.aniliberty => const [
+      'https://anilibria.top/support',
+      'https://aniliberty.top/support',
+    ],
+    AnimeVoice.animevost => const [
+      'https://animevost.org/pompsh-animevost.html',
+      'https://v9.vost.pw/pompsh-animevost.html',
+    ],
+  };
+
+  // Pick the first URL that responds with a "good" status (2xx by default).
+  final url = await pickApiBaseUrlGoodStatus(
+    urls,
+    timeout: const Duration(seconds: 3),
+    useGet: true,            // GET is safer for simple support pages
+    fallbackGetOn405: true,  // in case HEAD is not allowed
+  );
+
+  // Nothing reachable → inform the user and stop.
+  if (url == null) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to open support page for ${voice.name}')),
+    );
+    return;
+  }
+
+  // Try to launch externally; show one concise error if it fails.
+  final uri = Uri.parse(url);
+  try {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $url')),
+      );
+    }
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to open: $e')),
     );
   }
 }

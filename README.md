@@ -4,7 +4,7 @@
 
 <h1 align="center">AnimeShin</h1>
 <p align="center">
-  A modern, unofficial AniList client with Russian titles, AniLiberty voice-over tracking, and episode watching for AniLiberty dubs.
+  A modern, unofficial AniList client with Russian titles, AniLiberty voice-over tracking, and episode watching for AniLiberty and AnimeVost dubs.
   <br>
   Track anime & manga, update progress with gestures, watch dubbed episodes, and get notified about new releases and dubs — all in one place.
 </p>
@@ -40,6 +40,14 @@
 
 - **▶️ AniLiberty Watch**  
   Watch AniLiberty-dubbed episodes directly from the app.
+
+- **▶️ Other Watch Sources**  
+  If there is no dubbing from AniLiberty, watch episodes dubbed by AnimeVost.
+  (But the automatic update of anime progress will not work.)
+
+- **📁 Export Anime/Manga list**
+  Export your anime or manga list in MyAnimeList or Shikimori format.
+  Export button in the top-right corner of your profile page.
 
 - **🔗 Extra Links**  
   Direct links to Shikimori and AniLiberty release pages.

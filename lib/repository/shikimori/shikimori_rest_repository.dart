@@ -31,8 +31,8 @@ class ShikimoriRestRepository {
   Future<({String? ru, String? url})> searchRussianAndUrl(
     String query, {
     required bool ofAnime,
-    int limit = 10,            // Shikimori allows up to 50
-    bool includeAdult = false, // pass censored=false if you want adult titles too
+    int limit = 50,           // Shikimori allows up to 50
+    bool includeAdult = true, // pass censored=false if you want adult titles too
   }) async {
     final q = query.trim();
     if (q.isEmpty) return (ru: null, url: null);

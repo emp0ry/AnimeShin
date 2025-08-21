@@ -59,6 +59,7 @@ class FeedTopBarTrailingContent extends StatelessWidget {
               icon: const Icon(Ionicons.funnel_outline),
               onPressed: () => showActivityFilterSheet(context, ref, null),
             ),
+            const SizedBox(width: 8),
           ],
         );
       },
