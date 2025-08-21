@@ -80,7 +80,7 @@ class AnimeVostRepository {
   /// Builds headers for a specific call, merging defaults and per-call headers.
   Map<String, String> _buildHeaders([Map<String, String>? headers]) {
     final h = <String, String>{
-      'User-Agent': userAgent,
+      // 'User-Agent': userAgent,
       // Keep Accept broad to avoid server-side blocks.
       'Accept': 'text/html,application/json;q=0.9,*/*;q=0.8',
     };

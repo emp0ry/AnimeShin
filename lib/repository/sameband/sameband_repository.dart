@@ -59,7 +59,7 @@ class SameBandRepository {
 
   Map<String, String> _buildHeaders([Map<String, String>? headers]) {
     final h = <String, String>{
-      'User-Agent': userAgent,
+      // 'User-Agent': userAgent,
       'Accept': 'text/html,application/json;q=0.9,*/*;q=0.8',
     };
     if (defaultHeaders != null) h.addAll(defaultHeaders!);

@@ -1378,7 +1378,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             animeVoice: widget.animeVoice,
             startupBannerText: 'Now playing: Episode ${next.ordinal}',
             startFullscreen: wasFs,
-            startWithProxy: widget.animeVoice == AnimeVoice.aniliberty,
+            startWithProxy: widget.startWithProxy,
           ),
         ),
       );

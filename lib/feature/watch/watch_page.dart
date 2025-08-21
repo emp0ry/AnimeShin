@@ -19,12 +19,13 @@ import 'anilibria_mapper.dart';
 import '../player/player_page.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
-  const WatchPage({super.key, required this.id, required this.url, required this.item, required this.sync, required this.animeVoice});
+  const WatchPage({super.key, required this.id, required this.url, required this.item, required this.sync, required this.animeVoice, required this.startWithProxy});
   final int id;
   final String url;
   final Entry? item;
   final bool sync;
   final AnimeVoice animeVoice;
+  final bool startWithProxy;
 
   @override
   ConsumerState<WatchPage> createState() => _WatchPageState();
@@ -125,7 +126,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
     return ep.clamp(1, maxOrdinal);
   }
 
-  void _openPlayer(AniRelease release, int ordinal, Entry? item, bool sync, AnimeVoice animeVoice) {
+  void _openPlayer(AniRelease release, int ordinal, Entry? item, bool sync, AnimeVoice animeVoice, bool startWithProxy) {
     final ep = release.episodes.firstWhere((e) => e.ordinal == ordinal);
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -147,8 +148,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           item: item,
           sync: sync,
           animeVoice: animeVoice,
-          startWithProxy: widget.animeVoice == AnimeVoice.aniliberty ||
-                          widget.animeVoice == AnimeVoice.animevost,
+          startWithProxy: startWithProxy,
         ),
       ),
     );
@@ -182,7 +182,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         AsyncData(:final value) => _Body(
             release: value,
             entry: _findMatchingEntry(ref),
-            onPlay: (e) => _openPlayer(value, e.ordinal, widget.item, widget.sync, widget.animeVoice),
+            onPlay: (e) => _openPlayer(value, e.ordinal, widget.item, widget.sync, widget.animeVoice, widget.startWithProxy),
           ),
         AsyncError(:final error) => Center(
             child: Text(
@@ -201,7 +201,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
                   release: rel.value,
                   entry: _findMatchingEntry(ref),
                 );
-                _openPlayer(rel.value, i, widget.item, widget.sync, widget.animeVoice);
+                _openPlayer(rel.value, i, widget.item, widget.sync, widget.animeVoice, widget.startWithProxy);
               },
             )
           : null,

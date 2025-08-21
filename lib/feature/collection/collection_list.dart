@@ -572,6 +572,7 @@ class __TileContentState extends State<_TileContent> {
               item: widget.item,
               sync: false,
               animeVoice: AnimeVoice.aniliberty,
+              startWithProxy: true,
             ),
           ),
         );
@@ -587,6 +588,7 @@ class __TileContentState extends State<_TileContent> {
               item: widget.item,
               sync: false,
               animeVoice: AnimeVoice.animevost,
+              startWithProxy: false,
             ),
           ),
         );
@@ -602,6 +604,7 @@ class __TileContentState extends State<_TileContent> {
               item: widget.item,
               sync: false,
               animeVoice: AnimeVoice.sameband,
+              startWithProxy: true,
             ),
           ),
         );
@@ -628,6 +631,7 @@ class __TileContentState extends State<_TileContent> {
                 item: widget.item,
                 sync: true,
                 animeVoice: AnimeVoice.aniliberty,
+                startWithProxy: true,
               ),
             ));
           },
