@@ -1,8 +1,10 @@
 import 'dart:ui';
 
 import 'package:animeshin/feature/watch/animevost_mapper.dart';
+import 'package:animeshin/feature/watch/sameband_mapper.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
 import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/sameband/sameband_repository.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,8 +19,9 @@ import 'anilibria_mapper.dart';
 import '../player/player_page.dart';
 
 class WatchPage extends ConsumerStatefulWidget {
-  const WatchPage({super.key, required this.id, required this.item, required this.sync, required this.animeVoice});
+  const WatchPage({super.key, required this.id, required this.url, required this.item, required this.sync, required this.animeVoice});
   final int id;
+  final String url;
   final Entry? item;
   final bool sync;
   final AnimeVoice animeVoice;
@@ -73,6 +76,23 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         }
         break;
       }
+      case AnimeVoice.sameband: {
+        try {
+          final samebandRepo = SameBandRepository();
+          final items = await samebandRepo.fetchPlaylistByAnimePage(widget.url);
+          if (!mounted) return;
+          if (items.isEmpty) {
+            setState(() => _release = const AsyncError('Not found', StackTrace.empty));
+            return;
+          }
+          final mapped = mapSameBandRelease(items, widget.url, '');
+          setState(() => _release = AsyncData(mapped));
+        } catch (e, st) {
+          if (!mounted) return;
+          setState(() => _release = AsyncError(e, st));
+        }
+        break;
+      }
     }
   }
 
@@ -112,6 +132,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         builder: (_) => PlayerPage(
           args: PlayerArgs(
             id: release.id,
+            url: release.url,
             ordinal: ordinal,
             title: release.title ?? '',
             url480: ep.hls480,
@@ -126,7 +147,8 @@ class _WatchPageState extends ConsumerState<WatchPage> {
           item: item,
           sync: sync,
           animeVoice: animeVoice,
-          startWithProxy: widget.animeVoice == AnimeVoice.aniliberty,
+          startWithProxy: widget.animeVoice == AnimeVoice.aniliberty ||
+                          widget.animeVoice == AnimeVoice.animevost,
         ),
       ),
     );

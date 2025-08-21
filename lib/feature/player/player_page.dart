@@ -5,8 +5,10 @@ import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/collection/collection_provider.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/feature/watch/animevost_mapper.dart';
+import 'package:animeshin/feature/watch/sameband_mapper.dart';
 import 'package:animeshin/repository/animevost/animevost_repository.dart';
 import 'package:animeshin/repository/get_valid_url.dart';
+import 'package:animeshin/repository/sameband/sameband_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -97,6 +99,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Repo / persistence
   final _anilibriaRepo = AnilibriaRepository();
   final _animevostRepo = AnimeVostRepository();
+  final _samebandRepo = SameBandRepository();
   final _playback = const PlaybackStore();
 
   // Local HLS proxy
@@ -1314,6 +1317,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             return;
           }
           rel = mapAnimeVostRelease(raw, widget.args.id, '');
+          break;
+        }
+        case AnimeVoice.sameband: {
+          final uri = await _samebandRepo.getListUrlFromAnimePage(widget.args.url);
+          final raw = await _samebandRepo.fetchPlaylistFromListUrl(uri);
+          if (raw.isEmpty) {
+            _log('fetch returned null, aborting');
+            return;
+          }
+          rel = mapSameBandRelease(raw, widget.args.url, '');
+          break;
         }
       }
 
@@ -1347,6 +1361,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           builder: (_) => PlayerPage(
             args: PlayerArgs(
               id: rel.id,
+              url: rel.url,
               ordinal: next.ordinal,
               title: rel.title ?? '',
               url480: next.hls480,
@@ -1825,7 +1840,7 @@ class _CursorAutoHideOverlayState extends State<_CursorAutoHideOverlay> {
         widget.controller!._tick.removeListener(_controllerSub!);
       }
       if (_hideNowSub != null) {
-        widget.controller!._hideNowTick.removeListener(_hideNowSub!); // NEW
+        widget.controller!._hideNowTick.removeListener(_hideNowSub!);
       }
     }
     super.dispose();
@@ -1860,6 +1875,9 @@ Future<void> openSupport(AnimeVoice voice, BuildContext context) async {
     AnimeVoice.animevost => const [
       'https://animevost.org/pompsh-animevost.html',
       'https://v9.vost.pw/pompsh-animevost.html',
+    ],
+    AnimeVoice.sameband => const [
+      'https://sameband.studio/'
     ],
   };
 

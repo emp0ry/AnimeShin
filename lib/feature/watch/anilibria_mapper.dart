@@ -78,6 +78,7 @@ AniRelease mapAniLibriaRelease(Map<String, dynamic> json) {
 
   return AniRelease(
     id: id,
+    url: '',
     title: title,
     posterUrl: posterUrl,
     episodes: episodes,

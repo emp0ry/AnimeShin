@@ -5,12 +5,14 @@ import 'package:flutter/foundation.dart';
 class AniRelease {
   const AniRelease({
     required this.id,
+    required this.url,
     required this.title,
     required this.posterUrl,
     required this.episodes,
   });
 
   final int id;
+  final String url;
   final String? title;
   final String? posterUrl; // not used for tiles (tiles use episode.preview)
   final List<AniEpisode> episodes;
@@ -57,6 +59,7 @@ class AniEpisode {
 class PlayerArgs {
   const PlayerArgs({
     required this.id,
+    required this.url,
     required this.ordinal,
     required this.title,
     this.url480,
@@ -70,6 +73,7 @@ class PlayerArgs {
   });
 
   final int id;
+  final String url;
   final int ordinal;
   final String title;
 
@@ -85,4 +89,4 @@ class PlayerArgs {
   final int? endingEnd;
 }
 
-enum AnimeVoice {aniliberty, animevost}
+enum AnimeVoice {aniliberty, animevost, sameband}

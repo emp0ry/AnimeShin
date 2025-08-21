@@ -2,6 +2,7 @@ import 'package:animeshin/feature/watch/watch_page.dart';
 import 'package:animeshin/feature/watch/watch_types.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
 import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/sameband/sameband_repository.dart';
 import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -314,23 +315,36 @@ class __TileContentState extends State<_TileContent> {
 
     Future<void> openSearchMenu() async {
       Future<List<Map<String, dynamic>>> searchAniLiberty() async {
-        final shikimoriRepo = ShikimoriRestRepository();
         try {
           final aniLibriaRepo = AnilibriaRepository();
 
           final malId = widget.item.malId;
           if (malId == 0) return const [];
 
-          final shikiData = await shikimoriRepo.fetchByMalId(malId, ofAnime: true);
-          if (shikiData == null) return const [];
+          List<Map<String, dynamic>> items = [];
 
-          final ru = shikiData['russian']?.toString().trim();
-          final items = await aniLibriaRepo.searchByTitle(
-            ru!,
-            ['id', 'name.main'],
-            null,
-          );
+          if (widget.item.titleRussian != null) {
+            items = await aniLibriaRepo.searchByTitle(
+              widget.item.titleRussian!,
+              ['id', 'name.main'],
+              null,
+            );
+          }
 
+          if (items.isEmpty && widget.item.titleRomaji != null) {
+            items = await aniLibriaRepo.searchByTitle(
+              widget.item.titleRomaji!,
+              ['id', 'name.main'],
+              null,
+            );
+          }
+          if (items.isEmpty && widget.item.titleEnglish != null) {
+            items = await aniLibriaRepo.searchByTitle(
+              widget.item.titleEnglish!,
+              ['id', 'name.main'],
+              null,
+            );
+          }
           if (items.isEmpty) return const [];
 
           final converted = items.map((item) {
@@ -341,37 +355,63 @@ class __TileContentState extends State<_TileContent> {
           }).toList();
 
           debugPrint('AniLiberty: ${converted.toString()}');
-          shikimoriRepo.dispose();
 
           return converted;
         } catch (e, st) {
           debugPrint('AniLiberty Search failed: $e\n$st');
-          shikimoriRepo.dispose();
           return const [];
         }
       }
 
       Future<List<Map<String, dynamic>>> searchAnimeVost() async {
-        final shikimoriRepo = ShikimoriRestRepository();
         try {
           final animeVostRepo = AnimeVostRepository();
 
           final malId = widget.item.malId;
           if (malId == 0) return const [];
 
-          final shikiData = await shikimoriRepo.fetchByMalId(malId, ofAnime: true);
-          if (shikiData == null) return const [];
+          List<Map<String, dynamic>> items = [];
 
-          final ru = shikiData['russian']?.toString().trim();
-          final items = await animeVostRepo.searchByTitle(ru!);
+          if (widget.item.titleRussian != null) {
+            items = await animeVostRepo.searchByTitle(widget.item.titleRussian!);
+          }
+          if (items.isEmpty && widget.item.titleRomaji != null) {
+            items = await animeVostRepo.searchByTitle(widget.item.titleRomaji!);
+          }
+          if (items.isEmpty && widget.item.titleEnglish != null) {
+            items = await animeVostRepo.searchByTitle(widget.item.titleEnglish!);
+          }
           if (items.isEmpty) return const [];
 
           debugPrint('AnimeVost: ${items.toString()}');
-          shikimoriRepo.dispose();
           return items;
         } catch (e, st) {
-          debugPrint('AniLiberty Search failed: $e\n$st');
-          shikimoriRepo.dispose();
+          debugPrint('AnimeVost Search failed: $e\n$st');
+          return const [];
+        }
+      }
+
+      Future<List<Map<String, dynamic>>> searchSameBand() async {
+        try {
+          final sameBandRepo = SameBandRepository();
+
+          List<Map<String, dynamic>> items = [];
+
+          if (widget.item.titleRomaji != null) {
+            items = await sameBandRepo.searchByTitle(widget.item.titleRomaji!);
+          }
+          if (items.isEmpty && widget.item.titleRussian != null) {
+            items = await sameBandRepo.searchByTitle(widget.item.titleRussian!);
+          }
+          if (items.isEmpty && widget.item.titleEnglish != null) {
+            items = await sameBandRepo.searchByTitle(widget.item.titleEnglish!);
+          }
+          if (items.isEmpty) return const [];
+
+          debugPrint('SameBand: ${items.toString()}');
+          return items;
+        } catch (e, st) {
+          debugPrint('SameBand Search failed: $e\n$st');
           return const [];
         }
       }
@@ -398,10 +438,14 @@ class __TileContentState extends State<_TileContent> {
       final results = await Future.wait([
         searchAniLiberty().catchError((_) => <Map<String, dynamic>>[]),
         searchAnimeVost().catchError((_) => <Map<String, dynamic>>[]),
+        searchSameBand().catchError((_) => <Map<String, dynamic>>[]),
       ]);
+
+      // shikimoriRepo.dispose();
 
       final aniLibertyList = results[0];
       final animeVostList = results[1];
+      final sameBandList = results[2];
 
       if (!mounted || !ctx.mounted) return;
 
@@ -431,6 +475,18 @@ class __TileContentState extends State<_TileContent> {
             ],
           ),
         ),
+        PopupMenuItem<String>(
+          value: 'sameband',
+          child: Row(
+            children: [
+              const Icon(Ionicons.film_outline, size: 16),
+              const SizedBox(width: 8),
+              const Text('SameBand'),
+              const Spacer(),
+              Text('(${sameBandList.length})'),
+            ],
+          ),
+        ),
       ];
 
       final selectedSource = await showMenu<String>(
@@ -452,6 +508,10 @@ class __TileContentState extends State<_TileContent> {
         case 'animevost':
           chosenList = animeVostList;
           sourceKey = 'animevost';
+          break;
+        case 'sameband':
+          chosenList = sameBandList;
+          sourceKey = 'sameband';
           break;
         default:
           return;
@@ -508,22 +568,40 @@ class __TileContentState extends State<_TileContent> {
           MaterialPageRoute(
             builder: (_) => WatchPage(
               id: id,
+              url: '',
               item: widget.item,
               sync: false,
               animeVoice: AnimeVoice.aniliberty,
             ),
           ),
         );
-      } else if (selSource == 'animevost') {
+      }
+      else if (selSource == 'animevost') {
         final id = picked['id'] as int? ?? 0;
         if (id == 0) return;
         Navigator.of(ctx).push(
           MaterialPageRoute(
             builder: (_) => WatchPage(
               id: id,
+              url: '',
               item: widget.item,
               sync: false,
               animeVoice: AnimeVoice.animevost,
+            ),
+          ),
+        );
+      }
+      else if (selSource == 'sameband') {
+        String url = picked['url'] as String? ?? '';
+        if (url == '') return;
+        Navigator.of(ctx).push(
+          MaterialPageRoute(
+            builder: (_) => WatchPage(
+              id: 0,
+              url: url,
+              item: widget.item,
+              sync: false,
+              animeVoice: AnimeVoice.sameband,
             ),
           ),
         );
@@ -546,6 +624,7 @@ class __TileContentState extends State<_TileContent> {
             Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => WatchPage(
                 id: widget.item.anilibriaId!,
+                url: '',
                 item: widget.item,
                 sync: true,
                 animeVoice: AnimeVoice.aniliberty,

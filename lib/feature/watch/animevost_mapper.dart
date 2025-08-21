@@ -29,6 +29,7 @@ AniRelease mapAnimeVostRelease(List<AnimeVostEpisode> items, int id, String? tit
 
   return AniRelease(
     id: id,
+    url: '',
     title: title,
     posterUrl: '',
     episodes: episodes,

@@ -18,16 +18,18 @@ This Privacy Policy explains what information is (and isn’t) collected when yo
 AnimeShin integrates with the following services to provide content and features.
 **Requests to these services are made directly from your device** and may expose your **IP address, user agent, and other standard HTTP headers** to the respective service.
 
-* **AniList API** — Used for authentication and syncing your anime/manga list (OAuth2). Your AniList account data is handled by AniList.
+* **AniList API** — Used for authentication and syncing your anime/manga list (OAuth2). Your AniList account data is handled by AniList.  
   Policy: [AniList Privacy Policy](https://anilist.co/terms)
-* **AniLiberty / AniLibria** — Used to check availability of dubbed episodes and enable playback.
+* **AniLiberty / AniLibria** — Used to check availability of dubbed episodes and enable playback.  
   Site: [anilibria.top](https://anilibria.top/) *(no formal privacy policy publicly available)*
-* **Shikimori** — Used to fetch Russian titles and additional metadata.
+* **Shikimori** — Used to fetch Russian titles and additional metadata.  
   Policy: [Shikimori Privacy Policy](https://shikimori.one/terms)
-* **AnimeVost** — Used to fetch playlists and enable playback of AnimeVost-dubbed episodes.
+* **AnimeVost** — Used to fetch playlists and enable playback of AnimeVost-dubbed episodes.  
   Site: [animevost.org](https://animevost.org/) *(privacy policy availability not verified)*
+* **Sameband** — Used to fetch and parse **M3U8 playlists** to enable episode playback.  
+  Site: [sameband.studio](https://sameband.studio/polzovatelskoe-soglashenie.html)
 
-> **Note:** When you play video from any third-party source, media segments are streamed **directly from that source’s servers**. The App does **not** proxy, log, or re-route your traffic through its own servers. (In some builds the App may use a **local, on-device** HLS helper strictly to fix headers/compatibility; it does not transmit data to any server controlled by the App.)
+> **Note:** When you play video from any third-party source (including Sameband), media segments are streamed **directly from that source’s servers**. The App does **not** proxy, log, or re-route your traffic through its own servers. (In some builds the App may use a **local, on-device** HLS helper strictly to fix headers/compatibility; it does not transmit data to any server controlled by the App.)
 
 ## 4. Analytics
 
@@ -54,5 +56,5 @@ This Privacy Policy may be updated from time to time. Updates will be published 
 
 ## 9. Contact
 
-For questions, issues, or concerns about privacy, please contact:
+For questions, issues, or concerns about privacy, please contact:  
 **GitHub:** [emp0ry](https://github.com/emp0ry)
