@@ -1877,6 +1877,7 @@ Future<void> openSupport(AnimeVoice voice, BuildContext context) async {
       'https://v9.vost.pw/pompsh-animevost.html',
     ],
     AnimeVoice.sameband => const [
+      'https://boosty.to/aphoenixvoice',
       'https://sameband.studio/'
     ],
   };
