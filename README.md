@@ -43,7 +43,7 @@
 
 - **▶️ Other Watch Sources**  
   If there is no dubbing from AniLiberty, watch episodes dubbed by AnimeVost.
-  (But the automatic update of anime progress will not work.)
+  (But the automatic update of anime progress will not work)
 
 - **📁 Export Anime/Manga list**
   Export your anime or manga list in MyAnimeList or Shikimori format.
