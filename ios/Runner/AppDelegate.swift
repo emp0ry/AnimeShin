@@ -31,23 +31,12 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       timeObserverToken = nil
     }
     // Invalidate KVO if still active
-    statusObserver?.invalidate()
-    statusObserver = nil
-    rateObserver?.invalidate()
-    rateObserver = nil
+    statusObserver?.invalidate(); statusObserver = nil
+    rateObserver?.invalidate();   rateObserver   = nil
     // Remove playback-end/timejump/stalled observers if set
-    if let eo = endObserver {
-      NotificationCenter.default.removeObserver(eo)
-      endObserver = nil
-    }
-    if let tj = timeJumpObserver {
-      NotificationCenter.default.removeObserver(tj)
-      timeJumpObserver = nil
-    }
-    if let st = stalledObserver {
-      NotificationCenter.default.removeObserver(st)
-      stalledObserver = nil
-    }
+    if let eo = endObserver { NotificationCenter.default.removeObserver(eo); endObserver = nil }
+    if let tj = timeJumpObserver { NotificationCenter.default.removeObserver(tj); timeJumpObserver = nil }
+    if let st = stalledObserver { NotificationCenter.default.removeObserver(st); stalledObserver = nil }
   }
 
   override func viewDidDisappear(_ animated: Bool) {
@@ -82,9 +71,6 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 @main
 @objc class AppDelegate: FlutterAppDelegate, AVPlayerViewControllerDelegate {
 
-  // Keep a weak reference to the active native VC (optional, handy for PiP control)
-  weak var activePlayerVC: ReportingAVPlayerViewController?
-
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -108,7 +94,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     )
 
     // Handle "present" method to open native AVPlayer.
-    channel.setMethodCallHandler { [weak self] (call, result) in
+    channel.setMethodCallHandler { (call, result) in
       guard call.method == "present",
             let args = call.arguments as? [String: Any],
             let urlStr = args["url"] as? String,
@@ -141,9 +127,6 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.modalPresentationStyle = .fullScreen
       vc.channel = channel
       vc.delegate = self
-
-      // Keep reference (optional)
-      self?.activePlayerVC = vc
 
       // Enable PiP
       vc.allowsPictureInPicturePlayback = true
@@ -201,14 +184,14 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         }
       }
 
-      // User scrubbing auto-resume:
+      // User scrubbing auto-resume (ignore our own seeks).
       vc.timeJumpObserver = NotificationCenter.default.addObserver(
         forName: .AVPlayerItemTimeJumped,
         object: item,
         queue: .main
       ) { [weak vc] _ in
         guard let vc = vc else { return }
-        if vc.programmaticSeekInFlight { return } // ignore our own seeks
+        if vc.programmaticSeekInFlight { return }
         if let last = vc.wasPlayingRecentlyAt, Date().timeIntervalSince(last) < 1.0 {
           if vc.desiredRate > 0 {
             vc.player?.playImmediately(atRate: vc.desiredRate)
@@ -228,16 +211,15 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         }
       }
 
-      // Notify Flutter when playback completes.
-      // If PiP is active, stop PiP to bring the Flutter UI back to foreground.
+      // Notify Flutter when playback completes (including PiP case).
       vc.endObserver = NotificationCenter.default.addObserver(
         forName: .AVPlayerItemDidPlayToEndTime,
         object: item,
         queue: .main
-      ) { [weak self, weak vc] _ in
+      ) { [weak vc] _ in
         guard let vc = vc else { return }
 
-        // Send final position & duration to Flutter
+        // Send final position & duration back to Flutter
         let pos = CMTimeGetSeconds(vc.player?.currentTime() ?? .zero)
         let dur = CMTimeGetSeconds(vc.player?.currentItem?.duration ?? .zero)
         vc.channel?.invokeMethod("ios_player_completed", arguments: [
@@ -245,22 +227,15 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
           "duration": dur
         ])
 
-        // If in PiP — stop PiP; otherwise dismiss VC.
-        if vc.pipActive {
-          if vc.responds(to: #selector(AVPlayerViewController.stopPictureInPicture)) {
-            vc.stopPictureInPicture()
-          }
-        } else {
+        // If VC is still presented (not auto-dismissed by PiP), dismiss it.
+        if vc.presentingViewController != nil {
           vc.dismiss(animated: true, completion: nil)
         }
-
-        // Drop reference to active VC
-        self?.activePlayerVC = nil
       }
 
       // Present native player
       controller.present(vc, animated: true) {
-        // Helper: seek & play with the desired rate when ready
+        // Seek & play with the desired rate when ready
         let startPlayback = {
           if pos > 0 {
             vc.programmaticSeekInFlight = true
@@ -270,9 +245,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
               toleranceAfter: .zero
             ) { _ in
               vc.programmaticSeekInFlight = false
-              if wasPlaying {
-                player.playImmediately(atRate: Float(rate))
-              }
+              if wasPlaying { player.playImmediately(atRate: Float(rate)) }
             }
           } else {
             if wasPlaying { player.playImmediately(atRate: Float(rate)) }
@@ -286,8 +259,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
           vc.statusObserver = item.observe(\.status, options: [.new, .initial]) { observedItem, _ in
             if observedItem.status == .readyToPlay {
               startPlayback()
-              vc.statusObserver?.invalidate()
-              vc.statusObserver = nil
+              vc.statusObserver?.invalidate(); vc.statusObserver = nil
             }
           }
         }
@@ -324,18 +296,14 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
   func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
     (playerViewController as? ReportingAVPlayerViewController)?.pipActive = false
-    // Clear active VC reference after PiP ends
-    if let vc = playerViewController as? ReportingAVPlayerViewController, activePlayerVC === vc {
-      activePlayerVC = nil
-    }
   }
 
-  /// Do NOT re-present the native player when PiP stops — go back to Flutter UI.
+  /// Do NOT re-present the native player when PiP stops — show Flutter UI instead.
   func playerViewController(
     _ playerViewController: AVPlayerViewController,
     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
   ) {
-    // Just tell the system that UI is ready; Flutter UI is already visible.
+    // Flutter UI is already underneath — simply acknowledge we’re ready.
     completionHandler(true)
   }
 }

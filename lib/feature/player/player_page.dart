@@ -714,21 +714,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             }
           }
 
+          // Robust restore (wait → double seek → rate → resume).
           await _restoreFromIOSDismiss(
             target: target,
             rate: rate,
             wasPlaying: wasPlaying,
           );
-          _safeSetState(() {});
+
+          _safeSetState(() {}); // refresh any UI that shows speed/position
           break;
         }
 
         case 'ios_player_completed': {
-          // Completion from native iOS player (including PiP). Do NOT read media_kit state here.
+          // Completion from native iOS player (including PiP).
+          // Do NOT read media_kit state here; act on the signal directly.
 
-          // Optional telemetry (final position/duration from native VC).
           final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
-          final _ = (map['position'] as num?)?.toDouble();
+          final _ = (map['position'] as num?)?.toDouble(); // optional telemetry
           final __ = (map['duration'] as num?)?.toDouble();
 
           // 1) Clear local persisted playback immediately for this episode.
