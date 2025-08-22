@@ -119,6 +119,7 @@ class AccountGroup {
     final accounts = <Account>[];
     for (final a in map['accounts'] ?? const []) {
       final accessToken = accessTokens[Account.accessTokenKeyById(a['id'])];
+
       if (accessToken == null) continue;
 
       accounts.add(Account.fromPersistenceMap(a, accessToken));
