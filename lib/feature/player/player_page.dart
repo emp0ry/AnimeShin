@@ -682,7 +682,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       switch (call.method) {
         case 'ios_player_dismissed': {
-          // Restore Flutter player after native VC is dismissed (non-PiP).
+          // Native VC was dismissed (not PiP).
           final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
           final posSec = (map['position'] as num?)?.toDouble() ?? 0.0;
           final rate = (map['rate'] as num?)?.toDouble() ?? _speed;
@@ -691,7 +691,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           final target = Duration(milliseconds: (posSec * 1000).round());
           _speed = rate;
 
-          // If user left right at the end, clear local progress and bump AniList.
+          // If user left at the very end, clear local playback & bump AniList.
           if (_player.state.duration > Duration.zero &&
               target >= _player.state.duration - const Duration(seconds: 1)) {
             unawaited(_playback.clearEpisode(
@@ -699,7 +699,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               widget.args.id,
               widget.args.ordinal,
             ));
-
             if (widget.item != null) {
               final ord = widget.args.ordinal;
               final current = _progressBaselineForOrdinal(
@@ -714,40 +713,36 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             }
           }
 
-          // Robust restore (wait → double seek → rate → resume).
+          // Restore Flutter-side player (seek → rate → resume).
           await _restoreFromIOSDismiss(
             target: target,
             rate: rate,
             wasPlaying: wasPlaying,
           );
-
-          _safeSetState(() {}); // refresh any UI that shows speed/position
+          _safeSetState(() {});
           break;
         }
 
         case 'ios_player_completed': {
-          // Completion from native iOS player (including PiP).
-          // Do NOT read media_kit state here; act on the signal directly.
-
+          // Completion in native iOS player (including PiP).
           final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
-          final _ = (map['position'] as num?)?.toDouble(); // optional telemetry
+          final _ = (map['position'] as num?)?.toDouble(); // optional
           final __ = (map['duration'] as num?)?.toDouble();
 
-          // 1) Clear local persisted playback immediately for this episode.
+          // Clear local persisted playback for this episode.
           await _playback.clearEpisode(
             widget.animeVoice,
             widget.args.id,
             widget.args.ordinal,
           );
 
-          // 2) Bump AniList progress if current ordinal is ahead of stored value.
+          // Bump AniList progress if needed.
           if (widget.item != null) {
             final ord = widget.args.ordinal;
             final current = _progressBaselineForOrdinal(
               ord,
               _knownProgress ?? widget.item?.progress,
             );
-
             if (ord > current) {
               final err = await _persistAniListProgress(ord, setAsCurrent: false);
               if (err == null) {
@@ -760,13 +755,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             }
           }
 
-          // 3) Continue flow (auto-next or banner).
+          // Continue flow.
           if (_autoNextEpisode) {
             _hideCursorInstant();
             unawaited(_openNextEpisode());
           } else {
             _showBanner('Completed');
           }
+          break;
+        }
+
+        case 'ios_pip_restored': {
+          // User exited PiP and native VC was restored to fullscreen.
+          // Persist current position to keep Flutter-side "continue watching" in sync.
+          final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
+          final posSec = (map['position'] as num?)?.toDouble() ?? 0.0;
+          // We only save; playback continues in native VC.
+          await _playback.save(
+            widget.animeVoice,
+            widget.args.id,
+            widget.args.ordinal,
+            posSec.round(),
+          );
           break;
         }
 

@@ -16,6 +16,9 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
   var programmaticSeekInFlight: Bool = false   // true while our skip/seek is running
   var wasPlayingRecentlyAt: Date?              // for user scrubs auto-resume heuristic
 
+  // Mark that the item reached end (used to decide PiP restore behavior)
+  var didReachEnd: Bool = false
+
   // KVO & notifications
   var statusObserver: NSKeyValueObservation?
   var rateObserver: NSKeyValueObservation?
@@ -219,6 +222,8 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       ) { [weak vc] _ in
         guard let vc = vc else { return }
 
+        vc.didReachEnd = true
+
         // Send final position & duration back to Flutter
         let pos = CMTimeGetSeconds(vc.player?.currentTime() ?? .zero)
         let dur = CMTimeGetSeconds(vc.player?.currentItem?.duration ?? .zero)
@@ -298,12 +303,41 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
     (playerViewController as? ReportingAVPlayerViewController)?.pipActive = false
   }
 
-  /// Do NOT re-present the native player when PiP stops — show Flutter UI instead.
+  /// When the user exits PiP, restore the native player UI unless the item has already completed.
   func playerViewController(
     _ playerViewController: AVPlayerViewController,
     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
   ) {
-    // Flutter UI is already underneath — simply acknowledge we’re ready.
-    completionHandler(true)
+    // If we already completed while in PiP, do NOT re-present the native player.
+    if let rvc = playerViewController as? ReportingAVPlayerViewController, rvc.didReachEnd {
+      completionHandler(true)
+      return
+    }
+
+    // If already presented, nothing to do.
+    if playerViewController.presentingViewController != nil {
+      completionHandler(true)
+      return
+    }
+
+    // Present the same native player VC back on top of Flutter.
+    guard let root = self.window?.rootViewController else {
+      completionHandler(false); return
+    }
+
+    root.present(playerViewController, animated: true) {
+      // Send a lightweight "PiP restored" signal so Flutter can persist progress.
+      if let rvc = playerViewController as? ReportingAVPlayerViewController {
+        let pos = CMTimeGetSeconds(rvc.player?.currentTime() ?? .zero)
+        let dur = CMTimeGetSeconds(rvc.player?.currentItem?.duration ?? .zero)
+        let rate = Double(rvc.player?.rate ?? 0)
+        rvc.channel?.invokeMethod("ios_pip_restored", arguments: [
+          "position": pos,
+          "duration": dur,
+          "rate": rate
+        ])
+      }
+      completionHandler(true)
+    }
   }
 }
