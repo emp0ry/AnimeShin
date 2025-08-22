@@ -1,9 +1,9 @@
 import 'dart:ui';
 
-import 'package:animeshin/feature/watch/animevost_mapper.dart';
+import 'package:animeshin/feature/watch/aniv_mapper.dart';
 import 'package:animeshin/feature/watch/sameband_mapper.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
-import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/aniv/aniv_repository.dart';
 import 'package:animeshin/repository/sameband/sameband_repository.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:flutter/material.dart';
@@ -60,16 +60,16 @@ class _WatchPageState extends ConsumerState<WatchPage> {
         }
         break;
       }
-      case AnimeVoice.animevost: {
+      case AnimeVoice.aniv: {
         try {
-          final animevostRepo = AnimeVostRepository();
-          final items = await animevostRepo.fetchPlaylist(widget.id);
+          final anivRepo = AniVRepository();
+          final items = await anivRepo.fetchPlaylist(widget.id);
           if (!mounted) return;
           if (items.isEmpty) {
             setState(() => _release = const AsyncError('Not found', StackTrace.empty));
             return;
           }
-          final mapped = mapAnimeVostRelease(items, widget.id, '');
+          final mapped = mapAniVRelease(items, widget.id, '');
           setState(() => _release = AsyncData(mapped));
         } catch (e, st) {
           if (!mounted) return;
@@ -167,14 +167,15 @@ class _WatchPageState extends ConsumerState<WatchPage> {
             tooltip: 'Reload',
             onPressed: _load,
           ),
-          // Support button that opens AniLiberty support page
-          IconButton(
-            icon: const Icon(Ionicons.heart),
-            tooltip: 'Support voiceover authors',
-            onPressed: () async {
-              await openSupport(widget.animeVoice, context);
-            },
-          ),
+          // Support button that opens dubs source support page
+          if (widget.animeVoice != AnimeVoice.aniv)
+            IconButton(
+              icon: const Icon(Ionicons.heart),
+              tooltip: 'Support voiceover authors',
+              onPressed: () async {
+                await openSupport(widget.animeVoice, context);
+              },
+            ),
           const SizedBox(width: 8), // Add a small right inset so actions aren't flush to the edge
         ],
       ),

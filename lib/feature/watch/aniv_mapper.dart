@@ -1,10 +1,10 @@
-import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/aniv/aniv_repository.dart';
 
 import 'watch_types.dart';
 
-/// Map AnimeVost REST v1 release json to our models.
+/// Map AniV REST v1 release json to our models.
 /// Expected shape is the full object from /api/v1/anime/releases/{alias}
-AniRelease mapAnimeVostRelease(List<AnimeVostEpisode> items, int id, String? title) {
+AniRelease mapAniVRelease(List<AniVEpisode> items, int id, String? title) {
   final episodes = <AniEpisode>[];
   int i = 0;
   for (final item in items) {

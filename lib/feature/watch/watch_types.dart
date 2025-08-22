@@ -89,4 +89,4 @@ class PlayerArgs {
   final int? endingEnd;
 }
 
-enum AnimeVoice {aniliberty, animevost, sameband}
+enum AnimeVoice {aniliberty, aniv, sameband}

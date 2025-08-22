@@ -4,7 +4,7 @@
 
 <h1 align="center">AnimeShin</h1>
 <p align="center">
-  A modern, unofficial AniList client with Russian titles, AniLiberty voice-over tracking, and episode watching for AniLiberty, AnimeVost and SameBand dubs.
+  A modern, unofficial AniList client with Russian titles, AniLiberty voice-over tracking, and episode watching for AniLiberty, SameBand dubs and other dubs.
   <br>
   Track anime & manga, update progress with gestures, watch dubbed episodes, and get notified about new releases and dubs — all in one place.
 </p>

@@ -1,4 +1,4 @@
-// animevost_repository.dart
+// aniv_repository.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
@@ -6,7 +6,7 @@ import 'package:animeshin/repository/get_valid_url.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 
-const animeVostUrls = [
+const aniVUrls = [
   'https://animevost.org',
   'https://v9.vost.pw/',
 ];
@@ -22,15 +22,15 @@ String toKebabCase(String input) => input
     .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
     .replaceAll(RegExp(r'^-+|-+$'), '');
 
-/// Simple episode model returned by AnimeVost playlist API.
-class AnimeVostEpisode {
+/// Simple episode model returned by AniV playlist API.
+class AniVEpisode {
   final String name;
   final Uri? fhd;
   final Uri? hd;
   final Uri? std;
   final Uri? preview;
 
-  const AnimeVostEpisode({
+  const AniVEpisode({
     required this.name,
     this.fhd,
     this.hd,
@@ -38,9 +38,9 @@ class AnimeVostEpisode {
     this.preview,
   });
 
-  factory AnimeVostEpisode.fromJson(Map<String, dynamic> j) {
+  factory AniVEpisode.fromJson(Map<String, dynamic> j) {
     Uri? _u(String? s) => (s == null || s.isEmpty) ? null : Uri.tryParse(s);
-    return AnimeVostEpisode(
+    return AniVEpisode(
       name: (j['name'] ?? '').toString(),
       fhd: _u(j['fhd'] as String?),
       hd: _u(j['hd'] as String?),
@@ -58,11 +58,11 @@ class AnimeVostEpisode {
       };
 }
 
-class AnimeVostRepository {
+class AniVRepository {
   // Base endpoints
   static final Uri _playlistUrl = Uri.parse('https://api.animevost.org/v1/playlist');
 
-  AnimeVostRepository({
+  AniVRepository({
     this.defaultHeaders,
     this.timeout = const Duration(seconds: 20),
     this.userAgent = 'AnimeShin/1.0 (+https://github.com/animeshin) DartHttpClient',
@@ -135,7 +135,7 @@ class AnimeVostRepository {
   // 1) Search: submit the DLE search form and parse result links
   // ---------------------------------------------------------------------------
 
-  /// Searches AnimeVost by a human-readable [title] and returns found links.
+  /// Searches AniV by a human-readable [title] and returns found links.
   ///
   /// Server expects a form with:
   ///   do=search, subaction=search, story=<title>
@@ -179,11 +179,9 @@ class AnimeVostRepository {
     return links;
   }
 
-  /// Tries to extract numeric ID from an AnimeVost content URL.
+  /// Tries to extract numeric ID from an AniV content URL.
   ///
   /// Works with patterns like:
-  ///   https://animevost.org/tip/tv/3005-douluo-dalu-ii-jueshi-tangmen.html
-  ///   https://animevost.org/tip/polnometrazhnyy-film/3146-soul-land-directors-cut-final.html
   int? extractIdFromUrl(String url) {
     final uri = Uri.tryParse(url);
     if (uri == null) return null;
@@ -231,12 +229,9 @@ class AnimeVostRepository {
   // 2) Playlist: hit the official API and parse episodes
   // ---------------------------------------------------------------------------
 
-  /// Fetches the playlist for a given AnimeVost numeric [id].
-  ///
-  /// API: POST https://api.animevost.org/v1/playlist with form field: id=<id>
-  ///
-  /// Returns a list of [AnimeVostEpisode].
-  Future<List<AnimeVostEpisode>> fetchPlaylist(
+  /// Fetches the playlist for a given AniV numeric [id].
+  /// Returns a list of [AniVEpisode].
+  Future<List<AniVEpisode>> fetchPlaylist(
     int id, {
     Map<String, String>? headers,
   }) async {
@@ -265,12 +260,12 @@ class AnimeVostRepository {
 
     return jsonBody
         .whereType<Map<String, dynamic>>()
-        .map(AnimeVostEpisode.fromJson)
+        .map(AniVEpisode.fromJson)
         .toList(growable: false);
   }
 
-  /// Convenience: obtain playlist by a full AnimeVost content [url].
-  Future<List<AnimeVostEpisode>> fetchPlaylistByUrl(
+  /// Convenience: obtain playlist by a full AniV content [url].
+  Future<List<AniVEpisode>> fetchPlaylistByUrl(
     String url, {
     Map<String, String>? headers,
   }) async {
@@ -284,7 +279,7 @@ class AnimeVostRepository {
   /// Full flow convenience: search by [title] → take first result → fetch playlist.
   ///
   /// If nothing found, returns empty list (no throw).
-  Future<List<AnimeVostEpisode>> fetchPlaylistByTitle(
+  Future<List<AniVEpisode>> fetchPlaylistByTitle(
     String title, {
     Map<String, String>? headers,
   }) async {
@@ -293,7 +288,7 @@ class AnimeVostRepository {
     return fetchPlaylist(id, headers: headers);
   }
 
-  /// Search AnimeVost by [title] and return a list of maps:
+  /// Search AniV by [title] and return a list of maps:
   /// [{"name": ..., "id": ...}, ...]
   Future<List<Map<String, dynamic>>> searchByTitle(String title, {Map<String, String>? headers}) async {
     // Prepare form fields

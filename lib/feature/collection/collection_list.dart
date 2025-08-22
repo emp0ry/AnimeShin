@@ -1,7 +1,7 @@
 import 'package:animeshin/feature/watch/watch_page.dart';
 import 'package:animeshin/feature/watch/watch_types.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
-import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/aniv/aniv_repository.dart';
 import 'package:animeshin/repository/sameband/sameband_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -362,9 +362,9 @@ class __TileContentState extends State<_TileContent> {
         }
       }
 
-      Future<List<Map<String, dynamic>>> searchAnimeVost() async {
+      Future<List<Map<String, dynamic>>> searchAniV() async {
         try {
-          final animeVostRepo = AnimeVostRepository();
+          final aniVRepo = AniVRepository();
 
           final malId = widget.item.malId;
           if (malId == 0) return const [];
@@ -372,20 +372,20 @@ class __TileContentState extends State<_TileContent> {
           List<Map<String, dynamic>> items = [];
 
           if (widget.item.titleRussian != null) {
-            items = await animeVostRepo.searchByTitle(widget.item.titleRussian!);
+            items = await aniVRepo.searchByTitle(widget.item.titleRussian!);
           }
           if (items.isEmpty && widget.item.titleRomaji != null) {
-            items = await animeVostRepo.searchByTitle(widget.item.titleRomaji!);
+            items = await aniVRepo.searchByTitle(widget.item.titleRomaji!);
           }
           if (items.isEmpty && widget.item.titleEnglish != null) {
-            items = await animeVostRepo.searchByTitle(widget.item.titleEnglish!);
+            items = await aniVRepo.searchByTitle(widget.item.titleEnglish!);
           }
           if (items.isEmpty) return const [];
 
-          debugPrint('AnimeVost: ${items.toString()}');
+          debugPrint('AniV: ${items.toString()}');
           return items;
         } catch (e, st) {
-          debugPrint('AnimeVost Search failed: $e\n$st');
+          debugPrint('AniV Search failed: $e\n$st');
           return const [];
         }
       }
@@ -436,14 +436,14 @@ class __TileContentState extends State<_TileContent> {
       // Do both at once
       final results = await Future.wait([
         searchAniLiberty().catchError((_) => <Map<String, dynamic>>[]),
-        searchAnimeVost().catchError((_) => <Map<String, dynamic>>[]),
+        searchAniV().catchError((_) => <Map<String, dynamic>>[]),
         searchSameBand().catchError((_) => <Map<String, dynamic>>[]),
       ]);
 
       // shikimoriRepo.dispose();
 
       final aniLibertyList = results[0];
-      final animeVostList = results[1];
+      final aniVList = results[1];
       final sameBandList = results[2];
 
       if (!mounted || !ctx.mounted) return;
@@ -463,14 +463,14 @@ class __TileContentState extends State<_TileContent> {
           ),
         ),
         PopupMenuItem<String>(
-          value: 'animevost',
+          value: 'aniv',
           child: Row(
             children: [
               const Icon(Ionicons.film_outline, size: 16),
               const SizedBox(width: 8),
-              const Text('AnimeVost'),
+              const Text('AVost'),
               const Spacer(),
-              Text('(${animeVostList.length})'),
+              Text('(${aniVList.length})'),
             ],
           ),
         ),
@@ -504,9 +504,9 @@ class __TileContentState extends State<_TileContent> {
           chosenList = aniLibertyList;
           sourceKey = 'aniliberty';
           break;
-        case 'animevost':
-          chosenList = animeVostList;
-          sourceKey = 'animevost';
+        case 'aniv':
+          chosenList = aniVList;
+          sourceKey = 'aniv';
           break;
         case 'sameband':
           chosenList = sameBandList;
@@ -576,7 +576,7 @@ class __TileContentState extends State<_TileContent> {
           ),
         );
       }
-      else if (selSource == 'animevost') {
+      else if (selSource == 'aniv') {
         final id = picked['id'] as int? ?? 0;
         if (id == 0) return;
         Navigator.of(ctx).push(
@@ -586,7 +586,7 @@ class __TileContentState extends State<_TileContent> {
               url: '',
               item: widget.item,
               sync: false,
-              animeVoice: AnimeVoice.animevost,
+              animeVoice: AnimeVoice.aniv,
               startWithProxy: false,
             ),
           ),

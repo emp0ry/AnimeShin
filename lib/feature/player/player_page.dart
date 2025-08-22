@@ -4,9 +4,9 @@ import 'dart:async';
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/collection/collection_provider.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
-import 'package:animeshin/feature/watch/animevost_mapper.dart';
+import 'package:animeshin/feature/watch/aniv_mapper.dart';
 import 'package:animeshin/feature/watch/sameband_mapper.dart';
-import 'package:animeshin/repository/animevost/animevost_repository.dart';
+import 'package:animeshin/repository/aniv/aniv_repository.dart';
 import 'package:animeshin/repository/get_valid_url.dart';
 import 'package:animeshin/repository/sameband/sameband_repository.dart';
 import 'package:flutter/foundation.dart';
@@ -98,7 +98,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   // Repo / persistence
   final _anilibriaRepo = AnilibriaRepository();
-  final _animevostRepo = AnimeVostRepository();
+  final _anivRepo = AniVRepository();
   final _samebandRepo = SameBandRepository();
   final _playback = const PlaybackStore();
 
@@ -1359,13 +1359,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           rel = mapAniLibriaRelease(raw);
           break;
         }
-        case AnimeVoice.animevost: {
-          final raw = await _animevostRepo.fetchPlaylist(widget.args.id);
+        case AnimeVoice.aniv: {
+          final raw = await _anivRepo.fetchPlaylist(widget.args.id);
           if (raw.isEmpty) {
             _log('fetch returned null, aborting');
             return;
           }
-          rel = mapAnimeVostRelease(raw, widget.args.id, '');
+          rel = mapAniVRelease(raw, widget.args.id, '');
           break;
         }
         case AnimeVoice.sameband: {
@@ -1589,14 +1589,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           child: Icon(Icons.settings),
         ),
       ),
-      // Support button that opens AniLiberty support page
-      IconButton(
-        icon: const Icon(Ionicons.heart),
-        tooltip: 'Support voiceover authors',
-        onPressed: () async {
-          await openSupport(widget.animeVoice, context);
-        },
-      ),
+      // Support button that opens dubs source support page
+      if (widget.animeVoice != AnimeVoice.aniv)
+        IconButton(
+          icon: const Icon(Ionicons.heart),
+          tooltip: 'Support voiceover authors',
+          onPressed: () async {
+            await openSupport(widget.animeVoice, context);
+          },
+        ),
       const SizedBox(width: 2), // Add a small right inset so actions aren't flush to the edge
     ];
 
@@ -1921,9 +1922,8 @@ Future<void> openSupport(AnimeVoice voice, BuildContext context) async {
       'https://anilibria.top/support',
       'https://aniliberty.top/support',
     ],
-    AnimeVoice.animevost => const [
-      'https://animevost.org/pompsh-animevost.html',
-      'https://v9.vost.pw/pompsh-animevost.html',
+    AnimeVoice.aniv => const [
+      '',
     ],
     AnimeVoice.sameband => const [
       'https://boosty.to/aphoenixvoice',
