@@ -24,9 +24,7 @@ AnimeShin integrates with the following services to provide content and features
   Site: [anilibria.top](https://anilibria.top/) *(no formal privacy policy publicly available)*
 * **Shikimori** — Used to fetch Russian titles and additional metadata.  
   Policy: [Shikimori Privacy Policy](https://shikimori.one/terms)
-* **AnimeVost** — Used to fetch playlists and enable playback of AnimeVost-dubbed episodes.  
-  Site: [animevost.org](https://animevost.org/) *(privacy policy availability not verified)*
-* **Sameband** — Used to fetch and parse **M3U8 playlists** to enable episode playback.  
+* **Sameband** — Used to fetch playlists and enable playback of SameBand-dubbed episodes.  
   Site: [sameband.studio](https://sameband.studio/polzovatelskoe-soglashenie.html)
 
 > **Note:** When you play video from any third-party source (including Sameband), media segments are streamed **directly from that source’s servers**. The App does **not** proxy, log, or re-route your traffic through its own servers. (In some builds the App may use a **local, on-device** HLS helper strictly to fix headers/compatibility; it does not transmit data to any server controlled by the App.)

@@ -42,7 +42,7 @@
   Watch AniLiberty-dubbed episodes directly from the app.
 
 - **▶️ Other Watch Sources**  
-  If there is no dubbing from AniLiberty, watch episodes dubbed by AnimeVost and SameBand.
+  If there is no dubbing from AniLiberty, watch episodes dubbed by SameBand or other sources.
   (But the automatic update of anime progress will not work)
 
 - **📁 Export Anime/Manga list**
@@ -156,16 +156,14 @@ flutter build windows
 ## 🙏 Credits
 
 Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https://github.com/lotusprey/otraku) — the inspiration for AnimeShin.  
-Thanks to [AniLiberty](https://anilibria.top/) for providing voice-over releases,  
-[AnimeVost](https://animevost.org/) and [Sameband](https://sameband.studio/) for voice-over and playlists,  
+Thanks to [AniLiberty](https://anilibria.top/) and [Sameband](https://sameband.studio/) for providing voice-over releases,
 and [Shikimori](https://shikimori.one/) for Russian titles & metadata.
-
 
 ## 🔒 Privacy & Policy
 
 AnimeShin respects your privacy. The app **does not collect personal data**, and all settings are stored locally on your device.  
 
-For details on data usage, third-party services (AniList, AniLiberty, Shikimori), and security measures, please read the full [Privacy Policy](PRIVACY_POLICY.md).
+For details on data usage, third-party services (AniList, AniLiberty, Shikimori, SameBand), and security measures, please read the full [Privacy Policy](PRIVACY_POLICY.md).
 
 ---
 
