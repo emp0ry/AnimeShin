@@ -22,32 +22,45 @@ import 'package:animeshin/widget/text_rail.dart';
 import 'package:webview_flutter/webview_flutter.dart'; // WebView for OAuth (no deep-link dependency)
 
 /// ------------------------
-/// Desktop helper for implicit flow (unchanged)
+/// Desktop helper for implicit flow
 /// ------------------------
 Future<String?> listenForToken({int port = 28371}) async {
-  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+  // Bind IPv6 loopback and allow IPv4, so both ::1 and 127.0.0.1 work.
+  HttpServer server;
+  try {
+    server = await HttpServer.bind(
+      InternetAddress.loopbackIPv6,
+      port,
+      v6Only: false,
+    );
+  } catch (e) {
+    // Log bind errors (port in use, firewall denied, etc.)
+    print('[OAuth] HttpServer.bind failed on $port: $e');
+    rethrow;
+  }
+
   final completer = Completer<String?>();
 
   server.listen((HttpRequest request) async {
     if (request.uri.path == '/') {
+      // Serve a tiny page that reads the fragment & posts it back to /token.
+      // NOTE: relative fetch keeps the same origin (works with ::1 or 127.0.0.1).
       final htmlContent = '''
-        <!DOCTYPE html>
-        <html>
-        <body>
-        <script>
-          // Parse fragment and POST it back to localhost server
-          const params = new URLSearchParams(window.location.hash.slice(1));
-          const token = params.get('access_token');
-          if (token) {
-            fetch('http://localhost:$port/token?access_token=' + encodeURIComponent(token))
-              .then(() => { document.body.innerHTML = "Success! You can close this window."; })
-              .catch(() => { document.body.innerHTML = "Error sending token."; });
-          } else {
-            document.body.innerHTML = "Error: No token found.";
-          }
-        </script>
-        </body>
-        </html>
+<!DOCTYPE html>
+<html><body>
+<script>
+  // Read access_token from location.hash (#...)
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const token = params.get('access_token');
+  if (token) {
+    fetch('/token?access_token=' + encodeURIComponent(token))
+      .then(() => { document.body.innerHTML = "Success! You can close this window."; })
+      .catch(() => { document.body.innerHTML = "Error sending token."; });
+  } else {
+    document.body.innerHTML = "Error: No token found.";
+  }
+</script>
+</body></html>
       ''';
       request.response
         ..headers.contentType = ContentType.html
@@ -56,15 +69,23 @@ Future<String?> listenForToken({int port = 28371}) async {
       return;
     }
 
-    final token = request.uri.queryParameters['access_token'];
-    await request.response.close();
-    if (!completer.isCompleted && token != null) {
-      completer.complete(token);
-      await server.close();
+    if (request.uri.path == '/token') {
+      final token = request.uri.queryParameters['access_token'];
+      await request.response.close();
+      if (!completer.isCompleted && token != null) {
+        completer.complete(token);
+        await server.close(force: true);
+      }
+      return;
     }
+
+    // Optional: 404 for anything else
+    request.response.statusCode = 404;
+    await request.response.close();
   });
 
-  return completer.future;
+  // Optional timeout to avoid hanging forever
+  return completer.future.timeout(const Duration(minutes: 5), onTimeout: () => null);
 }
 
 /// Fetch AniList Viewer profile with the received access token
@@ -535,17 +556,38 @@ class __AccountPickerState extends State<_AccountPicker> {
       }
       return;
     } else {
+      final futureToken = listenForToken(port: 28371); // start listener FIRST
+
       ConfirmationDialog.show(
         context,
         title: 'Add an Account',
-        content:
-            'To add more accounts, make sure you are logged out of the previous ones in the browser.',
+        content: 'To add more accounts, make sure you are logged out of the previous ones in the browser.',
         primaryAction: 'Continue',
         secondaryAction: 'Cancel',
-        onConfirm: () {
-          if (mounted) {
-            SnackBarExtension.launch(context, _loginLinkDesktop);
+        onConfirm: () async {
+          if (!mounted) return;
+          await SnackBarExtension.launch(context, _loginLinkDesktop);
+          final accessToken = await futureToken;
+          if (accessToken == null) {
+            if (context.mounted) SnackBarExtension.show(context, 'Login canceled or failed');
+            return;
           }
+          final profile = await fetchAniListProfile(accessToken);
+          if (profile == null) {
+            if (context.mounted) SnackBarExtension.show(context, 'Failed to load profile');
+            return;
+          }
+          final now = DateTime.now();
+          final expiration = now.add(const Duration(days: 365));
+          final account = Account(
+            id: profile['id'],
+            name: profile['name'],
+            avatarUrl: profile['avatar']['large'],
+            expiration: expiration,
+            accessToken: accessToken,
+          );
+          await ref.read(persistenceProvider.notifier).addAccount(account);
+          if (context.mounted) Navigator.pop(context);
         },
       );
     }

@@ -3,7 +3,6 @@ import 'package:animeshin/feature/watch/watch_types.dart';
 import 'package:animeshin/repository/anilibria/anilibria_repository.dart';
 import 'package:animeshin/repository/animevost/animevost_repository.dart';
 import 'package:animeshin/repository/sameband/sameband_repository.dart';
-import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -290,24 +289,24 @@ class __TileContentState extends State<_TileContent> {
       textRailItems[key] = false;
     }
 
-    if (widget.item.nextEpisode != null &&
-        widget.item.nextEpisode! - 1 > widget.item.progress) {
+    if (widget.item.nextEpisode != null && widget.item.nextEpisode! - 1 > widget.item.progress) {
+      final diff = widget.item.nextEpisode! - 1 - widget.item.progress;
       String key;
 
-      if (widget.item.anilibriaEpDubState != null && widget.item.anilibriaEpDubState!) {
-        if (widget.item.lastAniLibriaEpisode != null && widget.item.lastAniLibriaEpisode! > widget.item.progress) {
-          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✔️AL)';
-        } else if (widget.item.lastAniLibriaEpisode != null) {
-          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind (✖️AL)';
+      if (widget.item.anilibriaEpDubState == true) {
+        if (widget.item.lastAniLibriaEpisode != null && widget.item.anilibriaId != 0) {
+          if (widget.item.lastAniLibriaEpisode! > widget.item.progress) {
+            key = '$diff ep behind (✔️AL)';
+          } else {
+            key = '$diff ep behind (✖️AL)';
+          }
+        } else {
+          key = '$diff ep behind';
         }
-        else {
-          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
-        }
+      } else {
+        key = '$diff ep behind';
       }
-      else {
-          key = '${widget.item.nextEpisode! - 1 - widget.item.progress} ep behind';
-      }
-      
+
       textRailItems[key] = true;
     }
 

@@ -82,6 +82,9 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 @main
 @objc class AppDelegate: FlutterAppDelegate, AVPlayerViewControllerDelegate {
 
+  // Keep a weak reference to the active native VC (optional, handy for PiP control)
+  weak var activePlayerVC: ReportingAVPlayerViewController?
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -139,13 +142,16 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       vc.channel = channel
       vc.delegate = self
 
+      // Keep reference (optional)
+      self?.activePlayerVC = vc
+
       // Enable PiP
       vc.allowsPictureInPicturePlayback = true
       if #available(iOS 14.0, *) {
         vc.canStartPictureInPictureAutomaticallyFromInline = true
       }
 
-      // Optional: auto fullscreen begin/end (fine for a modal VC)
+      // Auto fullscreen begin/end (fine for a modal VC)
       vc.entersFullScreenWhenPlaybackBegins = true
       vc.exitsFullScreenWhenPlaybackEnds = true
 
@@ -196,8 +202,6 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       }
 
       // User scrubbing auto-resume:
-      // If the item time jumps and we did NOT initiate the seek,
-      // and playback was active recently, resume at desiredRate.
       vc.timeJumpObserver = NotificationCenter.default.addObserver(
         forName: .AVPlayerItemTimeJumped,
         object: item,
@@ -225,20 +229,33 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       }
 
       // Notify Flutter when playback completes.
-      // If PiP is active, do not dismiss VC here — let the system handle the UI.
+      // If PiP is active, stop PiP to bring the Flutter UI back to foreground.
       vc.endObserver = NotificationCenter.default.addObserver(
         forName: .AVPlayerItemDidPlayToEndTime,
         object: item,
         queue: .main
-      ) { [weak vc] _ in
+      ) { [weak self, weak vc] _ in
         guard let vc = vc else { return }
+
+        // Send final position & duration to Flutter
+        let pos = CMTimeGetSeconds(vc.player?.currentTime() ?? .zero)
+        let dur = CMTimeGetSeconds(vc.player?.currentItem?.duration ?? .zero)
+        vc.channel?.invokeMethod("ios_player_completed", arguments: [
+          "position": pos,
+          "duration": dur
+        ])
+
+        // If in PiP — stop PiP; otherwise dismiss VC.
         if vc.pipActive {
-          channel.invokeMethod("ios_player_completed", arguments: nil)
+          if vc.responds(to: #selector(AVPlayerViewController.stopPictureInPicture)) {
+            vc.stopPictureInPicture()
+          }
         } else {
-          vc.dismiss(animated: true, completion: {
-            channel.invokeMethod("ios_player_completed", arguments: nil)
-          })
+          vc.dismiss(animated: true, completion: nil)
         }
+
+        // Drop reference to active VC
+        self?.activePlayerVC = nil
       }
 
       // Present native player
@@ -307,20 +324,18 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
   func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
     (playerViewController as? ReportingAVPlayerViewController)?.pipActive = false
+    // Clear active VC reference after PiP ends
+    if let vc = playerViewController as? ReportingAVPlayerViewController, activePlayerVC === vc {
+      activePlayerVC = nil
+    }
   }
 
-  /// Restore the player UI when PiP stops (so the user lands back in the player).
+  /// Do NOT re-present the native player when PiP stops — go back to Flutter UI.
   func playerViewController(
     _ playerViewController: AVPlayerViewController,
     restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void
   ) {
-    if let root = self.window?.rootViewController,
-       playerViewController.presentingViewController == nil {
-      root.present(playerViewController, animated: true) {
-        completionHandler(true)
-      }
-    } else {
-      completionHandler(true)
-    }
+    // Just tell the system that UI is ready; Flutter UI is already visible.
+    completionHandler(true)
   }
 }

@@ -676,53 +676,89 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   void _maybeAttachIOSCallbacks() {
     if (!_isIOS) return;
+
     _iosNativePlayer.setMethodCallHandler((call) async {
       if (!mounted) return;
+
       switch (call.method) {
         case 'ios_player_dismissed': {
+          // Restore Flutter player after native VC is dismissed (non-PiP).
           final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
           final posSec = (map['position'] as num?)?.toDouble() ?? 0.0;
           final rate = (map['rate'] as num?)?.toDouble() ?? _speed;
           final wasPlaying = (map['wasPlaying'] as bool?) ?? true;
 
-          // Target position where native VC was dismissed.
           final target = Duration(milliseconds: (posSec * 1000).round());
-
-          // Keep local speed in sync with the native VC.
           _speed = rate;
 
-          // If user exited literally at the end, persist local playback clear.
+          // If user left right at the end, clear local progress and bump AniList.
           if (_player.state.duration > Duration.zero &&
               target >= _player.state.duration - const Duration(seconds: 1)) {
-            unawaited(_saveProgress(clearIfCompleted: true));
+            unawaited(_playback.clearEpisode(
+              widget.animeVoice,
+              widget.args.id,
+              widget.args.ordinal,
+            ));
 
-            // Also bump AniList progress if we were exactly catching up this episode.
             if (widget.item != null) {
               final ord = widget.args.ordinal;
-              final current = _progressBaselineForOrdinal(ord, _knownProgress ?? widget.item?.progress);
-
+              final current = _progressBaselineForOrdinal(
+                ord,
+                _knownProgress ?? widget.item?.progress,
+              );
               if (ord > current) {
-                // Arm local guard to avoid double increment on next ticks.
                 _autoIncDoneForThisEp = true;
                 _autoIncGuardForOrdinal = ord;
-
                 unawaited(_persistAniListProgress(ord, setAsCurrent: false));
               }
             }
           }
 
-          // Robust restore (wait → double seek → rate → resume).
           await _restoreFromIOSDismiss(
             target: target,
             rate: rate,
             wasPlaying: wasPlaying,
           );
-
-          _safeSetState(() {}); // refresh any UI that shows speed/position
+          _safeSetState(() {});
           break;
         }
-        case 'ios_player_completed':
-          await _saveProgress(clearIfCompleted: true);
+
+        case 'ios_player_completed': {
+          // Completion from native iOS player (including PiP). Do NOT read media_kit state here.
+
+          // Optional telemetry (final position/duration from native VC).
+          final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
+          final _ = (map['position'] as num?)?.toDouble();
+          final __ = (map['duration'] as num?)?.toDouble();
+
+          // 1) Clear local persisted playback immediately for this episode.
+          await _playback.clearEpisode(
+            widget.animeVoice,
+            widget.args.id,
+            widget.args.ordinal,
+          );
+
+          // 2) Bump AniList progress if current ordinal is ahead of stored value.
+          if (widget.item != null) {
+            final ord = widget.args.ordinal;
+            final current = _progressBaselineForOrdinal(
+              ord,
+              _knownProgress ?? widget.item?.progress,
+            );
+
+            if (ord > current) {
+              final err = await _persistAniListProgress(ord, setAsCurrent: false);
+              if (err == null) {
+                _knownProgress = ord;
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to update AniList progress: $err')),
+                );
+              }
+            }
+          }
+
+          // 3) Continue flow (auto-next or banner).
           if (_autoNextEpisode) {
             _hideCursorInstant();
             unawaited(_openNextEpisode());
@@ -730,6 +766,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             _showBanner('Completed');
           }
           break;
+        }
 
         default:
           break;
