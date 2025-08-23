@@ -362,6 +362,31 @@ class __TileContentState extends State<_TileContent> {
         }
       }
 
+      Future<List<Map<String, dynamic>>> searchSameBand() async {
+        try {
+          final sameBandRepo = SameBandRepository();
+
+          List<Map<String, dynamic>> items = [];
+
+          if (widget.item.titleRomaji != null) {
+            items = await sameBandRepo.searchByTitle(widget.item.titleRomaji!);
+          }
+          if (items.isEmpty && widget.item.titleRussian != null) {
+            items = await sameBandRepo.searchByTitle(widget.item.titleRussian!);
+          }
+          if (items.isEmpty && widget.item.titleEnglish != null) {
+            items = await sameBandRepo.searchByTitle(widget.item.titleEnglish!);
+          }
+          if (items.isEmpty) return const [];
+
+          debugPrint('SameBand: ${items.toString()}');
+          return items;
+        } catch (e, st) {
+          debugPrint('SameBand Search failed: $e\n$st');
+          return const [];
+        }
+      }
+
       Future<List<Map<String, dynamic>>> searchAniV() async {
         try {
           final aniVRepo = AniVRepository();
@@ -390,31 +415,6 @@ class __TileContentState extends State<_TileContent> {
         }
       }
 
-      Future<List<Map<String, dynamic>>> searchSameBand() async {
-        try {
-          final sameBandRepo = SameBandRepository();
-
-          List<Map<String, dynamic>> items = [];
-
-          if (widget.item.titleRomaji != null) {
-            items = await sameBandRepo.searchByTitle(widget.item.titleRomaji!);
-          }
-          if (items.isEmpty && widget.item.titleRussian != null) {
-            items = await sameBandRepo.searchByTitle(widget.item.titleRussian!);
-          }
-          if (items.isEmpty && widget.item.titleEnglish != null) {
-            items = await sameBandRepo.searchByTitle(widget.item.titleEnglish!);
-          }
-          if (items.isEmpty) return const [];
-
-          debugPrint('SameBand: ${items.toString()}');
-          return items;
-        } catch (e, st) {
-          debugPrint('SameBand Search failed: $e\n$st');
-          return const [];
-        }
-      }
-
       // --- Capture contexts & geometry BEFORE any awaits ---
       final ctx = context; // State.context
       final overlay = Overlay.of(ctx);
@@ -436,15 +436,15 @@ class __TileContentState extends State<_TileContent> {
       // Do both at once
       final results = await Future.wait([
         searchAniLiberty().catchError((_) => <Map<String, dynamic>>[]),
-        searchAniV().catchError((_) => <Map<String, dynamic>>[]),
         searchSameBand().catchError((_) => <Map<String, dynamic>>[]),
+        searchAniV().catchError((_) => <Map<String, dynamic>>[]),
       ]);
 
       // shikimoriRepo.dispose();
 
       final aniLibertyList = results[0];
-      final aniVList = results[1];
-      final sameBandList = results[2];
+      final sameBandList = results[1];
+      final aniVList = results[2];
 
       if (!mounted || !ctx.mounted) return;
 
@@ -463,18 +463,6 @@ class __TileContentState extends State<_TileContent> {
           ),
         ),
         PopupMenuItem<String>(
-          value: 'aniv',
-          child: Row(
-            children: [
-              const Icon(Ionicons.film_outline, size: 16),
-              const SizedBox(width: 8),
-              const Text('AVost'),
-              const Spacer(),
-              Text('(${aniVList.length})'),
-            ],
-          ),
-        ),
-        PopupMenuItem<String>(
           value: 'sameband',
           child: Row(
             children: [
@@ -483,6 +471,18 @@ class __TileContentState extends State<_TileContent> {
               const Text('SameBand'),
               const Spacer(),
               Text('(${sameBandList.length})'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'aniv',
+          child: Row(
+            children: [
+              const Icon(Ionicons.film_outline, size: 16),
+              const SizedBox(width: 8),
+              const Text('AVost'),
+              const Spacer(),
+              Text('(${aniVList.length})'),
             ],
           ),
         ),
@@ -504,13 +504,13 @@ class __TileContentState extends State<_TileContent> {
           chosenList = aniLibertyList;
           sourceKey = 'aniliberty';
           break;
-        case 'aniv':
-          chosenList = aniVList;
-          sourceKey = 'aniv';
-          break;
         case 'sameband':
           chosenList = sameBandList;
           sourceKey = 'sameband';
+          break;
+        case 'aniv':
+          chosenList = aniVList;
+          sourceKey = 'aniv';
           break;
         default:
           return;
@@ -576,22 +576,6 @@ class __TileContentState extends State<_TileContent> {
           ),
         );
       }
-      else if (selSource == 'aniv') {
-        final id = picked['id'] as int? ?? 0;
-        if (id == 0) return;
-        Navigator.of(ctx).push(
-          MaterialPageRoute(
-            builder: (_) => WatchPage(
-              id: id,
-              url: '',
-              item: widget.item,
-              sync: false,
-              animeVoice: AnimeVoice.aniv,
-              startWithProxy: false,
-            ),
-          ),
-        );
-      }
       else if (selSource == 'sameband') {
         String url = picked['url'] as String? ?? '';
         if (url == '') return;
@@ -604,6 +588,22 @@ class __TileContentState extends State<_TileContent> {
               sync: false,
               animeVoice: AnimeVoice.sameband,
               startWithProxy: true,
+            ),
+          ),
+        );
+      }
+      else if (selSource == 'aniv') {
+        final id = picked['id'] as int? ?? 0;
+        if (id == 0) return;
+        Navigator.of(ctx).push(
+          MaterialPageRoute(
+            builder: (_) => WatchPage(
+              id: id,
+              url: '',
+              item: widget.item,
+              sync: false,
+              animeVoice: AnimeVoice.aniv,
+              startWithProxy: false,
             ),
           ),
         );

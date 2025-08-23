@@ -504,6 +504,52 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
   }
 
+  // Call this right after _player = Player(...);
+  Future<void> _hardenMpvForHls() async {
+    // --- Core cache knobs: make seeks & jitter resilient ---
+    unawaited(_setMpv('cache', 'yes'));                       // enable demuxer cache
+    unawaited(_setMpv('cache-secs', '30'));                   // ~30s target cache
+    unawaited(_setMpv('demuxer-seekable-cache', 'yes'));      // allow seeks from cache
+    unawaited(_setMpv('demuxer-readahead-secs', '15'));       // read ahead more data
+    unawaited(_setMpv('demuxer-max-back-bytes', '${64 * 1024 * 1024}')); // 64MB back buffer
+
+    // --- Avoid aggressive frame dropping on micro stalls ---
+    unawaited(_setMpv('hr-seek-framedrop', 'no'));            // keep frames on precise seeks
+    unawaited(_setMpv('framedrop', 'no'));                    // prefer not dropping frames
+
+    // --- Make A/V sync follow the display clock (VLC-like smoothness) ---
+    unawaited(_setMpv('video-sync', 'display-resample'));     // reduce "chase" & teleports
+    // Optional: if you see micro-judder, you can also try interpolation
+    // unawaited(_setMpv('interpolation', 'yes'));
+    // unawaited(_setMpv('tscale', 'oversample'));
+
+    // --- Hardware decoding: safer choice across devices ---
+    unawaited(_setMpv('hwdec', 'auto-safe'));                 // avoid brittle decoders
+
+    // --- Stabilize timestamp probing for HLS/TS (helps missing PTS) ---
+    unawaited(_setMpv('demuxer-lavf-analyzeduration', '10')); // seconds
+    unawaited(_setMpv('demuxer-lavf-probesize', '${50 * 1024 * 1024}'));
+    // Generate missing PTS if upstream is wobbly.
+    unawaited(_setMpv('demuxer-lavf-o', 'fflags=+genpts'));
+
+    // --- HTTP/HLS transport safety (you already set some; keep them consolidated) ---
+    unawaited(_setMpv(
+      'stream-lavf-o',
+      [
+        // Keep persistent connections to reduce mid-segment stalls
+        'http_persistent=1',
+        'reconnect=1',
+        'reconnect_streamed=1',
+        'reconnect_on_http_error=4xx,5xx',
+        // Some CDNs play nicer when we avoid multi-range; mpv handles ranges anyway
+        // 'multiple_requests=0', // optional; only if you see glide-skips
+      ].join(':'),
+    ));
+
+    // --- Optional: tame decoder threading if you see sporadic drops on low cores ---
+    // unawaited(_setMpv('vd-lavc-threads', '2'));
+  }
+
   @override
   void initState() {
     super.initState();
@@ -518,18 +564,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         title: 'AnimeShin',
         logLevel: MPVLogLevel.error, // keep only error-level from mpv core
         bufferSize: _isWindows ? 128 * 1024 * 1024 : 64 * 1024 * 1024,
-        async: _isWindows ? false : true,
+        async: true,
       ),
     );
     _video = VideoController(_player);
 
-    // Safe mpv tweaks (HLS host-switch & log filtering).
-    unawaited(_setMpv(
-      'stream-lavf-o',
-      // Keep-alive off + safe reconnects. Avoid multiple_requests here.
-      'http_persistent=0:reconnect=1:reconnect_streamed=1:reconnect_on_http_error=4xx,5xx',
-    ));
-    unawaited(_setMpv('msg-level', 'ffmpeg=error'));
+    // // Safe mpv tweaks (HLS host-switch & log filtering).
+    // unawaited(_setMpv(
+    //   'stream-lavf-o',
+    //   // Keep-alive off + safe reconnects. Avoid multiple_requests here.
+    //   'http_persistent=0:reconnect=1:reconnect_streamed=1:reconnect_on_http_error=4xx,5xx',
+    // ));
+    // unawaited(_setMpv('msg-level', 'ffmpeg=error'));
+    _hardenMpvForHls();
 
     // Preferences subscription — no awaits inside the callback.
     _prefsSub = ref.listenManual<PlayerPrefs>(

@@ -35,7 +35,7 @@ Future<String?> listenForToken({int port = 28371}) async {
     );
   } catch (e) {
     // Log bind errors (port in use, firewall denied, etc.)
-    print('[OAuth] HttpServer.bind failed on $port: $e');
+    debugPrint('[OAuth] HttpServer.bind failed on $port: $e');
     rethrow;
   }
 

@@ -53,14 +53,14 @@ class PlayerPrefs {
 
 class PlayerPrefsNotifier extends Notifier<PlayerPrefs> {
   // legacy keys (kept if you already had some of them earlier)
-  static const _kSpeed = 'player.speed.v3';
-  static const _kSeekFwd = 'player.seek_fwd.v3';
-  static const _kSeekBack = 'player.seek_back.v3';
-  static const _kPreferredQuality = 'player.quality.preferred.v3'; // "1080p"|"720p"|"480p"
-  static const _kAutoSkipOpening = 'player.auto.skip.opening.v3';
-  static const _kAutoSkipEnding = 'player.auto.skip.ending.v3';
-  static const _kAutoNextEpisode = 'player.auto.next.episode.v3';
-  static const _kDesktopVolume = 'player.desktop.volume.v3';
+  static const _kSpeed = 'player.speed.v4';
+  static const _kSeekFwd = 'player.seek_fwd.v4';
+  static const _kSeekBack = 'player.seek_back.v4';
+  static const _kPreferredQuality = 'player.quality.preferred.v4'; // "1080p"|"720p"|"480p"
+  static const _kAutoSkipOpening = 'player.auto.skip.opening.v4';
+  static const _kAutoSkipEnding = 'player.auto.skip.ending.v4';
+  static const _kAutoNextEpisode = 'player.auto.next.episode.v4';
+  static const _kDesktopVolume = 'player.desktop.volume.v4';
 
   late SharedPreferences _sp;
 
