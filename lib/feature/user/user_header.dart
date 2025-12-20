@@ -27,13 +27,10 @@ import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 /// ------------------------
 class _OAuthCallback {
   final String? accessToken;
-  final String? code;
 
-  const _OAuthCallback._({this.accessToken, this.code});
+  const _OAuthCallback._({this.accessToken});
 
   const _OAuthCallback.token(String token) : this._(accessToken: token);
-
-  const _OAuthCallback.authCode(String code) : this._(code: code);
 }
 
 class _OAuthListener {
@@ -78,25 +75,6 @@ Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
 
   server.listen((HttpRequest request) async {
     if (request.uri.path == '/') {
-      // Authorization Code flow callback (query parameter)
-      final code = request.uri.queryParameters['code'];
-      if (code != null && code.isNotEmpty) {
-        request.response
-          ..headers.contentType = ContentType.html
-          ..write('Success! You can close this window.');
-        await request.response.close();
-
-        if (!completer.isCompleted) {
-          completer.complete(_OAuthCallback.authCode(code));
-          try {
-            await server.close(force: true);
-          } catch (_) {
-            // Best-effort.
-          }
-        }
-        return;
-      }
-
       // Serve a tiny page that reads the fragment & posts it back to /token.
       // NOTE: relative fetch keeps the same origin (works with ::1 or 127.0.0.1).
       final htmlContent = '''
@@ -152,16 +130,6 @@ Future<String?> listenForToken({int port = 28371}) async {
     return cb?.accessToken;
   } finally {
     // Ensure port is freed even if caller abandons the future.
-    await listener.cancel();
-  }
-}
-
-Future<String?> listenForAuthCode({int port = 28371}) async {
-  final listener = await _startOAuthListener(port: port);
-  try {
-    final cb = await listener.wait();
-    return cb?.code;
-  } finally {
     await listener.cancel();
   }
 }
