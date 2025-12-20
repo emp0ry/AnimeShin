@@ -201,6 +201,39 @@ class AuthWebViewPage extends StatefulWidget {
 class _AuthWebViewPageState extends State<AuthWebViewPage> {
   late final WebViewController _controller;
   bool _loading = true;
+  bool _completed = false;
+
+  void _maybeCompleteFromUri(Uri uri, {required String source}) {
+    if (_completed) return;
+
+    // Accept the expected callback scheme/path. On macOS the host component
+    // may be empty or differ in how it's reported by the WebView.
+    final isCallbackScheme = uri.scheme == widget.redirectScheme;
+    final isCallbackPath = uri.path == widget.redirectPath ||
+        uri.path.startsWith('${widget.redirectPath}/');
+    final isCallback = isCallbackScheme && isCallbackPath;
+
+    // Fallback: sometimes WebView reports the final URL differently, but still
+    // includes the token in the fragment/query.
+    final params = _parseImplicitParams(uri);
+    final token = (params['access_token'] ?? '').trim();
+    final expires = int.tryParse(params['expires_in'] ?? '') ?? 31536000;
+
+    if (kDebugMode) {
+      final hasToken = token.isNotEmpty;
+      debugPrint(
+        '[OAuth][$source] url=${uri.scheme}://${uri.host}${uri.path} '
+        'isCallback=$isCallback hasToken=$hasToken',
+      );
+    }
+
+    if (!isCallback && token.isEmpty) return;
+
+    _completed = true;
+    Navigator.of(context).pop(
+      token.isNotEmpty ? OAuthResult(accessToken: token, expiresIn: expires) : null,
+    );
+  }
 
   @override
   void initState() {
@@ -208,29 +241,71 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'OAuth',
+        onMessageReceived: (message) {
+          if (_completed) return;
+          // Expect a query-string-like payload e.g. "access_token=...&expires_in=..."
+          final raw = message.message.trim();
+          if (raw.isEmpty) return;
+          Map<String, String> params;
+          try {
+            params = Uri.splitQueryString(raw);
+          } catch (_) {
+            params = {};
+          }
+          final token = (params['access_token'] ?? '').trim();
+          final expires = int.tryParse(params['expires_in'] ?? '') ?? 31536000;
+          if (kDebugMode) {
+            debugPrint('[OAuth][js] hasToken=${token.isNotEmpty}');
+          }
+          if (token.isEmpty) return;
+          _completed = true;
+          Navigator.of(context).pop(
+            OAuthResult(accessToken: token, expiresIn: expires),
+          );
+        },
+      )
       // ..setBackgroundColor(Colors.transparent)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() => _loading = true),
-          onPageFinished: (_) => setState(() => _loading = false),
+          onPageStarted: (_) {
+            if (mounted) setState(() => _loading = true);
+          },
+          onPageFinished: (_) async {
+            if (mounted) setState(() => _loading = false);
+            // JS fallback: if the current page has the token in location.hash,
+            // post it back to Flutter.
+            try {
+              await _controller.runJavaScript('''
+(function(){
+  try {
+    var raw = (window.location.hash || '').replace(/^#/, '');
+    if (raw && raw.indexOf('access_token=') !== -1) {
+      OAuth.postMessage(raw);
+    }
+  } catch (e) {}
+})();
+              ''');
+            } catch (_) {
+              // Ignore: some platforms/pages may not allow JS execution.
+            }
+          },
+          onUrlChange: (change) {
+            final url = change.url;
+            if (url == null) return;
+            _maybeCompleteFromUri(Uri.parse(url), source: 'urlChange');
+          },
           onNavigationRequest: (request) {
             final uri = Uri.parse(request.url);
+            _maybeCompleteFromUri(uri, source: 'navRequest');
 
-            final isCallback = uri.scheme == widget.redirectScheme &&
-                uri.host == widget.redirectHost &&
-                uri.path == widget.redirectPath;
-
-            if (isCallback) {
-              final params = _parseImplicitParams(uri);
-              final token = params['access_token'];
-              final expires =
-                  int.tryParse(params['expires_in'] ?? '') ?? 31536000;
-
-              Navigator.of(context).pop(
-                (token != null && token.isNotEmpty)
-                    ? OAuthResult(accessToken: token, expiresIn: expires)
-                    : null,
-              );
+            // If it's the callback scheme, prevent navigation so WebView doesn't
+            // try (and fail) to open a custom scheme.
+            final isCallbackScheme = uri.scheme == widget.redirectScheme;
+            final isCallbackPath = uri.path == widget.redirectPath ||
+                uri.path.startsWith('${widget.redirectPath}/');
+            if (isCallbackScheme && isCallbackPath) {
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
