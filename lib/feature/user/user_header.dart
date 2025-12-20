@@ -570,6 +570,11 @@ class __AccountPickerState extends State<_AccountPicker> {
   static const _mobileClientId = '29017';
   static const _desktopClientId = '29106';
 
+  // AniList supports an "Auth PIN" redirect that shows/returns the token on a
+  // normal https page. This is significantly more reliable on macOS WKWebView
+  // than custom-scheme redirects (which often drop URL fragments).
+  static const _authPinRedirect = 'https://anilist.co/api/v2/oauth/pin';
+
   // IMPORTANT:
   // Your registered mobile redirect URI with AniList is: app://animeshin/auth
   // We will supply it explicitly and intercept it inside the WebView.
@@ -580,11 +585,15 @@ class __AccountPickerState extends State<_AccountPicker> {
   /// Builds the authorize URL for implicit flow.
   static String _buildAuthUrl({
     required String clientId,
+    String? redirectUri,
   }) {
     final qp = <String, String>{
       'client_id': clientId,
       'response_type': 'token', // implicit flow
     };
+    if (redirectUri != null && redirectUri.isNotEmpty) {
+      qp['redirect_uri'] = redirectUri;
+    }
     return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
         .replace(queryParameters: qp)
         .toString();
@@ -597,6 +606,11 @@ class __AccountPickerState extends State<_AccountPicker> {
 
   static String get _loginLinkDesktop =>
       _buildAuthUrl(clientId: _desktopClientId);
+
+    static String get _loginLinkMacOS => _buildAuthUrl(
+      clientId: _desktopClientId,
+      redirectUri: _authPinRedirect,
+      );
 
   static const _imageSize = 55.0;
 
@@ -736,11 +750,9 @@ class __AccountPickerState extends State<_AccountPicker> {
 
     // --- Mobile path: use embedded WebView and intercept callback ---
     if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      // On macOS, WKWebView often does not reliably expose URL fragments on
-      // custom-scheme redirects. Using the desktop client ID increases the
-      // chance the redirect is web-based (e.g., Auth PIN), which we can parse
-      // directly from the page content without debug logs.
-      final authUrl = Platform.isMacOS ? _loginLinkDesktop : _loginLinkMobile;
+      // macOS: force Auth PIN redirect so token is delivered on an https page
+      // (capture works in release via URL hash / DOM extraction).
+      final authUrl = Platform.isMacOS ? _loginLinkMacOS : _loginLinkMobile;
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
           builder: (_) => AuthWebViewPage(
