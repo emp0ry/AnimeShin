@@ -1,0 +1,129 @@
+# =====================
+# Misc
+# =====================
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+.history
+History/
+.svn/
+migrate_working_dir/
+
+.venv/
+
+# =====================
+# IDE/Editor
+# =====================
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/*
+!.vscode/launch.json
+
+# =====================
+# Flutter/Dart/Pub
+# =====================
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub/
+.pub-cache/
+build/
+buildlog/
+coverage/
+**/doc/api/
+lib/generated_plugin_registrant.dart  # web registrant
+
+# =====================
+# Android
+# =====================
+android/.gradle/
+**/android/captures/
+android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+# Keystores & props
+*.jks
+*.keystore
+android/key.properties
+
+# =====================
+# iOS (Xcode / CocoaPods)
+# =====================
+ios/Flutter/.last_build_id
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/flutter_export_environment.sh
+ios/ServiceDefinitions.json
+ios/Runner/GeneratedPluginRegistrant.*
+ios/.symlinks/
+ios/Pods/
+# Xcode user data
+**/*.xcuserstate
+**/*.xcbkptlist
+**/*.xcworkspace/xcuserdata/
+**/*.xcodeproj/project.xcworkspace/xcuserdata/
+**/*.xcuserdatad
+# Keep podhelper in repo (Flutter expects it)
+!**/ios/Flutter/podhelper.rb
+
+# =====================
+# macOS
+# =====================
+macos/Flutter/Flutter-Debug.xcconfig
+macos/Flutter/Flutter-Profile.xcconfig
+macos/Flutter/Flutter-Release.xcconfig
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Flutter/ephemeral/
+macos/.symlinks/
+macos/Pods/
+macos/Flutter/flutter_export_environment.sh
+# Xcode user data (same as iOS rules apply)
+
+# =====================
+# Windows / Linux
+# =====================
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+
+# =====================
+# Web
+# =====================
+web/.dart_tool/
+
+# =====================
+# Symbolication & Obfuscation
+# =====================
+app.*.symbols
+app.*.map.json
+
+# =====================
+# Secrets
+# =====================
+.env
+.env.*
+*.pem
+*.p12
+*.pfx
+*.mobileprovision
+*.cer
+*.crt
+*.der
+*.key
+
+# =====================
+# Binaries / Release builds
+# (keep artifacts in Releases, not in source)
+# =====================
+*.apk
+*.aab
+*.ipa
+*.app
+*.dmg
+*.pkg
+/dist/
+
+sora/

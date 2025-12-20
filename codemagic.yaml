@@ -1,0 +1,19 @@
+workflows:
+  build-ios:
+    name: Build iOS
+    environment:
+      flutter: stable
+      xcode: latest
+      groups:
+        - secrets
+    scripts:
+      - name: 'Build iOS'
+        script: flutter build ios --no-codesign
+      - name: Create IPA
+        script: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r "AnimeShin-v${VERSION}.ipa" Payload
+    artifacts:
+      - AnimeShin-v*.ipa
