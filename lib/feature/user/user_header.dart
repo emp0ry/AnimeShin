@@ -162,6 +162,11 @@ Future<Map<String, dynamic>?> fetchAniListProfile(String accessToken) async {
     final data = jsonDecode(response.body);
     return data['data']['Viewer'];
   }
+  if (kDebugMode) {
+    final body = response.body;
+    final preview = body.length > 300 ? body.substring(0, 300) : body;
+    debugPrint('[OAuth] fetchAniListProfile failed status=${response.statusCode} body=${preview.replaceAll('\n', ' ')}');
+  }
   return null;
 }
 
@@ -204,8 +209,64 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
   bool _loading = true;
   bool _completed = false;
 
-  void _maybeCompleteFromUri(Uri uri, {required String source}) {
+  Map<String, String> _parseImplicitParamsRaw(String url) {
+    final iHash = url.indexOf('#');
+    final iQuery = url.indexOf('?');
+
+    String raw = '';
+    if (iHash >= 0 && iHash + 1 < url.length) {
+      raw = url.substring(iHash + 1);
+    } else if (iQuery >= 0 && iQuery + 1 < url.length) {
+      raw = url.substring(iQuery + 1);
+    }
+    if (raw.isEmpty) return {};
+    try {
+      return Uri.splitQueryString(raw);
+    } catch (_) {
+      final map = <String, String>{};
+      for (final part in raw.split('&')) {
+        final j = part.indexOf('=');
+        if (j > 0) {
+          final k = part.substring(0, j);
+          final v = Uri.decodeComponent(part.substring(j + 1));
+          map[k] = v;
+        }
+      }
+      return map;
+    }
+  }
+
+  Future<void> _tryRecoverTokenFromController() async {
     if (_completed) return;
+
+    try {
+      final current = await _controller.currentUrl();
+      if (current != null && current.isNotEmpty) {
+        _maybeCompleteFromUrl(current, source: 'currentUrl');
+      }
+    } catch (_) {
+      // Ignore.
+    }
+
+    if (_completed) return;
+    try {
+      final hrefObj = await _controller.runJavaScriptReturningResult('window.location.href');
+      var href = hrefObj.toString();
+      // Some platforms wrap string results in quotes.
+      href = href.replaceAll(RegExp(r"^'+|'+$"), '').replaceAll(RegExp(r'^"+|"+$'), '');
+      if (href.isNotEmpty) {
+        _maybeCompleteFromUrl(href, source: 'jsHref');
+      }
+    } catch (_) {
+      // Ignore.
+    }
+  }
+
+  void _maybeCompleteFromUrl(String url, {required String source}) {
+    if (_completed) return;
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
 
     // Accept the expected callback scheme/path. On macOS the host component
     // may be empty or differ in how it's reported by the WebView.
@@ -216,7 +277,11 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
 
     // Fallback: sometimes WebView reports the final URL differently, but still
     // includes the token in the fragment/query.
-    final params = _parseImplicitParams(uri);
+    // Prefer parsing from the raw URL string (helps when some platforms
+    // drop fragment info in Uri events), then fall back to Uri.
+    final rawParams = _parseImplicitParamsRaw(url);
+    final uriParams = _parseImplicitParams(uri);
+    final params = rawParams.isNotEmpty ? rawParams : uriParams;
     final token = (params['access_token'] ?? '').trim();
     final expires = int.tryParse(params['expires_in'] ?? '') ?? 31536000;
 
@@ -228,12 +293,18 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
       );
     }
 
-    if (!isCallback && token.isEmpty) return;
+    if (token.isEmpty) {
+      // Critical: do NOT close the WebView without a token.
+      // On macOS, we sometimes observe the callback navigation but lose the
+      // fragment in the event payload. Try to recover via controller APIs.
+      if (isCallback) {
+        unawaited(_tryRecoverTokenFromController());
+      }
+      return;
+    }
 
     _completed = true;
-    Navigator.of(context).pop(
-      token.isNotEmpty ? OAuthResult(accessToken: token, expiresIn: expires) : null,
-    );
+    Navigator.of(context).pop(OAuthResult(accessToken: token, expiresIn: expires));
   }
 
   @override
@@ -297,11 +368,13 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
           onUrlChange: (change) {
             final url = change.url;
             if (url == null) return;
-            _maybeCompleteFromUri(Uri.parse(url), source: 'urlChange');
+            _maybeCompleteFromUrl(url, source: 'urlChange');
           },
           onNavigationRequest: (request) {
-            final uri = Uri.parse(request.url);
-            _maybeCompleteFromUri(uri, source: 'navRequest');
+            final url = request.url;
+            _maybeCompleteFromUrl(url, source: 'navRequest');
+            final uri = Uri.tryParse(url);
+            if (uri == null) return NavigationDecision.navigate;
 
             // If it's the callback scheme, prevent navigation so WebView doesn't
             // try (and fail) to open a custom scheme.
