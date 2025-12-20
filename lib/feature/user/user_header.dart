@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'dart:math';
 import 'package:animeshin/feature/export/export_button.dart';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:ionicons/ionicons.dart';
-import 'package:crypto/crypto.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/routes.dart';
@@ -166,61 +164,6 @@ Future<String?> listenForAuthCode({int port = 28371}) async {
   } finally {
     await listener.cancel();
   }
-}
-
-String _base64UrlNoPad(List<int> bytes) {
-  return base64UrlEncode(bytes).replaceAll('=', '');
-}
-
-String _generatePkceVerifier() {
-  final rnd = Random.secure();
-  final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
-  return _base64UrlNoPad(bytes);
-}
-
-String _pkceChallengeS256(String verifier) {
-  final bytes = utf8.encode(verifier);
-  final digest = sha256.convert(bytes);
-  return _base64UrlNoPad(digest.bytes);
-}
-
-Future<OAuthResult?> exchangeAuthCodeForToken({
-  required String clientId,
-  required String redirectUri,
-  required String code,
-  required String codeVerifier,
-}) async {
-  final response = await http.post(
-    Uri.parse('https://anilist.co/api/v2/oauth/token'),
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: {
-      'grant_type': 'authorization_code',
-      'client_id': clientId,
-      'redirect_uri': redirectUri,
-      'code': code,
-      'code_verifier': codeVerifier,
-    },
-  );
-
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final token = (data['access_token'] ?? '').toString();
-    final expires = int.tryParse((data['expires_in'] ?? '').toString()) ??
-        31536000;
-    if (token.isEmpty) return null;
-    return OAuthResult(accessToken: token, expiresIn: expires);
-  }
-
-  if (kDebugMode) {
-    final body = response.body;
-    final preview = body.length > 300 ? body.substring(0, 300) : body;
-    debugPrint(
-      '[OAuth] token exchange failed status=${response.statusCode} body=${preview.replaceAll('\n', ' ')}',
-    );
-  }
-  return null;
 }
 
 /// Fetch AniList Viewer profile with the received access token
@@ -762,6 +705,13 @@ class __AccountPickerState extends State<_AccountPicker> {
         responseType: 'token',
       );
 
+  static String get _loginLinkDesktop =>
+      _buildAuthUrl(
+        clientId: _desktopClientId,
+        redirectUri: _desktopRedirectUri,
+        responseType: 'token',
+      );
+
   static const _imageSize = 55.0;
 
   @override
@@ -942,59 +892,45 @@ class __AccountPickerState extends State<_AccountPicker> {
       return;
     }
 
-    // --- Desktop path (Windows/Linux/macOS): Authorization Code + PKCE via localhost ---
-    final pkceVerifier = _generatePkceVerifier();
-    final pkceChallenge = _pkceChallengeS256(pkceVerifier);
-    final authUrl = _buildAuthUrl(
-      clientId: _desktopClientId,
-      redirectUri: _desktopRedirectUri,
-      responseType: 'code',
-      codeChallenge: pkceChallenge,
-      codeChallengeMethod: 'S256',
-    );
+    // --- Desktop path (Windows/Linux/macOS): Implicit Grant via localhost ---
+    // AniList's Authorization Code flow requires `client_secret` for token exchange.
+    // Since a desktop/mobile client can't safely embed that, we use Implicit Grant
+    // and capture `#access_token=...` via the localhost listener.
+    final authUrl = _loginLinkDesktop;
 
     if (isAccountListEmpty) {
-      final futureCode = listenForAuthCode(port: 28371);
+      final futureToken = listenForToken(port: 28371);
 
       await SnackBarExtension.launchLink(
         authUrl,
         messenger: messenger,
       );
-      final code = await futureCode;
-      if (code == null || code.isEmpty) return;
-
-      final tokenResult = await exchangeAuthCodeForToken(
-        clientId: _desktopClientId,
-        redirectUri: _desktopRedirectUri,
-        code: code,
-        codeVerifier: pkceVerifier,
-      );
-      if (tokenResult == null) {
-        SnackBarExtension.showOnMessenger(messenger, 'Login failed');
+      final token = await futureToken;
+      if (token == null || token.isEmpty) {
+        SnackBarExtension.showOnMessenger(messenger, 'Login canceled or failed');
         return;
       }
 
-      final profile = await fetchAniListProfile(tokenResult.accessToken);
+      final profile = await fetchAniListProfile(token);
       if (profile == null) {
         SnackBarExtension.showOnMessenger(messenger, 'Failed to load profile');
         return;
       }
 
-      final expiration =
-          DateTime.now().add(Duration(seconds: tokenResult.expiresIn));
+      final expiration = DateTime.now().add(const Duration(days: 365));
       final account = Account(
         id: profile['id'],
         name: profile['name'],
         avatarUrl: profile['avatar']['large'],
         expiration: expiration,
-        accessToken: tokenResult.accessToken,
+        accessToken: token,
       );
       await ref.read(persistenceProvider.notifier).addAccount(account);
       if (!mounted) return;
       if (nav.canPop()) nav.pop();
       return;
     } else {
-      final futureCode = listenForAuthCode(port: 28371); // start listener FIRST
+      final futureToken = listenForToken(port: 28371); // start listener FIRST
 
       ConfirmationDialog.show(
         context,
@@ -1012,8 +948,8 @@ class __AccountPickerState extends State<_AccountPicker> {
             messenger: confirmMessenger,
           );
 
-          final code = await futureCode;
-          if (code == null || code.isEmpty) {
+          final token = await futureToken;
+          if (token == null || token.isEmpty) {
             SnackBarExtension.showOnMessenger(
               confirmMessenger,
               'Login canceled or failed',
@@ -1021,35 +957,20 @@ class __AccountPickerState extends State<_AccountPicker> {
             return;
           }
 
-          final tokenResult = await exchangeAuthCodeForToken(
-            clientId: _desktopClientId,
-            redirectUri: _desktopRedirectUri,
-            code: code,
-            codeVerifier: pkceVerifier,
-          );
-          if (tokenResult == null) {
-            SnackBarExtension.showOnMessenger(
-              confirmMessenger,
-              'Login failed',
-            );
-            return;
-          }
-
-          final profile = await fetchAniListProfile(tokenResult.accessToken);
+          final profile = await fetchAniListProfile(token);
           if (profile == null) {
             SnackBarExtension.showOnMessenger(
                 confirmMessenger, 'Failed to load profile');
             return;
           }
 
-          final expiration =
-              DateTime.now().add(Duration(seconds: tokenResult.expiresIn));
+          final expiration = DateTime.now().add(const Duration(days: 365));
           final account = Account(
             id: profile['id'],
             name: profile['name'],
             avatarUrl: profile['avatar']['large'],
             expiration: expiration,
-            accessToken: tokenResult.accessToken,
+            accessToken: token,
           );
           await ref.read(persistenceProvider.notifier).addAccount(account);
           if (!mounted) return;
