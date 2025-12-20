@@ -25,7 +25,30 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// ------------------------
 /// Desktop helper for implicit flow
 /// ------------------------
-Future<String?> listenForToken({int port = 28371}) async {
+class _TokenListener {
+  _TokenListener(this._server, this._completer);
+
+  final HttpServer _server;
+  final Completer<String?> _completer;
+
+  Future<String?> wait() {
+    return _completer.future
+        .timeout(const Duration(minutes: 5), onTimeout: () => null);
+  }
+
+  Future<void> cancel() async {
+    if (!_completer.isCompleted) {
+      _completer.complete(null);
+    }
+    try {
+      await _server.close(force: true);
+    } catch (_) {
+      // Best-effort.
+    }
+  }
+}
+
+Future<_TokenListener> _startTokenListener({int port = 28371}) async {
   // Bind IPv6 loopback and allow IPv4, so both ::1 and 127.0.0.1 work.
   HttpServer server;
   try {
@@ -75,7 +98,11 @@ Future<String?> listenForToken({int port = 28371}) async {
       await request.response.close();
       if (!completer.isCompleted && token != null) {
         completer.complete(token);
-        await server.close(force: true);
+        try {
+          await server.close(force: true);
+        } catch (_) {
+          // Best-effort.
+        }
       }
       return;
     }
@@ -85,9 +112,17 @@ Future<String?> listenForToken({int port = 28371}) async {
     await request.response.close();
   });
 
-  // Optional timeout to avoid hanging forever
-  return completer.future
-      .timeout(const Duration(minutes: 5), onTimeout: () => null);
+  return _TokenListener(server, completer);
+}
+
+Future<String?> listenForToken({int port = 28371}) async {
+  final listener = await _startTokenListener(port: port);
+  try {
+    return await listener.wait();
+  } finally {
+    // Ensure port is freed even if caller abandons the future.
+    await listener.cancel();
+  }
 }
 
 /// Fetch AniList Viewer profile with the received access token
@@ -161,6 +196,71 @@ class AuthWebViewPage extends StatefulWidget {
 
   @override
   State<AuthWebViewPage> createState() => _AuthWebViewPageState();
+}
+
+/// macOS-friendly OAuth: use WebView for login UI, but complete via localhost
+/// token listener (so we do not depend on custom-scheme deep links).
+class AuthWebViewTokenPage extends StatefulWidget {
+  const AuthWebViewTokenPage({
+    super.key,
+    required this.authUrl,
+    required this.listener,
+  });
+
+  final String authUrl;
+  final _TokenListener listener;
+
+  @override
+  State<AuthWebViewTokenPage> createState() => _AuthWebViewTokenPageState();
+}
+
+class _AuthWebViewTokenPageState extends State<AuthWebViewTokenPage> {
+  late final WebViewController _controller;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) setState(() => _loading = true);
+          },
+          onPageFinished: (_) {
+            if (mounted) setState(() => _loading = false);
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.authUrl));
+
+    unawaited(() async {
+      final token = await widget.listener.wait();
+      if (!mounted) return;
+      Navigator.of(context).pop(token);
+    }());
+  }
+
+  @override
+  void dispose() {
+    unawaited(widget.listener.cancel());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('AniList Login')),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
+        ],
+      ),
+    );
+  }
 }
 
 class _AuthWebViewPageState extends State<AuthWebViewPage> {
@@ -508,7 +608,7 @@ class __AccountPickerState extends State<_AccountPicker> {
     final messenger = ScaffoldMessenger.maybeOf(context);
     final nav = Navigator.of(context);
 
-    // --- Mobile path: always use embedded WebView and intercept callback ---
+    // --- Mobile path: use embedded WebView and intercept callback ---
     if (Platform.isAndroid || Platform.isIOS) {
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
@@ -537,6 +637,45 @@ class __AccountPickerState extends State<_AccountPicker> {
         return;
       }
 
+      final account = Account(
+        id: profile['id'],
+        name: profile['name'],
+        avatarUrl: profile['avatar']['large'],
+        expiration: expiration,
+        accessToken: accessToken,
+      );
+      await ref.read(persistenceProvider.notifier).addAccount(account);
+      if (!mounted) return;
+      if (nav.canPop()) nav.pop();
+      return;
+    }
+
+    // --- macOS path: iPhone-like in-app WebView, but complete via localhost listener ---
+    if (Platform.isMacOS) {
+      final listener = await _startTokenListener(port: 28371);
+      final accessToken = await nav.push<String?>(
+        MaterialPageRoute(
+          builder: (_) => AuthWebViewTokenPage(
+            authUrl: _loginLinkDesktop,
+            listener: listener,
+          ),
+        ),
+      );
+
+      if (accessToken == null || accessToken.isEmpty) {
+        SnackBarExtension.showOnMessenger(
+            messenger, 'Login canceled or failed');
+        return;
+      }
+
+      final profile = await fetchAniListProfile(accessToken);
+      if (profile == null) {
+        SnackBarExtension.showOnMessenger(messenger, 'Failed to load profile');
+        return;
+      }
+
+      final now = DateTime.now();
+      final expiration = now.add(const Duration(days: 365));
       final account = Account(
         id: profile['id'],
         name: profile['name'],
