@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math';
 import 'package:animeshin/feature/export/export_button.dart';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:ionicons/ionicons.dart';
+import 'package:crypto/crypto.dart';
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/routes.dart';
@@ -25,13 +27,24 @@ import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 /// ------------------------
 /// Desktop helper for implicit flow
 /// ------------------------
-class _TokenListener {
-  _TokenListener(this._server, this._completer);
+class _OAuthCallback {
+  final String? accessToken;
+  final String? code;
+
+  const _OAuthCallback._({this.accessToken, this.code});
+
+  const _OAuthCallback.token(String token) : this._(accessToken: token);
+
+  const _OAuthCallback.authCode(String code) : this._(code: code);
+}
+
+class _OAuthListener {
+  _OAuthListener(this._server, this._completer);
 
   final HttpServer _server;
-  final Completer<String?> _completer;
+  final Completer<_OAuthCallback?> _completer;
 
-  Future<String?> wait() {
+  Future<_OAuthCallback?> wait() {
     return _completer.future
         .timeout(const Duration(minutes: 5), onTimeout: () => null);
   }
@@ -49,6 +62,10 @@ class _TokenListener {
 }
 
 Future<_TokenListener> _startTokenListener({int port = 28371}) async {
+  throw UnimplementedError();
+}
+
+Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
   // Bind IPv6 loopback and allow IPv4, so both ::1 and 127.0.0.1 work.
   HttpServer server;
   try {
@@ -63,10 +80,29 @@ Future<_TokenListener> _startTokenListener({int port = 28371}) async {
     rethrow;
   }
 
-  final completer = Completer<String?>();
+  final completer = Completer<_OAuthCallback?>();
 
   server.listen((HttpRequest request) async {
     if (request.uri.path == '/') {
+      // Authorization Code flow callback (query parameter)
+      final code = request.uri.queryParameters['code'];
+      if (code != null && code.isNotEmpty) {
+        request.response
+          ..headers.contentType = ContentType.html
+          ..write('Success! You can close this window.');
+        await request.response.close();
+
+        if (!completer.isCompleted) {
+          completer.complete(_OAuthCallback.authCode(code));
+          try {
+            await server.close(force: true);
+          } catch (_) {
+            // Best-effort.
+          }
+        }
+        return;
+      }
+
       // Serve a tiny page that reads the fragment & posts it back to /token.
       // NOTE: relative fetch keeps the same origin (works with ::1 or 127.0.0.1).
       final htmlContent = '''
@@ -97,7 +133,7 @@ Future<_TokenListener> _startTokenListener({int port = 28371}) async {
       final token = request.uri.queryParameters['access_token'];
       await request.response.close();
       if (!completer.isCompleted && token != null) {
-        completer.complete(token);
+        completer.complete(_OAuthCallback.token(token));
         try {
           await server.close(force: true);
         } catch (_) {
@@ -112,17 +148,83 @@ Future<_TokenListener> _startTokenListener({int port = 28371}) async {
     await request.response.close();
   });
 
-  return _TokenListener(server, completer);
+  return _OAuthListener(server, completer);
 }
 
 Future<String?> listenForToken({int port = 28371}) async {
-  final listener = await _startTokenListener(port: port);
+  final listener = await _startOAuthListener(port: port);
   try {
-    return await listener.wait();
+    final cb = await listener.wait();
+    return cb?.accessToken;
   } finally {
     // Ensure port is freed even if caller abandons the future.
     await listener.cancel();
   }
+}
+
+Future<String?> listenForAuthCode({int port = 28371}) async {
+  final listener = await _startOAuthListener(port: port);
+  try {
+    final cb = await listener.wait();
+    return cb?.code;
+  } finally {
+    await listener.cancel();
+  }
+}
+
+String _base64UrlNoPad(List<int> bytes) {
+  return base64UrlEncode(bytes).replaceAll('=', '');
+}
+
+String _generatePkceVerifier() {
+  final rnd = Random.secure();
+  final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
+  return _base64UrlNoPad(bytes);
+}
+
+String _pkceChallengeS256(String verifier) {
+  final bytes = utf8.encode(verifier);
+  final digest = sha256.convert(bytes);
+  return _base64UrlNoPad(digest.bytes);
+}
+
+Future<OAuthResult?> exchangeAuthCodeForToken({
+  required String clientId,
+  required String redirectUri,
+  required String code,
+  required String codeVerifier,
+}) async {
+  final response = await http.post(
+    Uri.parse('https://anilist.co/api/v2/oauth/token'),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: {
+      'grant_type': 'authorization_code',
+      'client_id': clientId,
+      'redirect_uri': redirectUri,
+      'code': code,
+      'code_verifier': codeVerifier,
+    },
+  );
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final token = (data['access_token'] ?? '').toString();
+    final expires = int.tryParse((data['expires_in'] ?? '').toString()) ??
+        31536000;
+    if (token.isEmpty) return null;
+    return OAuthResult(accessToken: token, expiresIn: expires);
+  }
+
+  if (kDebugMode) {
+    final body = response.body;
+    final preview = body.length > 300 ? body.substring(0, 300) : body;
+    debugPrint(
+      '[OAuth] token exchange failed status=${response.statusCode} body=${preview.replaceAll('\n', ' ')}',
+    );
+  }
+  return null;
 }
 
 /// Fetch AniList Viewer profile with the received access token
@@ -217,7 +319,7 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
   bool _loading = true;
   bool _completed = false;
 
-  _TokenListener? _localhostListener;
+  _OAuthListener? _localhostListener;
 
   String? _extractJwtTokenFromText(String text) {
     // AniList implicit tokens are JWTs.
@@ -446,15 +548,17 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
       if (widget.localhostPort != null) {
         try {
           _localhostListener =
-              await _startTokenListener(port: widget.localhostPort!);
+              await _startOAuthListener(port: widget.localhostPort!);
           unawaited(() async {
-            final token = await _localhostListener!.wait();
+            final cb = await _localhostListener!.wait();
             if (!mounted || _completed) return;
-            if (token == null || token.isEmpty) return;
-            _completed = true;
-            Navigator.of(context).pop(
-              OAuthResult(accessToken: token, expiresIn: 31536000),
-            );
+            final token = cb?.accessToken;
+            if (token != null && token.isNotEmpty) {
+              _completed = true;
+              Navigator.of(context).pop(
+                OAuthResult(accessToken: token, expiresIn: 31536000),
+              );
+            }
           }());
         } catch (e) {
           if (kDebugMode) {
@@ -627,13 +731,22 @@ class __AccountPickerState extends State<_AccountPicker> {
   static String _buildAuthUrl({
     required String clientId,
     String? redirectUri,
+    required String responseType,
+    String? codeChallenge,
+    String? codeChallengeMethod,
   }) {
     final qp = <String, String>{
       'client_id': clientId,
-      'response_type': 'token', // implicit flow
+      'response_type': responseType,
     };
     if (redirectUri != null && redirectUri.isNotEmpty) {
       qp['redirect_uri'] = redirectUri;
+    }
+    if (codeChallenge != null && codeChallenge.isNotEmpty) {
+      qp['code_challenge'] = codeChallenge;
+    }
+    if (codeChallengeMethod != null && codeChallengeMethod.isNotEmpty) {
+      qp['code_challenge_method'] = codeChallengeMethod;
     }
     return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
         .replace(queryParameters: qp)
@@ -643,10 +756,11 @@ class __AccountPickerState extends State<_AccountPicker> {
   /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
   /// For desktop we keep the existing local server flow in browser.
   static String get _loginLinkMobile =>
-      _buildAuthUrl(clientId: _mobileClientId, redirectUri: _mobileRedirectUri);
-
-  static String get _loginLinkDesktop =>
-      _buildAuthUrl(clientId: _desktopClientId, redirectUri: _desktopRedirectUri);
+      _buildAuthUrl(
+        clientId: _mobileClientId,
+        redirectUri: _mobileRedirectUri,
+        responseType: 'token',
+      );
 
   static const _imageSize = 55.0;
 
@@ -785,12 +899,8 @@ class __AccountPickerState extends State<_AccountPicker> {
     final nav = Navigator.of(context);
 
     // --- Mobile path: use embedded WebView and intercept callback ---
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      // macOS: use a localhost redirect inside the embedded WebView and capture
-      // the token via our in-app listener (more reliable than fragment events).
-      // Ensure your AniList desktop client has this redirect URI registered:
-      //   http://localhost:28371/
-      final authUrl = Platform.isMacOS ? _loginLinkDesktop : _loginLinkMobile;
+    if (Platform.isAndroid || Platform.isIOS) {
+      final authUrl = _loginLinkMobile;
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
           builder: (_) => AuthWebViewPage(
@@ -798,7 +908,7 @@ class __AccountPickerState extends State<_AccountPicker> {
             redirectScheme: _redirectScheme, // "app"
             redirectHost: _redirectHost, // "animeshin"
             redirectPath: _redirectPath, // "/auth"
-            localhostPort: Platform.isMacOS ? 28371 : null,
+            localhostPort: null,
           ),
         ),
       );
@@ -832,35 +942,59 @@ class __AccountPickerState extends State<_AccountPicker> {
       return;
     }
 
-    // --- Desktop path: keep existing external browser flow with localhost listener ---
+    // --- Desktop path (Windows/Linux/macOS): Authorization Code + PKCE via localhost ---
+    final pkceVerifier = _generatePkceVerifier();
+    final pkceChallenge = _pkceChallengeS256(pkceVerifier);
+    final authUrl = _buildAuthUrl(
+      clientId: _desktopClientId,
+      redirectUri: _desktopRedirectUri,
+      responseType: 'code',
+      codeChallenge: pkceChallenge,
+      codeChallengeMethod: 'S256',
+    );
+
     if (isAccountListEmpty) {
-      final futureToken = listenForToken(port: 28371);
+      final futureCode = listenForAuthCode(port: 28371);
 
       await SnackBarExtension.launchLink(
-        _loginLinkDesktop,
+        authUrl,
         messenger: messenger,
       );
-      final accessToken = await futureToken;
-      if (accessToken != null) {
-        final profile = await fetchAniListProfile(accessToken);
-        if (profile != null) {
-          final now = DateTime.now();
-          final expiration = now.add(const Duration(days: 365));
-          final account = Account(
-            id: profile['id'],
-            name: profile['name'],
-            avatarUrl: profile['avatar']['large'],
-            expiration: expiration,
-            accessToken: accessToken,
-          );
-          await ref.read(persistenceProvider.notifier).addAccount(account);
-          if (!mounted) return;
-          if (nav.canPop()) nav.pop();
-        }
+      final code = await futureCode;
+      if (code == null || code.isEmpty) return;
+
+      final tokenResult = await exchangeAuthCodeForToken(
+        clientId: _desktopClientId,
+        redirectUri: _desktopRedirectUri,
+        code: code,
+        codeVerifier: pkceVerifier,
+      );
+      if (tokenResult == null) {
+        SnackBarExtension.showOnMessenger(messenger, 'Login failed');
+        return;
       }
+
+      final profile = await fetchAniListProfile(tokenResult.accessToken);
+      if (profile == null) {
+        SnackBarExtension.showOnMessenger(messenger, 'Failed to load profile');
+        return;
+      }
+
+      final expiration =
+          DateTime.now().add(Duration(seconds: tokenResult.expiresIn));
+      final account = Account(
+        id: profile['id'],
+        name: profile['name'],
+        avatarUrl: profile['avatar']['large'],
+        expiration: expiration,
+        accessToken: tokenResult.accessToken,
+      );
+      await ref.read(persistenceProvider.notifier).addAccount(account);
+      if (!mounted) return;
+      if (nav.canPop()) nav.pop();
       return;
     } else {
-      final futureToken = listenForToken(port: 28371); // start listener FIRST
+      final futureCode = listenForAuthCode(port: 28371); // start listener FIRST
 
       ConfirmationDialog.show(
         context,
@@ -874,31 +1008,48 @@ class __AccountPickerState extends State<_AccountPicker> {
           final confirmNav = Navigator.of(context);
 
           await SnackBarExtension.launchLink(
-            _loginLinkDesktop,
+            authUrl,
             messenger: confirmMessenger,
           );
-          final accessToken = await futureToken;
-          if (accessToken == null) {
+
+          final code = await futureCode;
+          if (code == null || code.isEmpty) {
             SnackBarExtension.showOnMessenger(
               confirmMessenger,
               'Login canceled or failed',
             );
             return;
           }
-          final profile = await fetchAniListProfile(accessToken);
+
+          final tokenResult = await exchangeAuthCodeForToken(
+            clientId: _desktopClientId,
+            redirectUri: _desktopRedirectUri,
+            code: code,
+            codeVerifier: pkceVerifier,
+          );
+          if (tokenResult == null) {
+            SnackBarExtension.showOnMessenger(
+              confirmMessenger,
+              'Login failed',
+            );
+            return;
+          }
+
+          final profile = await fetchAniListProfile(tokenResult.accessToken);
           if (profile == null) {
             SnackBarExtension.showOnMessenger(
                 confirmMessenger, 'Failed to load profile');
             return;
           }
-          final now = DateTime.now();
-          final expiration = now.add(const Duration(days: 365));
+
+          final expiration =
+              DateTime.now().add(Duration(seconds: tokenResult.expiresIn));
           final account = Account(
             id: profile['id'],
             name: profile['name'],
             avatarUrl: profile['avatar']['large'],
             expiration: expiration,
-            accessToken: accessToken,
+            accessToken: tokenResult.accessToken,
           );
           await ref.read(persistenceProvider.notifier).addAccount(account);
           if (!mounted) return;

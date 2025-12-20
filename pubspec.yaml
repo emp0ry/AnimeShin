@@ -22,6 +22,9 @@ dependencies:
   # Data fetching.
   http: ^1.4.0
 
+  # OAuth PKCE (SHA-256)
+  crypto: ^3.0.6
+
   # Lightweight storage.
   hive: ^2.2.3
   hive_flutter: ^1.1.0
