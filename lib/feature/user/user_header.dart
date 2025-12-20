@@ -20,7 +20,7 @@ import 'package:animeshin/widget/dialogs.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/widget/text_rail.dart';
 import 'package:webview_flutter/webview_flutter.dart'; // WebView for OAuth (no deep-link dependency)
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 
 /// ------------------------
 /// Desktop helper for implicit flow
