@@ -46,10 +46,6 @@ Future<void> main() async {
   // Initialize Hive (required for Hive.openBox)
   await Hive.initFlutter();
 
-  await storage.write(key: 'probe', value: DateTime.now().toIso8601String());
-  final ok = await storage.read(key: 'probe');
-  debugPrint('secure storage probe: $ok');
-
   // === Desktop window size persistence ===
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
@@ -69,6 +65,21 @@ Future<void> main() async {
   BackgroundHandler.init(_notificationCtrl);
 
   runApp(UncontrolledProviderScope(container: container, child: const _App()));
+
+  // Debug-only sanity check for secure storage. Do not block app startup.
+  if (kDebugMode) {
+    unawaited(() async {
+      try {
+        await storage
+            .write(key: 'probe', value: DateTime.now().toIso8601String())
+            .timeout(const Duration(seconds: 2));
+        final ok = await storage.read(key: 'probe').timeout(const Duration(seconds: 2));
+        debugPrint('secure storage probe: $ok');
+      } catch (e) {
+        debugPrint('secure storage probe failed: $e');
+      }
+    }());
+  }
 
   // Listen for resize events on desktop only
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
