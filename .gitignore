@@ -73,14 +73,9 @@ ios/Pods/
 # =====================
 # macOS
 # =====================
-macos/Flutter/Flutter-Debug.xcconfig
-macos/Flutter/Flutter-Profile.xcconfig
-macos/Flutter/Flutter-Release.xcconfig
-macos/Flutter/GeneratedPluginRegistrant.swift
 macos/Flutter/ephemeral/
 macos/.symlinks/
 macos/Pods/
-macos/Flutter/flutter_export_environment.sh
 # Xcode user data (same as iOS rules apply)
 
 # =====================

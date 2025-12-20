@@ -103,21 +103,6 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
     }
   }
 
-  Future<void> _updateAllEnabled() async {
-    setState(() => _busy = true);
-    try {
-      await _remote.downloadAllEnabledRemote();
-      if (!mounted) return;
-      SnackBarExtension.show(context, 'Updated enabled modules');
-      await _refresh();
-    } catch (e) {
-      if (!mounted) return;
-      SnackBarExtension.show(context, e.toString());
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _exportAll() async {
     setState(() => _busy = true);
     try {
@@ -298,11 +283,6 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
                           child: const Text('Add'),
                         ),
                         const Spacer(),
-                        OutlinedButton(
-                          onPressed: _busy ? null : _updateAllEnabled,
-                          child: const Text('Update enabled'),
-                        ),
-                        const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: _busy ? null : _exportAll,
                           child: const Text('Export'),
