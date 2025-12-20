@@ -31,7 +31,12 @@ class PersistenceNotifier extends Notifier<Persistence> {
     WidgetsFlutterBinding.ensureInitialized();
 
     // Configure home directory, if not in the browser.
-    if (!kIsWeb) Hive.init((await getApplicationDocumentsDirectory()).path);
+    if (!kIsWeb) {
+      final dir = defaultTargetPlatform == TargetPlatform.macOS
+          ? await getApplicationSupportDirectory()
+          : await getApplicationDocumentsDirectory();
+      Hive.init(dir.path);
+    }
 
     _box = await Hive.openBox('persistence');
     final accessTokens = await storage.readAll();

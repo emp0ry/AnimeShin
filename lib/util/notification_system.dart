@@ -82,7 +82,7 @@ class NotificationSystem {
   /// Downloads image from url, saves to documents directory, returns local file path.
   static Future<String?> downloadAndSaveFile(String url, String fileName) async {
     try {
-      final directory = await getApplicationDocumentsDirectory();
+      final directory = await getTemporaryDirectory();
       final filePath = '${directory.path}/$fileName';
 
       // Delete previous if exists (to avoid duplicates)

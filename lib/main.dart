@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, Platform;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/foundation.dart';
@@ -14,7 +14,8 @@ import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/util/background_handler.dart';
 import 'package:animeshin/util/theming.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // For Hive.initFlutter()
+import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest.dart' as tz;
 
 final _notificationCtrl = StreamController<String>.broadcast();
@@ -43,8 +44,14 @@ Future<void> main() async {
 
   tz.initializeTimeZones();
 
-  // Initialize Hive (required for Hive.openBox)
-  await Hive.initFlutter();
+  // Initialize Hive (required for Hive.openBox).
+  // On macOS, prefer Application Support to avoid prompting for protected folder access.
+  if (!kIsWeb) {
+    final Directory dir = Platform.isMacOS
+        ? await getApplicationSupportDirectory()
+        : await getApplicationDocumentsDirectory();
+    Hive.init(dir.path);
+  }
 
   // === Desktop window size persistence ===
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
