@@ -200,6 +200,7 @@ class AuthWebViewPage extends StatefulWidget {
 
 class _AuthWebViewPageState extends State<AuthWebViewPage> {
   late final WebViewController _controller;
+  late final WebViewCookieManager _cookieManager;
   bool _loading = true;
   bool _completed = false;
 
@@ -238,6 +239,8 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
   @override
   void initState() {
     super.initState();
+
+    _cookieManager = WebViewCookieManager();
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -318,7 +321,24 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
       _controller.setBackgroundColor(Colors.transparent);
     }
 
-    _controller.loadRequest(Uri.parse(widget.authUrl));
+    // Start with a clean session so "Add Account" can log into a different user.
+    // This mirrors the common expectation on iOS Safari-private-like flows.
+    () async {
+      try {
+        await _cookieManager.clearCookies();
+      } catch (e) {
+        if (kDebugMode) debugPrint('[OAuth] clearCookies failed: $e');
+      }
+      try {
+        await _controller.clearCache();
+      } catch (_) {
+        // Not supported on all platforms/versions.
+      }
+
+      // If the widget got disposed while awaiting, bail.
+      if (!mounted) return;
+      _controller.loadRequest(Uri.parse(widget.authUrl));
+    }();
   }
 
   Map<String, String> _parseImplicitParams(Uri uri) {
