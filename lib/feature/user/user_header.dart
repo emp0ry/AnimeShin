@@ -209,6 +209,18 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
   bool _loading = true;
   bool _completed = false;
 
+  String? _extractJwtTokenFromText(String text) {
+    // AniList implicit tokens are JWTs.
+    // Heuristic: find the first JWT-looking substring.
+    final match = RegExp(r'([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)')
+        .firstMatch(text);
+    if (match == null) return null;
+    final token = match.group(1);
+    if (token == null) return null;
+    // Guard against extremely short false positives.
+    return token.length >= 30 ? token : null;
+  }
+
   Map<String, String> _parseImplicitParamsRaw(String url) {
     final iHash = url.indexOf('#');
     final iQuery = url.indexOf('?');
@@ -256,6 +268,24 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
       href = href.replaceAll(RegExp(r"^'+|'+$"), '').replaceAll(RegExp(r'^"+|"+$'), '');
       if (href.isNotEmpty) {
         _maybeCompleteFromUrl(href, source: 'jsHref');
+      }
+    } catch (_) {
+      // Ignore.
+    }
+
+    if (_completed) return;
+    // If AniList uses the Auth PIN redirect, the token is rendered in the page
+    // content (not in the URL fragment). Try to read the DOM and extract a JWT.
+    try {
+      final bodyObj = await _controller.runJavaScriptReturningResult(
+        'document && document.body ? (document.body.innerText || "") : ""',
+      );
+      var body = bodyObj.toString();
+      body = body.replaceAll(RegExp(r"^'+|'+$"), '').replaceAll(RegExp(r'^"+|"+$'), '');
+      final jwt = _extractJwtTokenFromText(body);
+      if (jwt != null && jwt.isNotEmpty) {
+        _completed = true;
+        Navigator.of(context).pop(OAuthResult(accessToken: jwt, expiresIn: 31536000));
       }
     } catch (_) {
       // Ignore.
@@ -348,8 +378,9 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
           },
           onPageFinished: (_) async {
             if (mounted) setState(() => _loading = false);
-            // JS fallback: if the current page has the token in location.hash,
-            // post it back to Flutter.
+            // Release-safe token capture:
+            // 1) Try URL-based fragment capture
+            // 2) Try controller-recovery (href + DOM extraction for Auth PIN page)
             try {
               await _controller.runJavaScript('''
 (function(){
@@ -362,8 +393,10 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
 })();
               ''');
             } catch (_) {
-              // Ignore: some platforms/pages may not allow JS execution.
+              // Ignore.
             }
+
+            await _tryRecoverTokenFromController();
           },
           onUrlChange: (change) {
             final url = change.url;
@@ -703,10 +736,15 @@ class __AccountPickerState extends State<_AccountPicker> {
 
     // --- Mobile path: use embedded WebView and intercept callback ---
     if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+      // On macOS, WKWebView often does not reliably expose URL fragments on
+      // custom-scheme redirects. Using the desktop client ID increases the
+      // chance the redirect is web-based (e.g., Auth PIN), which we can parse
+      // directly from the page content without debug logs.
+      final authUrl = Platform.isMacOS ? _loginLinkDesktop : _loginLinkMobile;
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
           builder: (_) => AuthWebViewPage(
-            authUrl: _loginLinkMobile,
+            authUrl: authUrl,
             redirectScheme: _redirectScheme, // "app"
             redirectHost: _redirectHost, // "animeshin"
             redirectPath: _redirectPath, // "/auth"
