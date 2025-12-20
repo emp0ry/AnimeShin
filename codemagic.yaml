@@ -7,6 +7,8 @@ workflows:
       groups:
         - secrets
     scripts:
+      - name: Flutter pub get
+        script: flutter pub get
       - name: 'Build iOS'
         script: flutter build ios --no-codesign
       - name: Create IPA
@@ -17,3 +19,47 @@ workflows:
           zip -r "AnimeShin-v${VERSION}.ipa" Payload
     artifacts:
       - AnimeShin-v*.ipa
+
+  build-macos:
+    name: Build macOS (DMG)
+    environment:
+      flutter: stable
+      xcode: latest
+      groups:
+        - secrets
+    scripts:
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Build macOS (release)
+        script: flutter build macos --release
+      - name: Package DMG (drag & drop)
+        script: |
+          set -e
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+
+          APP_SRC="build/macos/Build/Products/Release/animeshin.app"
+          if [ ! -d "$APP_SRC" ]; then
+            echo "ERROR: macOS app not found at $APP_SRC"
+            ls -la build/macos/Build/Products/Release || true
+            exit 1
+          fi
+
+          STAGE_DIR="build/macos/dmg/AnimeShin"
+          rm -rf "build/macos/dmg"
+          mkdir -p "$STAGE_DIR"
+
+          # Copy and rename app bundle to requested casing.
+          cp -R "$APP_SRC" "$STAGE_DIR/AnimeShin.app"
+          ln -s /Applications "$STAGE_DIR/Applications"
+
+          DMG_NAME="AnimeShin-macos-v${VERSION}.dmg"
+          hdiutil create \
+            -volname "AnimeShin" \
+            -srcfolder "$STAGE_DIR" \
+            -ov \
+            -format UDZO \
+            "$DMG_NAME"
+
+          echo "Created $DMG_NAME"
+    artifacts:
+      - AnimeShin-macos-v*.dmg
