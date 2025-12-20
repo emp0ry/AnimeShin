@@ -61,10 +61,6 @@ class _OAuthListener {
   }
 }
 
-Future<_TokenListener> _startTokenListener({int port = 28371}) async {
-  throw UnimplementedError();
-}
-
 Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
   // Bind IPv6 loopback and allow IPv4, so both ::1 and 127.0.0.1 work.
   HttpServer server;
@@ -363,6 +359,8 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
   Future<void> _tryRecoverTokenFromController() async {
     if (_completed) return;
 
+    final nav = Navigator.of(context);
+
     try {
       final current = await _controller.currentUrl();
       if (current != null && current.isNotEmpty) {
@@ -397,7 +395,7 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
       final jwt = _extractJwtTokenFromText(body);
       if (jwt != null && jwt.isNotEmpty) {
         _completed = true;
-        Navigator.of(context).pop(OAuthResult(accessToken: jwt, expiresIn: 31536000));
+        nav.pop(OAuthResult(accessToken: jwt, expiresIn: 31536000));
       }
     } catch (_) {
       // Ignore.
@@ -542,6 +540,8 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
     // Start with a clean session so "Add Account" can log into a different user.
     // This mirrors the common expectation on iOS Safari-private-like flows.
     () async {
+      final nav = Navigator.of(context);
+
       // Optional: for desktop-style flows, start a localhost token listener.
       // When AniList redirects to localhost, the served page extracts the token
       // from the URL fragment and posts it back to /token.
@@ -555,7 +555,7 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
             final token = cb?.accessToken;
             if (token != null && token.isNotEmpty) {
               _completed = true;
-              Navigator.of(context).pop(
+              nav.pop(
                 OAuthResult(accessToken: token, expiresIn: 31536000),
               );
             }
