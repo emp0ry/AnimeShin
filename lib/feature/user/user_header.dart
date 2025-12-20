@@ -341,14 +341,21 @@ class __AccountPickerState extends State<_AccountPicker> {
   static const _redirectHost = 'animeshin';
   static const _redirectPath = '/auth';
 
+  static const _desktopRedirectUri = 'http://localhost:28371/';
+
   /// Builds the authorize URL for implicit flow.
   static String _buildAuthUrl({
     required String clientId,
+    String? redirectUri,
   }) {
     final qp = <String, String>{
       'client_id': clientId,
       'response_type': 'token', // implicit flow
     };
+    final r = (redirectUri ?? '').trim();
+    if (r.isNotEmpty) {
+      qp['redirect_uri'] = r;
+    }
     return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
         .replace(queryParameters: qp)
         .toString();
@@ -357,10 +364,13 @@ class __AccountPickerState extends State<_AccountPicker> {
   /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
   /// For desktop we keep the existing local server flow in browser.
   static String get _loginLinkMobile =>
-      _buildAuthUrl(clientId: _mobileClientId);
+      _buildAuthUrl(
+        clientId: _mobileClientId,
+        redirectUri: '$_redirectScheme://$_redirectHost$_redirectPath',
+      );
 
   static String get _loginLinkDesktop =>
-      _buildAuthUrl(clientId: _desktopClientId);
+      _buildAuthUrl(clientId: _desktopClientId, redirectUri: _desktopRedirectUri);
 
   static const _imageSize = 55.0;
 
@@ -499,7 +509,7 @@ class __AccountPickerState extends State<_AccountPicker> {
     final nav = Navigator.of(context);
 
     // --- Mobile path: always use embedded WebView and intercept callback ---
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isAndroid || Platform.isIOS) {
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
           builder: (_) => AuthWebViewPage(
