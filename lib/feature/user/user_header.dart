@@ -192,12 +192,20 @@ class AuthWebViewPage extends StatefulWidget {
     required this.redirectScheme,
     required this.redirectHost,
     required this.redirectPath,
+    this.localhostPort,
   });
 
   final String authUrl;
   final String redirectScheme; // e.g. "app"
   final String redirectHost; // e.g. "animeshin"
   final String redirectPath; // e.g. "/auth"
+
+  /// If provided, the page will start a localhost token listener and complete
+  /// the OAuth flow when a token is delivered to `http://localhost:<port>/`.
+  ///
+  /// This is the most reliable way to capture implicit-flow tokens on desktop
+  /// WebViews, since URL fragment changes can be inconsistently surfaced.
+  final int? localhostPort;
 
   @override
   State<AuthWebViewPage> createState() => _AuthWebViewPageState();
@@ -208,6 +216,8 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
   late final WebViewCookieManager _cookieManager;
   bool _loading = true;
   bool _completed = false;
+
+  _TokenListener? _localhostListener;
 
   String? _extractJwtTokenFromText(String text) {
     // AniList implicit tokens are JWTs.
@@ -430,6 +440,29 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
     // Start with a clean session so "Add Account" can log into a different user.
     // This mirrors the common expectation on iOS Safari-private-like flows.
     () async {
+      // Optional: for desktop-style flows, start a localhost token listener.
+      // When AniList redirects to localhost, the served page extracts the token
+      // from the URL fragment and posts it back to /token.
+      if (widget.localhostPort != null) {
+        try {
+          _localhostListener =
+              await _startTokenListener(port: widget.localhostPort!);
+          unawaited(() async {
+            final token = await _localhostListener!.wait();
+            if (!mounted || _completed) return;
+            if (token == null || token.isEmpty) return;
+            _completed = true;
+            Navigator.of(context).pop(
+              OAuthResult(accessToken: token, expiresIn: 31536000),
+            );
+          }());
+        } catch (e) {
+          if (kDebugMode) {
+            debugPrint('[OAuth] localhost listener failed: $e');
+          }
+        }
+      }
+
       try {
         await _cookieManager.clearCookies();
       } catch (e) {
@@ -445,6 +478,16 @@ class _AuthWebViewPageState extends State<AuthWebViewPage> {
       if (!mounted) return;
       _controller.loadRequest(Uri.parse(widget.authUrl));
     }();
+  }
+
+  @override
+  void dispose() {
+    final listener = _localhostListener;
+    _localhostListener = null;
+    if (listener != null) {
+      unawaited(listener.cancel());
+    }
+    super.dispose();
   }
 
   Map<String, String> _parseImplicitParams(Uri uri) {
@@ -577,14 +620,21 @@ class __AccountPickerState extends State<_AccountPicker> {
   static const _redirectHost = 'animeshin';
   static const _redirectPath = '/auth';
 
+  static const _mobileRedirectUri = 'app://animeshin/auth';
+  static const _desktopRedirectUri = 'http://localhost:28371/';
+
   /// Builds the authorize URL for implicit flow.
   static String _buildAuthUrl({
     required String clientId,
+    String? redirectUri,
   }) {
     final qp = <String, String>{
       'client_id': clientId,
       'response_type': 'token', // implicit flow
     };
+    if (redirectUri != null && redirectUri.isNotEmpty) {
+      qp['redirect_uri'] = redirectUri;
+    }
     return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
         .replace(queryParameters: qp)
         .toString();
@@ -593,10 +643,10 @@ class __AccountPickerState extends State<_AccountPicker> {
   /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
   /// For desktop we keep the existing local server flow in browser.
   static String get _loginLinkMobile =>
-      _buildAuthUrl(clientId: _mobileClientId);
+      _buildAuthUrl(clientId: _mobileClientId, redirectUri: _mobileRedirectUri);
 
   static String get _loginLinkDesktop =>
-      _buildAuthUrl(clientId: _desktopClientId);
+      _buildAuthUrl(clientId: _desktopClientId, redirectUri: _desktopRedirectUri);
 
   static const _imageSize = 55.0;
 
@@ -736,10 +786,10 @@ class __AccountPickerState extends State<_AccountPicker> {
 
     // --- Mobile path: use embedded WebView and intercept callback ---
     if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      // macOS: use the desktop client ID in-app. Configure that client's
-      // redirect URL in AniList developer settings to:
-      //   https://anilist.co/api/v2/oauth/pin
-      // so the token is delivered on an https page (capturable in release).
+      // macOS: use a localhost redirect inside the embedded WebView and capture
+      // the token via our in-app listener (more reliable than fragment events).
+      // Ensure your AniList desktop client has this redirect URI registered:
+      //   http://localhost:28371/
       final authUrl = Platform.isMacOS ? _loginLinkDesktop : _loginLinkMobile;
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
@@ -748,6 +798,7 @@ class __AccountPickerState extends State<_AccountPicker> {
             redirectScheme: _redirectScheme, // "app"
             redirectHost: _redirectHost, // "animeshin"
             redirectPath: _redirectPath, // "/auth"
+            localhostPort: Platform.isMacOS ? 28371 : null,
           ),
         ),
       );
