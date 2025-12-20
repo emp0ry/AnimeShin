@@ -198,71 +198,6 @@ class AuthWebViewPage extends StatefulWidget {
   State<AuthWebViewPage> createState() => _AuthWebViewPageState();
 }
 
-/// macOS-friendly OAuth: use WebView for login UI, but complete via localhost
-/// token listener (so we do not depend on custom-scheme deep links).
-class AuthWebViewTokenPage extends StatefulWidget {
-  const AuthWebViewTokenPage({
-    super.key,
-    required this.authUrl,
-    required this.listener,
-  });
-
-  final String authUrl;
-  final _TokenListener listener;
-
-  @override
-  State<AuthWebViewTokenPage> createState() => _AuthWebViewTokenPageState();
-}
-
-class _AuthWebViewTokenPageState extends State<AuthWebViewTokenPage> {
-  late final WebViewController _controller;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (_) {
-            if (mounted) setState(() => _loading = true);
-          },
-          onPageFinished: (_) {
-            if (mounted) setState(() => _loading = false);
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.authUrl));
-
-    unawaited(() async {
-      final token = await widget.listener.wait();
-      if (!mounted) return;
-      Navigator.of(context).pop(token);
-    }());
-  }
-
-  @override
-  void dispose() {
-    unawaited(widget.listener.cancel());
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('AniList Login')),
-      body: Stack(
-        children: [
-          WebViewWidget(controller: _controller),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
-        ],
-      ),
-    );
-  }
-}
-
 class _AuthWebViewPageState extends State<AuthWebViewPage> {
   late final WebViewController _controller;
   bool _loading = true;
@@ -441,21 +376,14 @@ class __AccountPickerState extends State<_AccountPicker> {
   static const _redirectHost = 'animeshin';
   static const _redirectPath = '/auth';
 
-  static const _desktopRedirectUri = 'http://localhost:28371/';
-
   /// Builds the authorize URL for implicit flow.
   static String _buildAuthUrl({
     required String clientId,
-    String? redirectUri,
   }) {
     final qp = <String, String>{
       'client_id': clientId,
       'response_type': 'token', // implicit flow
     };
-    final r = (redirectUri ?? '').trim();
-    if (r.isNotEmpty) {
-      qp['redirect_uri'] = r;
-    }
     return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
         .replace(queryParameters: qp)
         .toString();
@@ -464,13 +392,10 @@ class __AccountPickerState extends State<_AccountPicker> {
   /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
   /// For desktop we keep the existing local server flow in browser.
   static String get _loginLinkMobile =>
-      _buildAuthUrl(
-        clientId: _mobileClientId,
-        redirectUri: '$_redirectScheme://$_redirectHost$_redirectPath',
-      );
+      _buildAuthUrl(clientId: _mobileClientId);
 
   static String get _loginLinkDesktop =>
-      _buildAuthUrl(clientId: _desktopClientId, redirectUri: _desktopRedirectUri);
+      _buildAuthUrl(clientId: _desktopClientId);
 
   static const _imageSize = 55.0;
 
@@ -609,7 +534,7 @@ class __AccountPickerState extends State<_AccountPicker> {
     final nav = Navigator.of(context);
 
     // --- Mobile path: use embedded WebView and intercept callback ---
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
       final result = await nav.push<OAuthResult?>(
         MaterialPageRoute(
           builder: (_) => AuthWebViewPage(
@@ -637,45 +562,6 @@ class __AccountPickerState extends State<_AccountPicker> {
         return;
       }
 
-      final account = Account(
-        id: profile['id'],
-        name: profile['name'],
-        avatarUrl: profile['avatar']['large'],
-        expiration: expiration,
-        accessToken: accessToken,
-      );
-      await ref.read(persistenceProvider.notifier).addAccount(account);
-      if (!mounted) return;
-      if (nav.canPop()) nav.pop();
-      return;
-    }
-
-    // --- macOS path: iPhone-like in-app WebView, but complete via localhost listener ---
-    if (Platform.isMacOS) {
-      final listener = await _startTokenListener(port: 28371);
-      final accessToken = await nav.push<String?>(
-        MaterialPageRoute(
-          builder: (_) => AuthWebViewTokenPage(
-            authUrl: _loginLinkDesktop,
-            listener: listener,
-          ),
-        ),
-      );
-
-      if (accessToken == null || accessToken.isEmpty) {
-        SnackBarExtension.showOnMessenger(
-            messenger, 'Login canceled or failed');
-        return;
-      }
-
-      final profile = await fetchAniListProfile(accessToken);
-      if (profile == null) {
-        SnackBarExtension.showOnMessenger(messenger, 'Failed to load profile');
-        return;
-      }
-
-      final now = DateTime.now();
-      final expiration = now.add(const Duration(days: 365));
       final account = Account(
         id: profile['id'],
         name: profile['name'],
