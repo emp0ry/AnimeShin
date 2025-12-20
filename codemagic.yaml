@@ -50,6 +50,12 @@ workflows:
 
           # Copy and rename app bundle to requested casing.
           cp -R "$APP_SRC" "$STAGE_DIR/AnimeShin.app"
+
+          # macOS 15+ can refuse to load unsigned embedded frameworks.
+          # Ad-hoc sign the app bundle (and embedded frameworks) so it runs after drag&drop.
+          codesign --force --deep --sign - "$STAGE_DIR/AnimeShin.app"
+          codesign --verify --deep --strict "$STAGE_DIR/AnimeShin.app"
+
           ln -s /Applications "$STAGE_DIR/Applications"
 
           DMG_NAME="AnimeShin-macos-v${VERSION}.dmg"
