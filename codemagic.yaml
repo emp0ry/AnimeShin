@@ -52,9 +52,25 @@ workflows:
           cp -R "$APP_SRC" "$STAGE_DIR/AnimeShin.app"
 
           # macOS 15+ can refuse to load unsigned embedded frameworks.
-          # Ad-hoc sign the app bundle (and embedded frameworks) so it runs after drag&drop.
-          codesign --force --deep --sign - "$STAGE_DIR/AnimeShin.app"
-          codesign --verify --deep --strict "$STAGE_DIR/AnimeShin.app"
+          # Ad-hoc sign (no identity) so dyld can load embedded frameworks/plugins.
+          # This is the minimum needed to *run* on modern macOS without a paid cert.
+          APP_BUNDLE="$STAGE_DIR/AnimeShin.app"
+
+          # Sign nested frameworks/binaries first (more reliable than relying on --deep).
+          if [ -d "$APP_BUNDLE/Contents/Frameworks" ]; then
+            find "$APP_BUNDLE/Contents/Frameworks" -type d -name "*.framework" -print0 \
+              | while IFS= read -r -d '' fw; do
+                  codesign --force --sign - "$fw" || true
+                done
+            find "$APP_BUNDLE/Contents/Frameworks" -type f \( -name "*.dylib" -o -name "*.so" \) -print0 \
+              | while IFS= read -r -d '' lib; do
+                  codesign --force --sign - "$lib" || true
+                done
+          fi
+
+          # Sign the app bundle last.
+          codesign --force --sign - "$APP_BUNDLE"
+          codesign --verify --deep --strict "$APP_BUNDLE"
 
           ln -s /Applications "$STAGE_DIR/Applications"
 
