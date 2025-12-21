@@ -6,6 +6,7 @@ import 'package:animeshin/util/module_loader/remote_modules_store.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/layout/navigation_tool.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -223,6 +224,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
         _remote.buildDescriptors(includeDisabled: true),
       ]),
       builder: (context, snap) {
+        final theming = Theming.of(context);
         final remoteList = (snap.data != null && snap.data!.isNotEmpty)
             ? (snap.data![0] as List<RemoteModuleEntry>)
             : const <RemoteModuleEntry>[];
@@ -243,12 +245,18 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
         // AdaptiveScaffold draws behind the TopBar; only use the safe inset.
         final topInset = MediaQuery.paddingOf(context).top + 4;
 
+        // AdaptiveScaffold uses extendBody=true, so content can end up behind the
+        // bottom navigation bar unless we add extra padding.
+        final bottomInset = MediaQuery.paddingOf(context).bottom +
+            (theming.formFactor == FormFactor.phone ? BottomBar.height : 0) +
+            Theming.offset;
+
         return ListView(
           controller: widget.scrollCtrl,
           padding: EdgeInsets.only(
             left: Theming.offset,
             right: Theming.offset,
-            bottom: 6,
+            bottom: bottomInset,
             top: topInset,
           ),
           children: [
