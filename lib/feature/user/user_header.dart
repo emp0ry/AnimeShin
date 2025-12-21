@@ -180,8 +180,8 @@ Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
           // If AniList returns an auth code, implicit flow won't work.
           var code = queryParams.get('code') || hashParams.get('code');
           if (code) {
-            setStatus('This redirect returned an authorization code, not an access token.\n' +
-              'The app is currently using Implicit Grant (response_type=token).\n' +
+            setStatus('This redirect returned an authorization code, not an access token.\\n' +
+              'The app is currently using Implicit Grant (response_type=token).\\n' +
               'Please verify the AniList client redirect URL matches exactly and that the request uses response_type=token.');
             stopSpinner();
             return;
