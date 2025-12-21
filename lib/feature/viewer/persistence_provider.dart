@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,7 +24,26 @@ final viewerIdProvider = persistenceProvider.select(
 );
 
 class PersistenceNotifier extends Notifier<Persistence> {
-  late Box<Map<dynamic, dynamic>> _box;
+  // This box stores multiple value shapes (maps for most settings + a macOS
+  // fallback string token), so keep it untyped.
+  late Box<dynamic> _box;
+
+  static String _fallbackTokenKey(int accountId) =>
+      'accessTokenFallback_${Account.accessTokenKeyById(accountId)}';
+
+  Map<String, String> _readFallbackTokensFromBox() {
+    final map = <String, String>{};
+    for (final dynamic key in _box.keys) {
+      if (key is! String) continue;
+      if (!key.startsWith('accessTokenFallback_')) continue;
+      final value = _box.get(key);
+      if (value is String && value.isNotEmpty) {
+        // Store by the same key shape AccountGroup expects: auth<ID>
+        map[key.substring('accessTokenFallback_'.length)] = value;
+      }
+    }
+    return map;
+  }
 
   @override
   Persistence build() => Persistence.empty();
@@ -39,9 +60,22 @@ class PersistenceNotifier extends Notifier<Persistence> {
     }
 
     _box = await Hive.openBox('persistence');
-    final accessTokens = await storage.readAll();
+    final secureTokens = await storage.readAll();
 
-    state = Persistence.fromPersistenceMap(_box.toMap(), accessTokens);
+    // On some CI-signed macOS builds, Keychain writes can fail due to signing/
+    // entitlements mismatches. To avoid "login says success but no account",
+    // we allow a macOS-only Hive fallback store.
+    final fallbackTokens = (!kIsWeb && Platform.isMacOS)
+        ? _readFallbackTokensFromBox()
+        : const <String, String>{};
+
+    state = Persistence.fromPersistenceMap(
+      _box.toMap(),
+      {
+        ...fallbackTokens,
+        ...secureTokens, // secure storage wins when available
+      },
+    );
   }
 
   void cacheSystemPrimaryColors(SystemColors systemColors) {
@@ -134,10 +168,25 @@ class PersistenceNotifier extends Notifier<Persistence> {
     final accounts = state.accountGroup.accounts;
     final accountIndex = state.accountGroup.accountIndex;
 
-    await storage.write(
-      key: Account.accessTokenKeyById(account.id),
-      value: account.accessToken,
-    );
+    final tokenKey = Account.accessTokenKeyById(account.id);
+    try {
+      await storage.write(
+        key: tokenKey,
+        value: account.accessToken,
+      );
+      if (!kIsWeb && Platform.isMacOS) {
+        // Clean up any previous fallback token.
+        await _box.delete(_fallbackTokenKey(account.id));
+      }
+    } catch (e) {
+      // If Keychain fails on macOS (common with CI signing issues), don't abort
+      // account setup. Store a best-effort fallback so the account is usable.
+      if (!kIsWeb && Platform.isMacOS) {
+        await _box.put(_fallbackTokenKey(account.id), account.accessToken);
+      } else {
+        rethrow;
+      }
+    }
 
     for (int i = 0; i < accounts.length; i++) {
       if (accounts[i].id == account.id) {
@@ -174,9 +223,19 @@ class PersistenceNotifier extends Notifier<Persistence> {
     if (index < 0 || index >= accountGroup.accounts.length) return;
 
     final account = accountGroup.accounts[index];
-    await storage.delete(
-      key: Account.accessTokenKeyById(account.id),
-    );
+    final tokenKey = Account.accessTokenKeyById(account.id);
+    try {
+      await storage.delete(key: tokenKey);
+    } catch (e) {
+      if (!kIsWeb && Platform.isMacOS) {
+        // Ignore Keychain issues; we'll also delete fallback below.
+      } else {
+        rethrow;
+      }
+    }
+    if (!kIsWeb && Platform.isMacOS) {
+      await _box.delete(_fallbackTokenKey(account.id));
+    }
 
     _setAccountGroup(
       AccountGroup(
