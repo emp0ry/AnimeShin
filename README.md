@@ -135,6 +135,12 @@ flutter build apk --flavor dev --split-per-abi
 flutter build ios --no-codesign
 ```
 
+**MacOS**
+
+```bash
+flutter build macos
+```
+
 **Windows:**
 
 ```bash
