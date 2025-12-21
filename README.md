@@ -50,7 +50,6 @@
 
 - **🔔 Notifications**  
   - New episode aired  
-  - (Planned) New source updates
 
 - **📝 Personal Notes & Scores**  
   Rate entries and attach personal notes right in your list.
@@ -92,10 +91,8 @@
 ## 📈 Roadmap
 
 - Full stable anime player  
-- macOS & Linux support  
-- Notifications for new source updates  
-- Import/export of watchlist and progress  
-- Home screen widgets  
+- Linux support  
+- Apple widgets  
 - Full Russian UI localization  
 
 ---
