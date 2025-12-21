@@ -27,10 +27,12 @@ import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 /// ------------------------
 class _OAuthCallback {
   final String? accessToken;
+  final int? expiresInSeconds;
 
-  const _OAuthCallback._({this.accessToken});
+  const _OAuthCallback._({this.accessToken, this.expiresInSeconds});
 
-  const _OAuthCallback.token(String token) : this._(accessToken: token);
+  const _OAuthCallback.token(String token, {int? expiresInSeconds})
+      : this._(accessToken: token, expiresInSeconds: expiresInSeconds);
 }
 
 class _OAuthListener {
@@ -79,20 +81,137 @@ Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
       // NOTE: relative fetch keeps the same origin (works with ::1 or 127.0.0.1).
       final htmlContent = '''
 <!DOCTYPE html>
-<html><body>
-<script>
-  // Read access_token from location.hash (#...)
-  const params = new URLSearchParams(window.location.hash.slice(1));
-  const token = params.get('access_token');
-  if (token) {
-    fetch('/token?access_token=' + encodeURIComponent(token))
-      .then(() => { document.body.innerHTML = "Success! You can close this window."; })
-      .catch(() => { document.body.innerHTML = "Error sending token."; });
-  } else {
-    document.body.innerHTML = "Error: No token found.";
-  }
-</script>
-</body></html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AniList Login</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        padding: 24px;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+      .card {
+        width: 100%;
+        max-width: 560px;
+        border: 1px solid rgba(127, 127, 127, 0.35);
+        border-radius: 14px;
+        padding: 18px 16px;
+        background: rgba(127, 127, 127, 0.08);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .title {
+        font-size: 16px;
+        font-weight: 650;
+        margin: 0;
+      }
+      .status {
+        margin: 0;
+        opacity: 0.9;
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+      .hint {
+        margin-top: 12px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        display: inline-block;
+        animation: spin 0.9s linear infinite;
+        opacity: 0.85;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="row">
+        <span id="spinner" class="spinner" aria-hidden="true"></span>
+        <p class="title">AniList Login</p>
+      </div>
+      <p id="status" class="status">Completing login…</p>
+      <div class="hint">This tab will show “Success” when done.</div>
+    </div>
+    <script>
+      (function () {
+        function setStatus(text) {
+          document.getElementById('status').textContent = text;
+        }
+
+        function stopSpinner() {
+          var s = document.getElementById('spinner');
+          if (s) s.style.display = 'none';
+        }
+
+        try {
+          var url = new URL(window.location.href);
+          var hashParams = new URLSearchParams((url.hash || '').replace(/^#/, ''));
+          var queryParams = url.searchParams;
+
+          // OAuth errors sometimes come back in the query string.
+          var err = queryParams.get('error') || hashParams.get('error');
+          var msg = queryParams.get('message') || hashParams.get('message');
+          var hint = queryParams.get('hint') || hashParams.get('hint');
+          if (err || msg || hint) {
+            setStatus('Login error: ' + [err, msg, hint].filter(Boolean).join(' | '));
+            stopSpinner();
+            return;
+          }
+
+          // If AniList returns an auth code, implicit flow won't work.
+          var code = queryParams.get('code') || hashParams.get('code');
+          if (code) {
+            setStatus('This redirect returned an authorization code, not an access token.\n' +
+              'The app is currently using Implicit Grant (response_type=token).\n' +
+              'Please verify the AniList client redirect URL matches exactly and that the request uses response_type=token.');
+            stopSpinner();
+            return;
+          }
+
+          // Read access_token from fragment (#...); very rarely it might appear in the query.
+          var token = hashParams.get('access_token') || queryParams.get('access_token');
+          var expiresIn = hashParams.get('expires_in') || queryParams.get('expires_in') || '';
+          if (!token) {
+            setStatus('Error: No access token found in redirect.');
+            stopSpinner();
+            return;
+          }
+
+          // Prefer POST to avoid URL length issues and be more robust.
+          // Most reliable approach: navigate to /token with the token in the query.
+          // The server will capture it and immediately scrub it from the URL.
+          var nextUrl = '/token?access_token=' + encodeURIComponent(token) +
+            (expiresIn ? ('&expires_in=' + encodeURIComponent(expiresIn)) : '');
+          setStatus('Finalizing login…');
+          window.location.replace(nextUrl);
+          return;
+        } catch (e) {
+          setStatus('Unexpected error completing login.');
+          stopSpinner();
+        }
+      })();
+    </script>
+  </body>
+</html>
       ''';
       request.response
         ..headers.contentType = ContentType.html
@@ -102,10 +221,94 @@ Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
     }
 
     if (request.uri.path == '/token') {
-      final token = request.uri.queryParameters['access_token'];
+      String? token;
+      String? expiresIn;
+
+      if (request.method.toUpperCase() == 'POST') {
+        try {
+          final bodyBytes = await request.fold<List<int>>(<int>[], (acc, b) {
+            acc.addAll(b);
+            return acc;
+          });
+          final body = utf8.decode(bodyBytes);
+          final params = Uri.splitQueryString(body);
+          token = params['access_token'];
+          expiresIn = params['expires_in'];
+        } catch (_) {
+          // Ignore.
+        }
+      } else {
+        token = request.uri.queryParameters['access_token'];
+        expiresIn = request.uri.queryParameters['expires_in'];
+      }
+
+      request.response.headers.contentType = ContentType.html;
+
+      // Always respond with a small page that removes the token from the URL.
+      request.response.write('''
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AniList Login</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        padding: 24px;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: Canvas;
+        color: CanvasText;
+      }
+      .card {
+        width: 100%;
+        max-width: 560px;
+        border: 1px solid rgba(127, 127, 127, 0.35);
+        border-radius: 14px;
+        padding: 18px 16px;
+        background: rgba(127, 127, 127, 0.08);
+      }
+      .title {
+        font-size: 16px;
+        font-weight: 650;
+        margin: 0 0 10px 0;
+      }
+      .status {
+        margin: 0;
+        opacity: 0.9;
+        line-height: 1.4;
+      }
+      .hint {
+        margin-top: 12px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p class="title">Success</p>
+      <p class="status">You can close this tab and return to the app.</p>
+      <div class="hint">For your security, the URL will be cleaned.</div>
+    </div>
+    <script>
+      try { history.replaceState({}, document.title, '/'); } catch (e) {}
+    </script>
+  </body>
+</html>
+      ''');
       await request.response.close();
-      if (!completer.isCompleted && token != null) {
-        completer.complete(_OAuthCallback.token(token));
+
+      if (!completer.isCompleted && token != null && token.isNotEmpty) {
+        final expiresInSeconds = int.tryParse((expiresIn ?? '').trim());
+        completer.complete(
+          _OAuthCallback.token(token, expiresInSeconds: expiresInSeconds),
+        );
         try {
           await server.close(force: true);
         } catch (_) {
@@ -123,11 +326,10 @@ Future<_OAuthListener> _startOAuthListener({int port = 28371}) async {
   return _OAuthListener(server, completer);
 }
 
-Future<String?> listenForToken({int port = 28371}) async {
+Future<_OAuthCallback?> _listenForToken({int port = 28371}) async {
   final listener = await _startOAuthListener(port: port);
   try {
-    final cb = await listener.wait();
-    return cb?.accessToken;
+    return await listener.wait();
   } finally {
     // Ensure port is freed even if caller abandons the future.
     await listener.cancel();
@@ -635,30 +837,20 @@ class __AccountPickerState extends State<_AccountPicker> {
   static const _redirectHost = 'animeshin';
   static const _redirectPath = '/auth';
 
-  static const _mobileRedirectUri = 'app://animeshin/auth';
-  static const _desktopRedirectUri = 'http://localhost:28371/';
+  // static const _mobileRedirectUri = 'app://animeshin/auth';
+  // static const _desktopRedirectUri = 'http://localhost:28371/';
 
   /// Builds the authorize URL for implicit flow.
+  ///
+  /// IMPORTANT: Do not pass `redirect_uri` from the app.
+  /// AniList uses the redirect URL configured in the developer profile.
   static String _buildAuthUrl({
     required String clientId,
-    String? redirectUri,
-    required String responseType,
-    String? codeChallenge,
-    String? codeChallengeMethod,
   }) {
     final qp = <String, String>{
       'client_id': clientId,
-      'response_type': responseType,
+      'response_type': 'token',
     };
-    if (redirectUri != null && redirectUri.isNotEmpty) {
-      qp['redirect_uri'] = redirectUri;
-    }
-    if (codeChallenge != null && codeChallenge.isNotEmpty) {
-      qp['code_challenge'] = codeChallenge;
-    }
-    if (codeChallengeMethod != null && codeChallengeMethod.isNotEmpty) {
-      qp['code_challenge_method'] = codeChallengeMethod;
-    }
     return Uri.parse('https://anilist.co/api/v2/oauth/authorize')
         .replace(queryParameters: qp)
         .toString();
@@ -667,18 +859,10 @@ class __AccountPickerState extends State<_AccountPicker> {
   /// For mobile we use WebView with explicit redirect to app://animeshin/auth.
   /// For desktop we keep the existing local server flow in browser.
   static String get _loginLinkMobile =>
-      _buildAuthUrl(
-        clientId: _mobileClientId,
-        redirectUri: _mobileRedirectUri,
-        responseType: 'token',
-      );
+      _buildAuthUrl(clientId: _mobileClientId);
 
   static String get _loginLinkDesktop =>
-      _buildAuthUrl(
-        clientId: _desktopClientId,
-        redirectUri: _desktopRedirectUri,
-        responseType: 'token',
-      );
+      _buildAuthUrl(clientId: _desktopClientId);
 
   static const _imageSize = 55.0;
 
@@ -867,13 +1051,20 @@ class __AccountPickerState extends State<_AccountPicker> {
     final authUrl = _loginLinkDesktop;
 
     if (isAccountListEmpty) {
-      final futureToken = listenForToken(port: 28371);
+      final futureCb = _listenForToken(port: 28371);
 
       await SnackBarExtension.launchLink(
         authUrl,
         messenger: messenger,
       );
-      final token = await futureToken;
+
+      final cb = await futureCb;
+      final token = cb?.accessToken;
+      final expiresInSeconds = cb?.expiresInSeconds;
+      final validSeconds = (expiresInSeconds != null && expiresInSeconds > 0)
+          ? expiresInSeconds
+          : 31536000;
+
       if (token == null || token.isEmpty) {
         SnackBarExtension.showOnMessenger(messenger, 'Login canceled or failed');
         return;
@@ -885,7 +1076,7 @@ class __AccountPickerState extends State<_AccountPicker> {
         return;
       }
 
-      final expiration = DateTime.now().add(const Duration(days: 365));
+      final expiration = DateTime.now().add(Duration(seconds: validSeconds));
       final account = Account(
         id: profile['id'],
         name: profile['name'],
@@ -898,7 +1089,7 @@ class __AccountPickerState extends State<_AccountPicker> {
       if (nav.canPop()) nav.pop();
       return;
     } else {
-      final futureToken = listenForToken(port: 28371); // start listener FIRST
+      final futureCb = _listenForToken(port: 28371); // start listener FIRST
 
       ConfirmationDialog.show(
         context,
@@ -916,7 +1107,14 @@ class __AccountPickerState extends State<_AccountPicker> {
             messenger: confirmMessenger,
           );
 
-          final token = await futureToken;
+          final cb = await futureCb;
+          final token = cb?.accessToken;
+          final expiresInSeconds = cb?.expiresInSeconds;
+          final validSeconds =
+              (expiresInSeconds != null && expiresInSeconds > 0)
+                  ? expiresInSeconds
+                  : 31536000;
+
           if (token == null || token.isEmpty) {
             SnackBarExtension.showOnMessenger(
               confirmMessenger,
@@ -932,7 +1130,7 @@ class __AccountPickerState extends State<_AccountPicker> {
             return;
           }
 
-          final expiration = DateTime.now().add(const Duration(days: 365));
+          final expiration = DateTime.now().add(Duration(seconds: validSeconds));
           final account = Account(
             id: profile['id'],
             name: profile['name'],
