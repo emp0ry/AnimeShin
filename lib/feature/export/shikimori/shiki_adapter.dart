@@ -89,6 +89,7 @@ ShikiAnimeItem? entryToShikiAnime(Entry e, ScoreFormat format) {
     rewatches: e.repeat,
     episodes: e.progress,
     text: e.notes.isEmpty ? null : e.notes,
+    isFav: e.isFavorite,
   );
 }
 

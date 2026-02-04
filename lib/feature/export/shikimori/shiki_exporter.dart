@@ -31,6 +31,7 @@ class ShikiExporter {
         'rewatches': e.rewatches,
         'episodes': e.episodes,
         'text': e.text,
+        'is_fav': e.isFav,
       }).toList();
 
       final jsonStr = const JsonEncoder.withIndent('  ').convert(list);

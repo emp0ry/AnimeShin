@@ -452,6 +452,8 @@ class Entry {
     required this.anilibriaAlias,
     required this.anilibriaId,
 
+    required this.isFavorite,
+
     required this.titleEnglish,
     required this.titleRomaji,
     required this.titleNative,
@@ -503,6 +505,8 @@ class Entry {
         ? map['media']['anilibriaId'] as int
         : 0;
 
+    final bool isFavorite = map['media']?['isFavourite'] ?? false;
+
     return Entry._(
       mediaId: map['media']['id'],
       malId: malId,
@@ -537,6 +541,7 @@ class Entry {
       anilibriaWatchState: map['anilibriaWatchState'] ?? false,
       anilibriaAlias: anilibriaAlias,
       anilibriaId: anilibriaId,
+      isFavorite: isFavorite,
       titleEnglish: english,
       titleRomaji: romaji,
       titleNative: native,
@@ -576,6 +581,7 @@ class Entry {
   bool? anilibriaWatchState;
   String? anilibriaAlias;
   int? anilibriaId;
+  final bool isFavorite;
   String? titleEnglish;
   String? titleRomaji;
   String? titleNative;

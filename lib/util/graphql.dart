@@ -1060,6 +1060,7 @@ abstract class _GqlFragment {
         nextAiringEpisode {episode airingAt}
         startDate {year month day}
         countryOfOrigin
+        isFavourite
       }
     }
   ''';

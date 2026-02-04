@@ -12,6 +12,7 @@ class ShikiAnimeItem {
     required this.rewatches,  // number of rewatches
     required this.episodes,   // watched episodes (progress)
     required this.text,       // user comments
+    required this.isFav,
   });
 
   final String targetTitle;
@@ -22,6 +23,7 @@ class ShikiAnimeItem {
   final int rewatches;
   final int episodes;
   final String? text;
+  final bool isFav;
 }
 
 class ShikiMangaItem {
