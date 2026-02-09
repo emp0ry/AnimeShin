@@ -132,19 +132,46 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       let mainAsset = buildAsset(url, headers: headers)
       let subtitleUrl = (subtitleUrlStr?.isEmpty ?? true) ? nil : subtitleUrlStr
 
-      // Build player item. If external subtitles are provided, try to attach them.
-      var item: AVPlayerItem
-      if let s = subtitleUrl, let sUrl = URL(string: s) {
-        let subAsset = buildAsset(sUrl, headers: headers)
-        let composition = AVMutableComposition()
-        let duration = mainAsset.duration
+      func buildItemWithExternalSubtitles(
+        mainAsset: AVURLAsset,
+        subtitleUrl: String,
+        completion: @escaping (AVPlayerItem, Bool) -> Void
+      ) {
+        guard let sUrl = URL(string: subtitleUrl) else {
+          completion(AVPlayerItem(asset: mainAsset), false)
+          return
+        }
 
-        // If duration is not ready, skip composition to avoid invalid inserts.
-        if CMTIME_IS_INDEFINITE(duration) || CMTIME_IS_INVALID(duration) {
-          item = AVPlayerItem(asset: mainAsset)
-        } else {
+        let subAsset = buildAsset(sUrl, headers: headers)
+        let group = DispatchGroup()
+
+        group.enter()
+        mainAsset.loadValuesAsynchronously(forKeys: ["tracks", "duration"]) {
+          group.leave()
+        }
+
+        group.enter()
+        subAsset.loadValuesAsynchronously(forKeys: ["tracks"]) {
+          group.leave()
+        }
+
+        group.notify(queue: .main) {
+          let duration = mainAsset.duration
+          if CMTIME_IS_INDEFINITE(duration) || CMTIME_IS_INVALID(duration) {
+            completion(AVPlayerItem(asset: mainAsset), false)
+            return
+          }
+
+          let videoTracks = mainAsset.tracks(withMediaType: .video)
+          if videoTracks.isEmpty {
+            completion(AVPlayerItem(asset: mainAsset), false)
+            return
+          }
+
+          let composition = AVMutableComposition()
+
           // Copy video & audio tracks from main asset
-          for track in mainAsset.tracks(withMediaType: .video) {
+          for track in videoTracks {
             if let compTrack = composition.addMutableTrack(
               withMediaType: .video,
               preferredTrackID: kCMPersistentTrackID_Invalid
@@ -185,56 +212,54 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
             }
           }
 
-          item = AVPlayerItem(asset: composition)
+          completion(AVPlayerItem(asset: composition), true)
         }
-      } else {
-        item = AVPlayerItem(asset: mainAsset)
       }
 
-      // Honor subtitle toggle: when disabled, explicitly deselect legible tracks.
-      if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
-        if subtitlesEnabled {
-          // Only force-select when an external subtitle is attached; otherwise let iOS decide.
-          if subtitleUrl != nil, let opt = group.options.first {
-            item.select(opt, in: group)
+      func startWithItem(_ item: AVPlayerItem, hasExternalSubtitle: Bool) {
+        // Honor subtitle toggle: when disabled, explicitly deselect legible tracks.
+        if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+          if subtitlesEnabled {
+            if hasExternalSubtitle, let opt = group.options.first {
+              item.select(opt, in: group)
+            }
+          } else {
+            item.select(nil, in: group)
           }
-        } else {
-          item.select(nil, in: group)
         }
-      }
 
-      let player = AVPlayer(playerItem: item)
+        let player = AVPlayer(playerItem: item)
 
-      // Prefer brief stalls over "catch-up" jumps that look like random skips
-      player.automaticallyWaitsToMinimizeStalling = false
+        // Prefer brief stalls over "catch-up" jumps that look like random skips
+        player.automaticallyWaitsToMinimizeStalling = false
 
-      // Configure view controller
-      let vc = ReportingAVPlayerViewController()
-      vc.player = player
-      vc.title = title
-      vc.modalPresentationStyle = .fullScreen
-      vc.channel = channel
-      vc.delegate = self
+        // Configure view controller
+        let vc = ReportingAVPlayerViewController()
+        vc.player = player
+        vc.title = title
+        vc.modalPresentationStyle = .fullScreen
+        vc.channel = channel
+        vc.delegate = self
 
-      // Enable PiP
-      vc.allowsPictureInPicturePlayback = true
-      if #available(iOS 14.0, *) {
-        vc.canStartPictureInPictureAutomaticallyFromInline = true
-      }
-
-      // Auto fullscreen begin/end (fine for a modal VC)
-      vc.entersFullScreenWhenPlaybackBegins = true
-      vc.exitsFullScreenWhenPlaybackEnds = true
-
-      // Track last non-zero rate to preserve playback intent
-      vc.desiredRate = Float(rate)
-      vc.rateObserver = player.observe(\.rate, options: [.new, .initial]) { [weak vc] p, _ in
-        guard let vc = vc else { return }
-        if p.rate > 0 {
-          vc.desiredRate = p.rate
-          vc.wasPlayingRecentlyAt = Date()
+        // Enable PiP
+        vc.allowsPictureInPicturePlayback = true
+        if #available(iOS 14.0, *) {
+          vc.canStartPictureInPictureAutomaticallyFromInline = true
         }
-      }
+
+        // Auto fullscreen begin/end (fine for a modal VC)
+        vc.entersFullScreenWhenPlaybackBegins = true
+        vc.exitsFullScreenWhenPlaybackEnds = true
+
+        // Track last non-zero rate to preserve playback intent
+        vc.desiredRate = Float(rate)
+        vc.rateObserver = player.observe(\.rate, options: [.new, .initial]) { [weak vc] p, _ in
+          guard let vc = vc else { return }
+          if p.rate > 0 {
+            vc.desiredRate = p.rate
+            vc.wasPlayingRecentlyAt = Date()
+          }
+        }
 
       // Auto-skip opening/ending via periodic time observer (with resume)
       var didSkipOpening = false
@@ -323,39 +348,51 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         }
       }
 
-      // Present native player
-      controller.present(vc, animated: true) {
-        // Seek & play with the desired rate when ready
-        let startPlayback = {
-          if pos > 0 {
-            vc.programmaticSeekInFlight = true
-            player.seek(
-              to: CMTime(seconds: pos, preferredTimescale: 600),
-              toleranceBefore: .zero,
-              toleranceAfter: .zero
-            ) { _ in
-              vc.programmaticSeekInFlight = false
+        // Present native player
+        controller.present(vc, animated: true) {
+          // Seek & play with the desired rate when ready
+          let startPlayback = {
+            if pos > 0 {
+              vc.programmaticSeekInFlight = true
+              player.seek(
+                to: CMTime(seconds: pos, preferredTimescale: 600),
+                toleranceBefore: .zero,
+                toleranceAfter: .zero
+              ) { _ in
+                vc.programmaticSeekInFlight = false
+                if wasPlaying { player.playImmediately(atRate: Float(rate)) }
+              }
+            } else {
               if wasPlaying { player.playImmediately(atRate: Float(rate)) }
             }
-          } else {
-            if wasPlaying { player.playImmediately(atRate: Float(rate)) }
           }
-        }
 
-        // Start after item becomes ready (guard against early seeking)
-        if item.status == .readyToPlay {
-          startPlayback()
-        } else {
-          vc.statusObserver = item.observe(\.status, options: [.new, .initial]) { observedItem, _ in
-            if observedItem.status == .readyToPlay {
-              startPlayback()
-              vc.statusObserver?.invalidate(); vc.statusObserver = nil
+          // Start after item becomes ready (guard against early seeking)
+          if item.status == .readyToPlay {
+            startPlayback()
+          } else {
+            vc.statusObserver = item.observe(\.status, options: [.new, .initial]) { observedItem, _ in
+              if observedItem.status == .readyToPlay {
+                startPlayback()
+                vc.statusObserver?.invalidate(); vc.statusObserver = nil
+              }
             }
           }
         }
+
+        result(nil)
       }
 
-      result(nil)
+      if subtitlesEnabled, let sub = subtitleUrl {
+        buildItemWithExternalSubtitles(
+          mainAsset: mainAsset,
+          subtitleUrl: sub
+        ) { built, attached in
+          startWithItem(built, hasExternalSubtitle: attached)
+        }
+      } else {
+        startWithItem(AVPlayerItem(asset: mainAsset), hasExternalSubtitle: false)
+      }
     }
 
     GeneratedPluginRegistrant.register(with: self)
