@@ -87,7 +87,6 @@ class MediaHeader extends ConsumerWidget {
       imageHeroTag: id,
       siteUrl: media?.info.siteUrl,
       siteShikimoriUrl: media?.info.siteShikimoriUrl,
-      siteAniLibriaUrl: media?.info.siteAniLibriaUrl,
       title: media?.info.preferredTitle,
       details: TextRail(
         textRailItems,

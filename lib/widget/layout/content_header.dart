@@ -14,7 +14,6 @@ class CustomContentHeader extends StatelessWidget {
     required this.content,
     required this.siteUrl,
     this.siteShikimoriUrl,
-    this.siteAniLibriaUrl,
     this.bannerUrl,
     this.trailingTopButtons = const [],
     this.trailingBottomButtons = const [],
@@ -25,7 +24,6 @@ class CustomContentHeader extends StatelessWidget {
   final PreferredSizeWidget content;
   final String? siteUrl;
   final String? siteShikimoriUrl;
-  final String? siteAniLibriaUrl;
   final String? bannerUrl;
   final List<Widget> trailingTopButtons;
   final List<Widget> trailingBottomButtons;
@@ -40,7 +38,6 @@ class CustomContentHeader extends StatelessWidget {
         title: title,
         siteUrl: siteUrl,
         siteShikimoriUrl: siteShikimoriUrl,
-        siteAniLibriaUrl: siteAniLibriaUrl,
         trailingTopButtons: trailingTopButtons,
         trailingBottomButtons: trailingBottomButtons,
         bannerUrl: bannerUrl,
@@ -60,7 +57,6 @@ class ContentHeader extends StatelessWidget {
     required this.details,
     required this.siteUrl,
     this.siteShikimoriUrl,
-    this.siteAniLibriaUrl,
     this.imageLargeUrl,
     this.imageFit = BoxFit.cover,
     this.trailingTopButtons = const [],
@@ -80,7 +76,6 @@ class ContentHeader extends StatelessWidget {
   final List<Widget> trailingBottomButtons;
   final String? siteUrl;
   final String? siteShikimoriUrl;
-  final String? siteAniLibriaUrl;
   final String? bannerUrl;
   final TabBarConfig? tabBarConfig;
 
@@ -109,7 +104,6 @@ class ContentHeader extends StatelessWidget {
         title: title,
         siteUrl: siteUrl,
         siteShikimoriUrl: siteShikimoriUrl,
-        siteAniLibriaUrl: siteAniLibriaUrl,
         trailingTopButtons: trailingTopButtons,
         trailingBottomButtons: trailingBottomButtons,
         bannerUrl: bannerUrl,
@@ -213,7 +207,6 @@ class _Delegate extends SliverPersistentHeaderDelegate {
     required this.title,
     required this.siteUrl,
     required this.siteShikimoriUrl,
-    required this.siteAniLibriaUrl,
     required this.bannerUrl,
     required this.tabBarConfig,
     required this.trailingTopButtons,
@@ -228,7 +221,6 @@ class _Delegate extends SliverPersistentHeaderDelegate {
   final List<Widget> trailingBottomButtons;
   final String? siteUrl;
   final String? siteShikimoriUrl;
-  final String? siteAniLibriaUrl;
   final String? bannerUrl;
   final TabBarConfig? tabBarConfig;
 
@@ -288,8 +280,11 @@ class _Delegate extends SliverPersistentHeaderDelegate {
           onPressed: siteUrl != null
               ? () => showSheet(
                     context,
-                    SimpleSheet.link2(context, siteUrl!, siteShikimoriUrl != null ? siteShikimoriUrl! : '',
-                                                         siteAniLibriaUrl != null ? siteAniLibriaUrl! : ''),
+                    SimpleSheet.link2(
+                      context,
+                      siteUrl!,
+                      siteShikimoriUrl != null ? siteShikimoriUrl! : '',
+                    ),
                   )
               : null,
         ),

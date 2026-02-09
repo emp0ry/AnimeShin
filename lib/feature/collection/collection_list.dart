@@ -318,10 +318,11 @@ class __TileContentState extends State<_TileContent> {
       final diff = widget.item.nextEpisode! - 1 - widget.item.progress;
       String key;
 
-      if (widget.item.anilibriaEpDubState == true) {
-        if (widget.item.lastAniLibriaEpisode != null &&
-            widget.item.anilibriaId != 0) {
-          if (widget.item.lastAniLibriaEpisode! > widget.item.progress) {
+      if (!isManga && widget.item.anilibriaEpDubState == true) {
+        final last = widget.item.lastAniLibriaEpisode ?? 0;
+        final id = widget.item.anilibriaId;
+        if (last > 0 && id != null && id != 0) {
+          if (last > widget.item.progress) {
             key = '$diff ep behind (✔️AniLiberty)';
           } else {
             key = '$diff ep behind (✖️AniLiberty)';

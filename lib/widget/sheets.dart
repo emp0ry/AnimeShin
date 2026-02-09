@@ -59,8 +59,7 @@ class SimpleSheet extends StatelessWidget {
     factory SimpleSheet.link2(
       BuildContext context,
       String link,
-      String shikimoriLink,
-      String aniLibriaLink, [
+      String shikimoriLink, [
       List<Widget> children = const [],
     ]) =>
       SimpleSheet.list([
@@ -79,15 +78,6 @@ class SimpleSheet extends StatelessWidget {
           leading: const Icon(Ionicons.link_outline),
           onTap: () {
             SnackBarExtension.launch(context, shikimoriLink);
-            Navigator.pop(context);
-            },
-          ),
-        if (aniLibriaLink != '')
-          ListTile(
-          title: const Text('Open in AniLibria'),
-          leading: const Icon(Ionicons.link_outline),
-          onTap: () {
-            SnackBarExtension.launch(context, aniLibriaLink);
             Navigator.pop(context);
             },
           ),

@@ -314,7 +314,6 @@ class MediaInfo {
     required this.hashtag,
     required this.siteUrl,
     required this.siteShikimoriUrl,
-    required this.siteAniLibriaUrl,
     required this.anilibriaLastEpisode,
     required this.countryOfOrigin,
     required this.isAdult,
@@ -356,7 +355,6 @@ class MediaInfo {
   final String? hashtag;
   final String? siteUrl;
   final String? siteShikimoriUrl;
-  final String? siteAniLibriaUrl;
   final int? anilibriaLastEpisode;
   final OriginCountry? countryOfOrigin;
   final bool isAdult;
@@ -418,7 +416,6 @@ class MediaInfo {
       hashtag: map['hashtag'],
       siteUrl: map['siteUrl'],
       siteShikimoriUrl: map['shikimoriUrl'],
-      siteAniLibriaUrl: map['anilibriaUrl'],
       anilibriaLastEpisode: map['anilibriaLastEpisode'],
       countryOfOrigin: OriginCountry.fromCode(map['countryOfOrigin']),
       isAdult: map['isAdult'] ?? false,

@@ -56,7 +56,7 @@ String normalizeForCompare(String input) {
   return d.replaceAll(RegExp(r'[^\p{L}\p{Nd}]+', unicode: true), '');
 }
 
-/// Kebab-case alias used by Anilibria (lowercase ASCII; non-alnum -> '-'; trim dashes).
+/// Kebab-case alias (lowercase ASCII; non-alnum -> '-'; trim dashes).
 String toKebabAlias(String input) {
   final d = stripDiacritics(input).toLowerCase();
   final k = d.replaceAll(RegExp(r'[^a-z0-9]+'), '-');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 import 'package:animeshin/extension/iterable_extension.dart';
 import 'package:animeshin/util/notification_system.dart';
@@ -68,8 +69,10 @@ class CollectionNotifier
     );
 
     // Light AniLiberty enrichment: fill alias/id/last episode for dub indicator.
-    // This keeps the existing AniLiberty badge working even after removing other sources.
-    await _enrichAniLibertyMeta(data);
+    // Only run when the indicator is enabled to avoid unnecessary requests.
+    if (options.anilibriaEpDub) {
+      await _enrichAniLibertyMeta(data);
+    }
 
     final imageQuality = ref.read(persistenceProvider).options.imageQuality;
 
@@ -473,7 +476,10 @@ class CollectionNotifier
       }
     }
 
-    if (aliasToEntry.isEmpty) return;
+    if (aliasToEntry.isEmpty) {
+      debugPrint('[AniLiberty] No aliases found for dub indicator');
+      return;
+    }
 
     final repo = AnilibertyRepository();
 
@@ -494,7 +500,20 @@ class CollectionNotifier
       return null;
     }
 
+    int? maxOrdinalFromEpisodes(dynamic episodes) {
+      if (episodes is! List) return null;
+      int max = 0;
+      for (final e in episodes) {
+        if (e is Map) {
+          final ord = parseInt(e['ordinal']);
+          if (ord != null && ord > max) max = ord;
+        }
+      }
+      return max > 0 ? max : null;
+    }
+
     try {
+      debugPrint('[AniLiberty] Enriching ${aliasToEntry.length} entries');
       // Batch fetch by aliases; tolerate failures quietly.
       final res = await repo.fetchListByAliases(aliases: aliasToEntry.keys.toList());
       final items = res['data'];
@@ -515,7 +534,7 @@ class CollectionNotifier
           pickFirstMapValue(item, const ['id', 'anilibria_id', 'aniliberty_id'])?.values.first,
         );
 
-        final int? lastEp = parseInt(
+        int? lastEp = parseInt(
           pickFirstMapValue(item, const [
             'lastEpisode',
             'last_episode',
@@ -526,15 +545,21 @@ class CollectionNotifier
           ])?.values.first,
         );
 
+        lastEp ??= maxOrdinalFromEpisodes(item['episodes']);
+
         if (alId != null) {
           entry['media']['anilibriaId'] = alId;
         }
         if (lastEp != null) {
           entry['media']['anilibriaLastEpisode'] = lastEp;
         }
+        debugPrint(
+          '[AniLiberty] alias=$alias id=${alId ?? 0} lastEp=${lastEp ?? 0}',
+        );
       }
     } catch (_) {
       // Swallow enrichment errors; keep core collection load unaffected.
+      debugPrint('[AniLiberty] Enrichment failed');
     }
   }
 }
