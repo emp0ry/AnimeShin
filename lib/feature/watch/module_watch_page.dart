@@ -350,34 +350,6 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     return out;
   }
 
-  static bool _titleHasQualityOrProvider(String raw) {
-    final t = raw.toLowerCase();
-    if (RegExp(r'\b(2160|1440|1080|720|480|360)\s*p\b').hasMatch(t)) {
-      return true;
-    }
-    if (t.contains('kodik') || t.contains('sub') || t.contains('dub') || t.contains('voice')) {
-      return true;
-    }
-    return RegExp(r'\([^)]*\)').hasMatch(t);
-  }
-
-  static bool _isNumericVoiceoverLabel(String raw) {
-    final t = raw.trim();
-    if (t.isEmpty) return false;
-    return RegExp(r'^\d{1,3}$').hasMatch(t);
-  }
-
-  static List<String> _uniqueVoiceoverBases(Iterable<String> titles) {
-    final unique = <String>[];
-    final seen = <String>{};
-    for (final t in titles) {
-      final base = _stripVoiceoverTitle(t).toLowerCase();
-      if (base.isEmpty) continue;
-      if (seen.add(base)) unique.add(base);
-    }
-    return unique;
-  }
-
   static List<String> _buildVoiceoverCandidates(
     Iterable<JsStreamCandidate> streams,
   ) {
