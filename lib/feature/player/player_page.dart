@@ -603,6 +603,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _applyExternalSubtitleIfAny({bool force = false}) async {
     if (!_alive) return;
 
+    // On iOS, rely on native in-band subtitles only.
+    if (_isIOS) return;
+
     // Don't attempt to attach subtitles before the first media is opened.
     if (!_hasOpenedMedia) return;
 
