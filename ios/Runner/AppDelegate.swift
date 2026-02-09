@@ -140,7 +140,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         let duration = mainAsset.duration
 
         // If duration is not ready, skip composition to avoid invalid inserts.
-        if duration.isIndefinite || duration.isInvalid {
+        if CMTIME_IS_INDEFINITE(duration) || CMTIME_IS_INVALID(duration) {
           item = AVPlayerItem(asset: mainAsset)
         } else {
           // Copy video & audio tracks from main asset
