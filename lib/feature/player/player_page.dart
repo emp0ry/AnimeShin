@@ -1383,6 +1383,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Reset auto-skip flags for a fresh media open (quality change / next episode).
     _openingSkipped = false;
     _endingSkipped = false;
+    _autoSkipBlockedUntil = null;
 
     // Do not force close; some CDNs misbehave & expose only the first HLS segment.
     try {
@@ -1430,11 +1431,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _selectOnlyExternalSubtitleIfPossible,
     ));
 
+    // On desktop, re-apply external subtitles after a short delay to avoid
+    // cases where mpv isn't ready on first attach (prevents needing a toggle).
+    if (!_isIOS) {
+      unawaited(Future<void>.delayed(
+        const Duration(milliseconds: 700),
+        () => _applyExternalSubtitleIfAny(force: true),
+      ));
+    }
+
     if (!_alive) return;
 
     // Reset auto-skip flags for a fresh media open (quality change / next episode).
     _openingSkipped = false;
     _endingSkipped = false;
+    _autoSkipBlockedUntil = null;
 
     // Robust HLS settle: wait for either a valid duration OR first stable positions.
     final settle = Completer<void>();
@@ -1508,6 +1519,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               reason: 'openAt_force_zero_confirm');
         }
       }
+    }
+
+    // Ensure playback starts if requested (prevents stuck paused state on Windows).
+    if (play && _alive) {
+      try {
+        if (!_player.state.playing) {
+          await _player.play();
+        }
+      } catch (_) {}
     }
   }
 
@@ -1765,7 +1785,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Respect temporary block (e.g., right after undo or iOS restore).
     if (_autoSkipBlockedUntil != null &&
         DateTime.now().isBefore(_autoSkipBlockedUntil!)) {
-      return;
+      // Disable skip penalty by clearing the block.
+      _autoSkipBlockedUntil = null;
     }
 
     final p = pos.inSeconds;
