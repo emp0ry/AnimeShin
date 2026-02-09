@@ -130,103 +130,23 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       }
 
       let mainAsset = buildAsset(url, headers: headers)
-      let subtitleUrl = (subtitleUrlStr?.isEmpty ?? true) ? nil : subtitleUrlStr
 
-      func buildItemWithExternalSubtitles(
-        mainAsset: AVURLAsset,
-        subtitleUrl: String,
-        completion: @escaping (AVPlayerItem, Bool) -> Void
-      ) {
-        guard let sUrl = URL(string: subtitleUrl) else {
-          completion(AVPlayerItem(asset: mainAsset), false)
-          return
-        }
-
-        let subAsset = buildAsset(sUrl, headers: headers)
-        let group = DispatchGroup()
-
-        group.enter()
-        mainAsset.loadValuesAsynchronously(forKeys: ["tracks", "duration"]) {
-          group.leave()
-        }
-
-        group.enter()
-        subAsset.loadValuesAsynchronously(forKeys: ["tracks"]) {
-          group.leave()
-        }
-
-        group.notify(queue: .main) {
-          let duration = mainAsset.duration
-          if CMTIME_IS_INDEFINITE(duration) || CMTIME_IS_INVALID(duration) {
-            completion(AVPlayerItem(asset: mainAsset), false)
+      func startWithItem(_ item: AVPlayerItem) {
+        func applySubtitleSelection() {
+          guard let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else {
             return
           }
-
-          let videoTracks = mainAsset.tracks(withMediaType: .video)
-          if videoTracks.isEmpty {
-            completion(AVPlayerItem(asset: mainAsset), false)
-            return
-          }
-
-          let composition = AVMutableComposition()
-
-          // Copy video & audio tracks from main asset
-          for track in videoTracks {
-            if let compTrack = composition.addMutableTrack(
-              withMediaType: .video,
-              preferredTrackID: kCMPersistentTrackID_Invalid
-            ) {
-              try? compTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: duration),
-                of: track,
-                at: .zero
-              )
-            }
-          }
-          for track in mainAsset.tracks(withMediaType: .audio) {
-            if let compTrack = composition.addMutableTrack(
-              withMediaType: .audio,
-              preferredTrackID: kCMPersistentTrackID_Invalid
-            ) {
-              try? compTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: duration),
-                of: track,
-                at: .zero
-              )
-            }
-          }
-
-          // Attach subtitle / text tracks from subtitle asset (best-effort)
-          let textTracks = subAsset.tracks(withMediaType: .text)
-          let subTracks = subAsset.tracks(withMediaType: .subtitle)
-          for track in textTracks + subTracks {
-            if let compTrack = composition.addMutableTrack(
-              withMediaType: track.mediaType,
-              preferredTrackID: kCMPersistentTrackID_Invalid
-            ) {
-              try? compTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: duration),
-                of: track,
-                at: .zero
-              )
-            }
-          }
-
-          completion(AVPlayerItem(asset: composition), true)
-        }
-      }
-
-      func startWithItem(_ item: AVPlayerItem, hasExternalSubtitle: Bool) {
-        // Honor subtitle toggle: when disabled, explicitly deselect legible tracks.
-        if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
           if subtitlesEnabled {
-            if hasExternalSubtitle, let opt = group.options.first {
+            if let opt = group.options.first {
               item.select(opt, in: group)
             }
           } else {
             item.select(nil, in: group)
           }
         }
+
+        // Apply initial subtitle selection (in-band only).
+        applySubtitleSelection()
 
         let player = AVPlayer(playerItem: item)
 
@@ -305,7 +225,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       ) { [weak vc] _ in
         guard let vc = vc else { return }
         if vc.programmaticSeekInFlight { return }
-        if let last = vc.wasPlayingRecentlyAt, Date().timeIntervalSince(last) < 1.0 {
+        if let last = vc.wasPlayingRecentlyAt, Date().timeIntervalSince(last) < 5.0 {
           if vc.desiredRate > 0 {
             vc.player?.playImmediately(atRate: vc.desiredRate)
           }
@@ -369,10 +289,12 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
           // Start after item becomes ready (guard against early seeking)
           if item.status == .readyToPlay {
+            applySubtitleSelection()
             startPlayback()
           } else {
             vc.statusObserver = item.observe(\.status, options: [.new, .initial]) { observedItem, _ in
               if observedItem.status == .readyToPlay {
+                applySubtitleSelection()
                 startPlayback()
                 vc.statusObserver?.invalidate(); vc.statusObserver = nil
               }
@@ -383,16 +305,8 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         result(nil)
       }
 
-      if subtitlesEnabled, let sub = subtitleUrl {
-        buildItemWithExternalSubtitles(
-          mainAsset: mainAsset,
-          subtitleUrl: sub
-        ) { built, attached in
-          startWithItem(built, hasExternalSubtitle: attached)
-        }
-      } else {
-        startWithItem(AVPlayerItem(asset: mainAsset), hasExternalSubtitle: false)
-      }
+      _ = subtitleUrlStr
+      startWithItem(AVPlayerItem(asset: mainAsset))
     }
 
     GeneratedPluginRegistrant.register(with: self)
