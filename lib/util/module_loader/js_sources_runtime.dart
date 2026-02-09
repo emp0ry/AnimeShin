@@ -333,6 +333,51 @@ class JsSourcesRuntime {
   globalThis.source = __meta;
   try {
     (function(exports, module, meta, console, fetch, fetchv2){
+      // --- Predeclare Sora-style aliases to avoid ReferenceError inside modules ---
+      const __callFirst = function(list, args){
+        for (let i = 0; i < list.length; i++) {
+          const fn = list[i];
+          if (typeof fn === 'function') return fn.apply(null, args);
+        }
+        return undefined;
+      };
+
+      if (typeof searchResults !== 'function') {
+        var searchResults = function(){
+          return __callFirst([
+            (typeof searchContent === 'function') ? searchContent : null,
+            (typeof search === 'function') ? search : null,
+            (typeof searchResult === 'function') ? searchResult : null
+          ], arguments);
+        };
+      }
+
+      if (typeof extractDetails !== 'function') {
+        var extractDetails = function(){
+          return __callFirst([
+            (typeof getContentData === 'function') ? getContentData : null
+          ], arguments);
+        };
+      }
+
+      if (typeof extractChapters !== 'function') {
+        var extractChapters = function(){
+          return __callFirst([
+            (typeof getChapters === 'function') ? getChapters : null,
+            (typeof getChapterList === 'function') ? getChapterList : null,
+            (typeof extractChapterList === 'function') ? extractChapterList : null
+          ], arguments);
+        };
+      }
+
+      if (typeof getChapterImages !== 'function') {
+        var getChapterImages = function(){
+          return __callFirst([
+            (typeof extractImages === 'function') ? extractImages : null,
+            (typeof getImages === 'function') ? getImages : null
+          ], arguments);
+        };
+      }
 $moduleCode
 
       // --- Compatibility exports (Sora-style modules vary in naming) ---
@@ -340,6 +385,8 @@ $moduleCode
       // common alternatives seen across source ecosystems.
       if (typeof searchResults === 'function') {
         exports.searchResults = searchResults;
+      } else if (typeof searchContent === 'function') {
+        exports.searchResults = searchContent;
       } else if (typeof search === 'function') {
         exports.searchResults = search;
       } else if (typeof searchResult === 'function') {
@@ -351,12 +398,15 @@ $moduleCode
       }
 
       if (typeof extractDetails === 'function') exports.extractDetails = extractDetails;
+      if (typeof getContentData === 'function') exports.extractDetails = getContentData;
       if (typeof extractEpisodes === 'function') exports.extractEpisodes = extractEpisodes;
       if (typeof extractChapters === 'function') exports.extractChapters = extractChapters;
       if (typeof extractChapterList === 'function') exports.extractChapterList = extractChapterList;
       if (typeof getChapters === 'function') exports.getChapters = getChapters;
+      if (typeof getChapterList === 'function') exports.getChapters = getChapterList;
       if (typeof extractPages === 'function') exports.extractPages = extractPages;
       if (typeof extractImages === 'function') exports.extractImages = extractImages;
+      if (typeof getChapterImages === 'function') exports.extractImages = getChapterImages;
       if (typeof getPages === 'function') exports.getPages = getPages;
       if (typeof getImages === 'function') exports.getImages = getImages;
       if (typeof extractStreamUrl === 'function') exports.extractStreamUrl = extractStreamUrl;
@@ -377,8 +427,10 @@ $moduleCode
       'extractChapters',
       'extractChapterList',
       'getChapters',
+      'getChapterList',
       'extractPages',
       'extractImages',
+      'getChapterImages',
       'getPages',
       'getImages',
       'extractStreamUrl',
@@ -507,6 +559,19 @@ const String _bootstrapScript = r'''
     return 'https://www.google.com/';
   }
 
+  function __moduleBaseFor(moduleId) {
+    try {
+      const meta = globalThis.__moduleMeta && globalThis.__moduleMeta[moduleId];
+      if (!meta) return null;
+      const raw = meta.baseUrl || meta.baseURL || meta.site || meta.website || '';
+      const s = String(raw || '').trim();
+      if (!s) return null;
+      const m = s.match(/^(https?:\/\/[^\/]+)\/?/i);
+      return m && m[1] ? (m[1] + '/') : null;
+    } catch (_) {}
+    return null;
+  }
+
   // fetchv2(url, headersOrOptions?, method?, body?)
   // Supports common Luna/Sora module call styles:
   // - fetchv2(url)
@@ -553,7 +618,15 @@ const String _bootstrapScript = r'''
       options.headers['Accept-Language'] = 'en-US,en;q=0.9';
     }
     if (!options.headers['Referer'] && !options.headers['referer']) {
-      options.headers['Referer'] = __defaultRefererFor(url);
+      const base = __moduleBaseFor(moduleId);
+      options.headers['Referer'] = base || __defaultRefererFor(url);
+    }
+    if (!options.headers['Origin'] && !options.headers['origin']) {
+      const ref = options.headers['Referer'] || options.headers['referer'];
+      try {
+        const m = String(ref || '').match(/^(https?:\/\/[^\/]+)\//i);
+        if (m && m[1]) options.headers['Origin'] = m[1];
+      } catch (_) {}
     }
 
     const startTs = Date.now();

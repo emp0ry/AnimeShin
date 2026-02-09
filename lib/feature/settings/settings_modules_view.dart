@@ -6,6 +6,7 @@ import 'package:animeshin/util/module_loader/remote_modules_store.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/layout/navigation_tool.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -165,7 +166,14 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
     }
     return CircleAvatar(
       backgroundColor: Colors.transparent,
-      foregroundImage: NetworkImage(url),
+      child: ClipOval(
+        child: CachedImage(
+          url,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 

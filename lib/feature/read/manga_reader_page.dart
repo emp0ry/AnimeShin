@@ -38,8 +38,9 @@ class MangaReaderPage extends ConsumerStatefulWidget {
 class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   final JsModuleExecutor _exec = JsModuleExecutor();
 
-  static const int _pageChunkSize = 24;
+  static const int _pageChunkSize = 5;
   final List<String> _pages = <String>[];
+  final List<String> _pendingPages = <String>[];
   bool _hasMorePages = true;
   bool _loadingMore = false;
   Object? _loadError;
@@ -76,6 +77,17 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
     if (_loadingMore) return;
     if (!_hasMorePages && !initial) return;
 
+    if (_pendingPages.isNotEmpty) {
+      final take = _pageChunkSize.clamp(1, _pendingPages.length);
+      final chunk = _pendingPages.sublist(0, take);
+      _pendingPages.removeRange(0, take);
+      setState(() {
+        _pages.addAll(chunk);
+        _hasMorePages = _pendingPages.isNotEmpty;
+      });
+      return;
+    }
+
     setState(() {
       _loadingMore = true;
       _loadError = null;
@@ -93,8 +105,18 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
       if (!mounted) return;
 
       setState(() {
-        _pages.addAll(chunk);
-        _hasMorePages = chunk.length == _pageChunkSize;
+        if (chunk.length > _pageChunkSize) {
+          final start = offset.clamp(0, chunk.length);
+          final end = (start + _pageChunkSize).clamp(0, chunk.length);
+          _pages.addAll(chunk.sublist(start, end));
+          if (end < chunk.length) {
+            _pendingPages.addAll(chunk.sublist(end));
+          }
+          _hasMorePages = _pendingPages.isNotEmpty;
+        } else {
+          _pages.addAll(chunk);
+          _hasMorePages = chunk.length == _pageChunkSize;
+        }
         _loadingMore = false;
       });
 
@@ -212,13 +234,19 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
     setState(() {});
   }
 
-  Widget _buildPageImage(String url) {
+  Widget _buildPageImage(BuildContext context, String url) {
     final headers = _imageHeadersFor(url);
+    final mq = MediaQuery.of(context);
+    final dpr = mq.devicePixelRatio;
+    final cacheWidth = (mq.size.width * dpr).round();
+    final cacheHeight = (mq.size.height * dpr).round();
 
     return Center(
       child: Image.network(
         url,
         headers: headers,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
         fit: BoxFit.contain,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
@@ -302,22 +330,25 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
           : null,
       child: NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          if (n is ScrollEndNotification || n is UserScrollNotification) {
-            final atEnd = _scroll.hasClients &&
-                (_scroll.position.pixels >=
-                    _scroll.position.maxScrollExtent - 24);
-            if (atEnd) {
-              if (_hasMorePages) {
-                unawaited(_loadMorePages(initial: false));
-              } else {
-                unawaited(_maybeAutoProgress(atEnd: true));
-              }
+          if (n.metrics.axis != Axis.vertical) return false;
+          final nearEnd = _scroll.hasClients &&
+              (n.metrics.pixels >=
+                  n.metrics.maxScrollExtent - n.metrics.viewportDimension * 2);
+          if (nearEnd) {
+            if (_hasMorePages) {
+              unawaited(_loadMorePages(initial: false));
+            } else {
+              unawaited(_maybeAutoProgress(atEnd: true));
             }
           }
           return false;
         },
         child: ListView.builder(
           controller: _scroll,
+          cacheExtent: MediaQuery.of(context).size.height * 2,
+          addAutomaticKeepAlives: false,
+          addRepaintBoundaries: true,
+          addSemanticIndexes: false,
           itemCount: pages.length + (_loadingMore ? 1 : 0),
           itemBuilder: (context, i) {
             if (i >= pages.length) {
@@ -328,7 +359,7 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
             }
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: _buildPageImage(pages[i]),
+              child: _buildPageImage(context, pages[i]),
             );
           },
         ),
@@ -346,18 +377,18 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
         controller: ctrl,
         itemCount: pages.length + (_loadingMore ? 1 : 0),
         onPageChanged: (i) {
-          final atEnd = i >= pages.length - 1;
-          if (atEnd && _hasMorePages) {
+          final nearEnd = i >= pages.length - 2;
+          if (nearEnd && _hasMorePages) {
             unawaited(_loadMorePages(initial: false));
-          } else {
-            unawaited(_maybeAutoProgress(atEnd: atEnd && !_hasMorePages));
           }
+          final atEnd = i >= pages.length - 1;
+          unawaited(_maybeAutoProgress(atEnd: atEnd && !_hasMorePages));
         },
         itemBuilder: (context, i) {
           if (i >= pages.length) {
             return const Center(child: CircularProgressIndicator());
           }
-          return _buildPageImage(pages[i]);
+          return _buildPageImage(context, pages[i]);
         },
       ),
     );
@@ -389,6 +420,7 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
                   .setAutoProgress(!prefs.autoProgress);
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: ValueListenableBuilder<bool>(

@@ -260,6 +260,7 @@ class JsModuleExecutor {
     const fallbackFnNames = <String>[
       'searchResults',
       'search',
+      'searchContent',
       'searchManga',
       'searchMangas',
       'searchMangaResult',
@@ -538,6 +539,7 @@ class JsModuleExecutor {
       'extractChapters',
       'extractChapterList',
       'getChapters',
+      'getChapterList',
     ];
 
     String? raw;
@@ -563,6 +565,9 @@ class JsModuleExecutor {
 
     if (raw == null) return const [];
     if (raw.startsWith('__JS_ERROR__:')) {
+      if (raw.startsWith('__JS_ERROR__:missing_function:')) {
+        return const [];
+      }
       throw StateError(raw);
     }
 
@@ -695,6 +700,7 @@ class JsModuleExecutor {
     const pageFns = <String>[
       'extractPages',
       'extractImages',
+      'getChapterImages',
       'getPages',
       'getImages',
       'pages',
@@ -793,6 +799,7 @@ class JsModuleExecutor {
     const pageFns = <String>[
       'extractPages',
       'extractImages',
+      'getChapterImages',
       'getPages',
       'getImages',
       'pages',
@@ -827,7 +834,26 @@ class JsModuleExecutor {
       if (s.isEmpty) continue;
       out.add(s);
     }
-    return out;
+    if (out.isNotEmpty || !asyncJs) return out;
+
+    // Fallback: some async modules ignore offset/limit and only accept 1 arg.
+    final raw2 = await _callFirstAvailable(
+      moduleId,
+      pageFns,
+      <Object?>[chapterHref],
+      timeout: const Duration(seconds: 60),
+    );
+    if (raw2 == null || raw2.startsWith('__JS_ERROR__:')) return out;
+    final decoded2 = _tryJsonDecode(raw2);
+    if (decoded2 is! List) return out;
+    final out2 = <String>[];
+    for (final item in decoded2) {
+      if (item == null) continue;
+      final s = item.toString().trim();
+      if (s.isEmpty) continue;
+      out2.add(s);
+    }
+    return out2.isNotEmpty ? out2 : out;
   }
 
   /// Optional module hook. If the JS module exports `getVoiceovers(episodeHref)`

@@ -10,6 +10,40 @@ import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:animeshin/util/text_utils.dart';
 import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/widget/cached_image.dart';
+
+Set<String> _extractModuleTypes(SourcesModuleDescriptor m) {
+  final meta = m.meta ?? const <String, dynamic>{};
+  final raw = meta['type'] ?? meta['types'] ?? meta['mediaType'] ?? meta['mediaTypes'];
+
+  final out = <String>{};
+
+  void addToken(String token) {
+    final t = token.trim().toLowerCase();
+    if (t.isEmpty) return;
+    if (t.contains('anime')) out.add('anime');
+    if (t.contains('manga')) out.add('manga');
+  }
+
+  if (raw is String) {
+    for (final part in raw.split(RegExp(r'[|,/]'))) {
+      addToken(part);
+    }
+  } else if (raw is List) {
+    for (final v in raw) {
+      if (v == null) continue;
+      addToken(v.toString());
+    }
+  }
+
+  return out;
+}
+
+bool _moduleSupportsType(SourcesModuleDescriptor m, {required bool isManga}) {
+  final types = _extractModuleTypes(m);
+  if (types.isEmpty) return true;
+  return isManga ? types.contains('manga') : types.contains('anime');
+}
 
 class ModuleSearchPage extends StatefulWidget {
   const ModuleSearchPage({
@@ -39,7 +73,14 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
     }
     return CircleAvatar(
       backgroundColor: Colors.transparent,
-      foregroundImage: NetworkImage(url),
+      child: ClipOval(
+        child: CachedImage(
+          url,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 
@@ -81,15 +122,9 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
           }
 
           final allModules = snapshot.data ?? const <SourcesModuleDescriptor>[];
-          final modules = allModules.where((m) {
-            final raw = (m.meta?['type'] ?? '').toString().trim().toLowerCase();
-            if (raw.isEmpty) return true; // keep unknown types
-            final isManga = widget.isManga;
-            if (isManga) {
-              return raw.contains('manga');
-            }
-            return raw.contains('anime');
-          }).toList(growable: false);
+          final modules = allModules
+              .where((m) => _moduleSupportsType(m, isManga: widget.isManga))
+              .toList(growable: false);
 
           if (modules.isEmpty) {
             return const Center(
@@ -220,6 +255,15 @@ class _ModuleSearchResultsPageState extends State<ModuleSearchResultsPage> {
   Future<_SearchResults> _search() async {
     final js = JsModuleExecutor();
     String? lastError;
+
+    if (!_moduleSupportsType(widget.module, isManga: widget.isManga)) {
+      final wanted = widget.isManga ? 'manga' : 'anime';
+      final types = _extractModuleTypes(widget.module).join(', ');
+      return (
+        items: const <_RankedModuleTile>[],
+        error: 'Module type mismatch. Expected $wanted, got ${types.isEmpty ? 'unknown' : types}.',
+      );
+    }
 
     ({String by, String query}) qv(String by, String query) =>
         (by: by, query: query);

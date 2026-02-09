@@ -273,9 +273,36 @@ class RemoteModulesStore {
 			(idFromJson == null || idFromJson.isEmpty) ? _idFromJsonUrl(jsonUrl) : idFromJson,
 		);
 
-		final scriptUrl = (meta['scriptUrl'] ?? meta['script_url'] ?? meta['scriptURL'] ?? meta['script_url'] ?? meta['jsUrl'] ?? meta['js_url'] ?? meta['jsURL'])
+		String? scriptUrl = (meta['scriptUrl'] ??
+					meta['script_url'] ??
+					meta['scriptURL'] ??
+					meta['jsUrl'] ??
+					meta['js_url'] ??
+					meta['jsURL'] ??
+					meta['script'] ??
+					meta['scriptSrc'] ??
+					meta['script_src'] ??
+					meta['scriptLink'] ??
+					meta['scriptHref'])
 				?.toString()
 				.trim();
+
+		if (scriptUrl == null || scriptUrl.isEmpty) {
+			// Fallback: derive script URL from the JSON URL if possible.
+			try {
+				final uri = Uri.parse(jsonUrl);
+				final path = uri.path;
+				if (path.endsWith('.json')) {
+					final jsPath = path.substring(0, path.length - 5) + '.js';
+					scriptUrl = uri.replace(path: jsPath).toString();
+				} else {
+					scriptUrl = uri.replace(path: '$path.js').toString();
+				}
+			} catch (_) {
+				scriptUrl = null;
+			}
+		}
+
 		if (scriptUrl == null || scriptUrl.isEmpty) {
 			throw StateError('Module JSON missing scriptUrl');
 		}
@@ -328,6 +355,8 @@ class RemoteModulesStore {
 		final disabled = reg.disabledModuleIds.toSet();
 		if (enabled) {
 			disabled.remove(id);
+		} else {
+			disabled.add(id);
 		}
 
 		await _writeRegistry(
@@ -373,6 +402,8 @@ class RemoteModulesStore {
 		final disabled = reg.disabledModuleIds.toSet();
 		if (enabled) {
 			disabled.remove(normId);
+		} else {
+			disabled.add(normId);
 		}
 
 		await _writeRegistry(

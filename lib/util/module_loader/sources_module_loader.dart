@@ -96,7 +96,7 @@ class SourcesModuleLoader {
     // Prefer remote modules (Sora-style), but fall back to bundled asset modules
     // when remote storage is unavailable/empty (e.g., first run or unit tests).
     try {
-      final remote = await _remoteStore.buildDescriptors(includeDisabled: true);
+      final remote = await _remoteStore.buildDescriptors(includeDisabled: false);
       final modules = remote.toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       if (modules.isNotEmpty) {
