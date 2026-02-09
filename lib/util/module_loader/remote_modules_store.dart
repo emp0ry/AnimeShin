@@ -273,7 +273,7 @@ class RemoteModulesStore {
 			(idFromJson == null || idFromJson.isEmpty) ? _idFromJsonUrl(jsonUrl) : idFromJson,
 		);
 
-		final scriptUrl = (meta['scriptUrl'] ?? meta['script_url'] ?? meta['jsUrl'] ?? meta['js_url'])
+		final scriptUrl = (meta['scriptUrl'] ?? meta['script_url'] ?? meta['scriptURL'] ?? meta['script_url'] ?? meta['jsUrl'] ?? meta['js_url'] ?? meta['jsURL'])
 				?.toString()
 				.trim();
 		if (scriptUrl == null || scriptUrl.isEmpty) {

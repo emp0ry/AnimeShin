@@ -102,6 +102,10 @@ class MediaHeader extends ConsumerWidget {
             child: Tooltip(
               message: 'Search modules',
               child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.black.withValues(alpha: 0.25),
+                  foregroundColor: Colors.white,
+                ),
                 icon: Icon(
                   media!.info.isAnime
                       ? Ionicons.play

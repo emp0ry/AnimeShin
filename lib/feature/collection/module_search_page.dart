@@ -30,7 +30,7 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
   late final Future<List<SourcesModuleDescriptor>> _modulesFuture;
 
   Widget _moduleLeadingIcon(SourcesModuleDescriptor m) {
-    final url = (m.meta?['iconUrl'] ?? m.meta?['icon'] ?? '').toString().trim();
+    final url = (m.meta?['iconUrl'] ?? m.meta?['iconURL'] ?? m.meta?['icon'] ?? '').toString().trim();
     if (url.isEmpty) {
       return CircleAvatar(
         child: Text(m.name.isNotEmpty ? m.name[0].toUpperCase() : '?'),
@@ -69,12 +69,22 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final modules = snapshot.data ?? const <SourcesModuleDescriptor>[];
+          final allModules = snapshot.data ?? const <SourcesModuleDescriptor>[];
+          final modules = allModules.where((m) {
+            final raw = (m.meta?['type'] ?? '').toString().trim().toLowerCase();
+            if (raw.isEmpty) return true; // keep unknown types
+            final isManga = widget.isManga;
+            if (isManga) {
+              return raw.contains('manga');
+            }
+            return raw.contains('anime');
+          }).toList(growable: false);
+
           if (modules.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('No modules found in assets/sources/'),
+                child: Text('No matching modules found in assets/sources/'),
               ),
             );
           }

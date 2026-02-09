@@ -158,7 +158,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   }
 
   Widget _moduleLeadingIcon(SourcesModuleDescriptor m) {
-    final url = (m.meta?['iconUrl'] ?? m.meta?['icon'] ?? '').toString().trim();
+    final url = (m.meta?['iconUrl'] ?? m.meta?['iconURL'] ?? m.meta?['icon'] ?? '').toString().trim();
     if (url.isEmpty) {
       return CircleAvatar(
           child: Text(m.name.isNotEmpty ? m.name[0].toUpperCase() : '?'));
