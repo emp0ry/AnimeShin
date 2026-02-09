@@ -18,13 +18,14 @@ final collectionEntriesProvider =
         .ensureSorted(mediaFilter.sort, mediaFilter.previewSort);
 
     final entries = ref
-            .watch(collectionProvider(tag))
-            .unwrapPrevious()
-            .valueOrNull
-            ?.list
-            .entries ??
-        const [];
-    final tags = ref.watch(tagsProvider).valueOrNull;
+        .watch(collectionProvider(tag))
+        .unwrapPrevious()
+        .asData
+        ?.value
+        .list
+        .entries ??
+      const [];
+    final tags = ref.watch(tagsProvider).asData?.value;
 
     return _filter(entries, mediaFilter, search, tags);
   },

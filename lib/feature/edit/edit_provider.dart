@@ -12,13 +12,16 @@ import 'package:animeshin/util/graphql.dart';
 
 final entryEditProvider = AsyncNotifierProvider.autoDispose
     .family<EntryEditNotifier, EntryEdit, EditTag>(
-  EntryEditNotifier.new,
+  (arg) => EntryEditNotifier(arg),
 );
 
-class EntryEditNotifier
-    extends AutoDisposeFamilyAsyncNotifier<EntryEdit, EditTag> {
+class EntryEditNotifier extends AsyncNotifier<EntryEdit> {
+  EntryEditNotifier(this.arg);
+
+  final EditTag arg;
+
   @override
-  FutureOr<EntryEdit> build(arg) async {
+  FutureOr<EntryEdit> build() async {
     if (ref.exists(mediaProvider(arg.id))) {
       return ref.watch(mediaProvider(arg.id).selectAsync((s) => s.entryEdit));
     }
@@ -41,7 +44,7 @@ class EntryEditNotifier
       };
 
   Future<Object?> save() async {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return null;
 
     state = const AsyncLoading();
@@ -68,7 +71,7 @@ class EntryEditNotifier
   }
 
   Future<Object?> remove() async {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null || value.baseEntry.entryId == null) return null;
 
     state = const AsyncLoading();

@@ -15,7 +15,7 @@ final notificationsProvider = AsyncNotifierProvider.autoDispose<
 );
 
 class NotificationsNotifier
-    extends AutoDisposeAsyncNotifier<PagedWithTotal<SiteNotification>> {
+  extends AsyncNotifier<PagedWithTotal<SiteNotification>> {
   late NotificationsFilter filter;
 
   @override
@@ -25,7 +25,7 @@ class NotificationsNotifier
   }
 
   Future<void> fetch() async {
-    final oldState = state.valueOrNull ?? const PagedWithTotal();
+    final oldState = state.asData?.value ?? const PagedWithTotal();
     if (!oldState.hasNext) return;
     state = await AsyncValue.guard(() => _fetch(oldState));
   }

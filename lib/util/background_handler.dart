@@ -25,7 +25,7 @@ class BackgroundHandler {
     );
 
     await _notificationPlugin.initialize(
-      const InitializationSettings(
+      settings: const InitializationSettings(
         android: AndroidInitializationSettings('notification_icon'),
         iOS: darwin,
         macOS: darwin,
@@ -269,10 +269,10 @@ void _fetch() => Workmanager().executeTask((_, __) async {
 
 () _show(SiteNotification notification, String title, String payload) {
   _notificationPlugin.show(
-    notification.id,
-    title,
-    notification.texts.join(),
-    NotificationDetails(
+    id: notification.id,
+    title: title,
+    body: notification.texts.join(),
+    notificationDetails: NotificationDetails(
       android: AndroidNotificationDetails(
         notification.type.name,
         notification.type.label,

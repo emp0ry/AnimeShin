@@ -10,15 +10,19 @@ import 'package:animeshin/util/graphql.dart';
 
 final socialProvider =
     AsyncNotifierProvider.autoDispose.family<SocialNotifier, Social, int>(
-  SocialNotifier.new,
+  (arg) => SocialNotifier(arg),
 );
 
-class SocialNotifier extends AutoDisposeFamilyAsyncNotifier<Social, int> {
+class SocialNotifier extends AsyncNotifier<Social> {
+  SocialNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Social> build(int arg) => _fetch(const Social(), null);
+  FutureOr<Social> build() => _fetch(const Social(), null);
 
   Future<void> fetch(SocialTab tab) async {
-    final oldState = state.valueOrNull ?? const Social();
+    final oldState = state.asData?.value ?? const Social();
     switch (tab) {
       case SocialTab.following:
         if (!oldState.following.hasNext) return;

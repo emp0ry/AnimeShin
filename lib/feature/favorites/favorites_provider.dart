@@ -9,15 +9,19 @@ import 'package:animeshin/util/graphql.dart';
 
 final favoritesProvider =
     AsyncNotifierProvider.autoDispose.family<FavoritesNotifier, Favorites, int>(
-  FavoritesNotifier.new,
+  (arg) => FavoritesNotifier(arg),
 );
 
-class FavoritesNotifier extends AutoDisposeFamilyAsyncNotifier<Favorites, int> {
+class FavoritesNotifier extends AsyncNotifier<Favorites> {
+  FavoritesNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Favorites> build(int arg) => _fetch(const Favorites(), null);
+  FutureOr<Favorites> build() => _fetch(const Favorites(), null);
 
   Future<void> fetch(FavoritesType type) async {
-    final oldState = state.valueOrNull ?? const Favorites();
+    final oldState = state.asData?.value ?? const Favorites();
     switch (type) {
       case FavoritesType.anime:
         if (!oldState.anime.hasNext) return;
@@ -174,7 +178,7 @@ class FavoritesNotifier extends AutoDisposeFamilyAsyncNotifier<Favorites, int> {
   }
 
   void startEdit(FavoritesType type) {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return;
 
     final edit = FavoritesEdit(
@@ -192,7 +196,7 @@ class FavoritesNotifier extends AutoDisposeFamilyAsyncNotifier<Favorites, int> {
   }
 
   void cancelEdit() {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return;
 
     final edit = value.edit;
@@ -220,7 +224,7 @@ class FavoritesNotifier extends AutoDisposeFamilyAsyncNotifier<Favorites, int> {
   }
 
   Future<Object?> saveEdit() async {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return null;
 
     final edit = value.edit;
@@ -228,31 +232,22 @@ class FavoritesNotifier extends AutoDisposeFamilyAsyncNotifier<Favorites, int> {
 
     state = AsyncValue.data(value.withEdit(null));
 
-    String idsVariableKey;
-    String indexesVariableKey;
-    List<FavoriteItem> items;
-    switch (edit.editedType) {
-      case FavoritesType.anime:
-        idsVariableKey = 'animeIds';
-        indexesVariableKey = 'animeOrder';
-        items = value.anime.items;
-      case FavoritesType.manga:
-        idsVariableKey = 'mangaIds';
-        indexesVariableKey = 'mangaOrder';
-        items = value.manga.items;
-      case FavoritesType.characters:
-        idsVariableKey = 'characterIds';
-        indexesVariableKey = 'characterOrder';
-        items = value.characters.items;
-      case FavoritesType.staff:
-        idsVariableKey = 'staffIds';
-        indexesVariableKey = 'staffOrder';
-        items = value.staff.items;
-      case FavoritesType.studios:
-        idsVariableKey = 'studioIds';
-        indexesVariableKey = 'studioOrder';
-        items = value.studios.items;
-    }
+    final (idsVariableKey, indexesVariableKey, items) =
+        switch (edit.editedType) {
+      FavoritesType.anime => ('animeIds', 'animeOrder', value.anime.items),
+      FavoritesType.manga => ('mangaIds', 'mangaOrder', value.manga.items),
+      FavoritesType.characters => (
+          'characterIds',
+          'characterOrder',
+          value.characters.items,
+        ),
+      FavoritesType.staff => ('staffIds', 'staffOrder', value.staff.items),
+      FavoritesType.studios => (
+          'studioIds',
+          'studioOrder',
+          value.studios.items,
+        ),
+    };
 
     final ids = items.map((e) => e.id).toList();
     final indexes = List.generate(items.length, (i) => i + 1, growable: false);
@@ -267,7 +262,7 @@ class FavoritesNotifier extends AutoDisposeFamilyAsyncNotifier<Favorites, int> {
   }
 
   Future<Object?> toggleFavorite(int id) async {
-    final edit = state.valueOrNull?.edit;
+    final edit = state.asData?.value.edit;
     if (edit == null) return null;
 
     final typeKey = switch (edit.editedType) {

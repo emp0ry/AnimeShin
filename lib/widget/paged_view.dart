@@ -6,6 +6,8 @@ import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/widget/layout/constrained_view.dart';
 import 'package:animeshin/widget/loaders.dart';
 
+typedef Invalidate = void Function(dynamic provider, {bool asReload});
+
 class PagedView<T> extends StatelessWidget {
   const PagedView({
     required this.provider,
@@ -15,7 +17,8 @@ class PagedView<T> extends StatelessWidget {
     this.padded = true,
   });
 
-  final ProviderListenable<AsyncValue<Paged<T>>> provider;
+
+  final dynamic provider;
 
   /// If [scrollCtrl] is [PagedController], pagination will automatically work.
   final ScrollController scrollCtrl;
@@ -23,7 +26,7 @@ class PagedView<T> extends StatelessWidget {
   /// The [invalidate] parameter is the method of [PagedView]'s [ref].
   /// The parameter is useful, because the parent widget
   /// may not have a [WidgetRef] at its disposal.
-  final void Function(void Function(ProviderOrFamily) invalidate) onRefresh;
+  final void Function(Invalidate invalidate) onRefresh;
 
   /// [onData] should return a sliver widget, displaying the items.
   final Widget Function(Paged<T>) onData;
@@ -35,7 +38,7 @@ class PagedView<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer(
       builder: (context, ref, _) {
-        ref.listen<AsyncValue>(
+        ref.listen<AsyncValue<Paged<T>>>(
           provider,
           (_, s) => s.whenOrNull(
             error: (error, _) => SnackBarExtension.show(
@@ -45,13 +48,20 @@ class PagedView<T> extends StatelessWidget {
           ),
         );
 
-        return ref.watch(provider).unwrapPrevious().when(
+        final value = ref.watch(provider) as AsyncValue<Paged<T>>;
+
+        return value.unwrapPrevious().when(
               loading: () => const Center(child: Loader()),
               error: (_, __) => CustomScrollView(
                 physics: Theming.bouncyPhysics,
                 slivers: [
                   SliverRefreshControl(
-                    onRefresh: () => onRefresh(ref.invalidate),
+                    onRefresh: () => onRefresh(
+                      (provider, {asReload = false}) => ref.invalidate(
+                        provider,
+                        asReload: asReload,
+                      ),
+                    ),
                   ),
                   const SliverFillRemaining(
                     child: Center(child: Text('Failed to load')),
@@ -66,7 +76,12 @@ class PagedView<T> extends StatelessWidget {
                     controller: scrollCtrl,
                     slivers: [
                       SliverRefreshControl(
-                        onRefresh: () => onRefresh(ref.invalidate),
+                        onRefresh: () => onRefresh(
+                          (provider, {asReload = false}) => ref.invalidate(
+                            provider,
+                            asReload: asReload,
+                          ),
+                        ),
                       ),
                       data.items.isEmpty
                           ? const SliverFillRemaining(

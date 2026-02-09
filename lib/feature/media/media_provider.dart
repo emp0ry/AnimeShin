@@ -16,27 +16,31 @@ import 'package:animeshin/util/paged.dart';
 
 final mediaProvider =
     AsyncNotifierProvider.autoDispose.family<MediaNotifier, Media, int>(
-  MediaNotifier.new,
+  (arg) => MediaNotifier(arg),
 );
 
 final mediaConnectionsProvider = AsyncNotifierProvider.autoDispose
     .family<MediaRelationsNotifier, MediaConnections, int>(
-  MediaRelationsNotifier.new,
+  (arg) => MediaRelationsNotifier(arg),
 );
 
 final mediaThreadsProvider =
     AsyncNotifierProvider.family<MediaThreadsNotifier, Paged<ThreadItem>, int>(
-  MediaThreadsNotifier.new,
+  (arg) => MediaThreadsNotifier(arg),
 );
 
 final mediaFollowingProvider = AsyncNotifierProvider.family<
     MediaFollowingNotifier, Paged<MediaFollowing>, int>(
-  MediaFollowingNotifier.new,
+  (arg) => MediaFollowingNotifier(arg),
 );
 
-class MediaNotifier extends AutoDisposeFamilyAsyncNotifier<Media, int> {
+class MediaNotifier extends AsyncNotifier<Media> {
+  MediaNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Media> build(int arg) async {
+  FutureOr<Media> build() async {
     var data = await ref
         .read(repositoryProvider)
         .request(GqlQuery.media, {'id': arg, 'withInfo': true});
@@ -92,7 +96,7 @@ class MediaNotifier extends AutoDisposeFamilyAsyncNotifier<Media, int> {
   }
 
   Future<Object?> toggleFavorite() {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return Future.value('User not yet loaded');
 
     final typeKey = value.info.isAnime ? 'anime' : 'manga';
@@ -103,14 +107,17 @@ class MediaNotifier extends AutoDisposeFamilyAsyncNotifier<Media, int> {
   }
 }
 
-class MediaRelationsNotifier
-    extends AutoDisposeFamilyAsyncNotifier<MediaConnections, int> {
+class MediaRelationsNotifier extends AsyncNotifier<MediaConnections> {
+  MediaRelationsNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<MediaConnections> build(arg) =>
+  FutureOr<MediaConnections> build() =>
       _fetch(const MediaConnections(), null);
 
   Future<void> fetch(MediaTab tab) async {
-    final oldState = state.valueOrNull ?? const MediaConnections();
+    final oldState = state.asData?.value ?? const MediaConnections();
     state = switch (tab) {
       MediaTab.info ||
       MediaTab.relations ||
@@ -293,12 +300,16 @@ class MediaRelationsNotifier
   }
 }
 
-class MediaThreadsNotifier extends FamilyAsyncNotifier<Paged<ThreadItem>, int> {
+class MediaThreadsNotifier extends AsyncNotifier<Paged<ThreadItem>> {
+  MediaThreadsNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Paged<ThreadItem>> build(arg) => _fetch(const Paged());
+  FutureOr<Paged<ThreadItem>> build() => _fetch(const Paged());
 
   Future<void> fetch() async {
-    final oldState = state.valueOrNull ?? const Paged();
+    final oldState = state.asData?.value ?? const Paged();
     if (!oldState.hasNext) return;
     state = await AsyncValue.guard(() => _fetch(oldState));
   }
@@ -321,13 +332,16 @@ class MediaThreadsNotifier extends FamilyAsyncNotifier<Paged<ThreadItem>, int> {
   }
 }
 
-class MediaFollowingNotifier
-    extends FamilyAsyncNotifier<Paged<MediaFollowing>, int> {
+class MediaFollowingNotifier extends AsyncNotifier<Paged<MediaFollowing>> {
+  MediaFollowingNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Paged<MediaFollowing>> build(arg) => _fetch(const Paged());
+  FutureOr<Paged<MediaFollowing>> build() => _fetch(const Paged());
 
   Future<void> fetch() async {
-    final oldState = state.valueOrNull ?? const Paged();
+    final oldState = state.asData?.value ?? const Paged();
     if (!oldState.hasNext) return;
     state = await AsyncValue.guard(() => _fetch(oldState));
   }

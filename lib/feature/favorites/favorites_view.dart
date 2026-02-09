@@ -63,7 +63,7 @@ class _FavoritesViewState extends ConsumerState<FavoritesView>
 
     final count = ref.watch(
       favoritesProvider(widget.userId).select(
-        (s) => s.valueOrNull?.getCount(type) ?? 0,
+        (s) => s.asData?.value.getCount(type) ?? 0,
       ),
     );
 
@@ -76,7 +76,7 @@ class _FavoritesViewState extends ConsumerState<FavoritesView>
 
     final inEditingMode = ref.watch(
       favoritesProvider(widget.userId).select(
-        (s) => s.valueOrNull?.edit != null,
+        (s) => s.asData?.value.edit != null,
       ),
     );
 

@@ -6,8 +6,7 @@ final notificationsFilterProvider = NotifierProvider.autoDispose<
   NotificationsFilterNotifier.new,
 );
 
-class NotificationsFilterNotifier
-    extends AutoDisposeNotifier<NotificationsFilter> {
+class NotificationsFilterNotifier extends Notifier<NotificationsFilter> {
   @override
   NotificationsFilter build() => NotificationsFilter.all;
 

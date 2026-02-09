@@ -122,7 +122,7 @@ class _HomeViewState extends ConsumerState<HomeView>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _discoverFocusNode.requestFocus();
-        ref.read(requestDiscoverSearchFocusProvider.notifier).state = false;
+        ref.read(requestDiscoverSearchFocusProvider.notifier).set(false);
       });
     }
 

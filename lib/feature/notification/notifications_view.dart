@@ -50,7 +50,7 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
   @override
   Widget build(BuildContext context) {
     final unreadCount = ref.watch(
-      notificationsProvider.select((s) => s.valueOrNull?.total ?? 0),
+      notificationsProvider.select((s) => s.asData?.value.total ?? 0),
     );
 
     final filter = ref.watch(notificationsFilterProvider);

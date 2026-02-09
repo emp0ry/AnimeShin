@@ -97,7 +97,7 @@ class _CalendarViewState extends State<CalendarView> {
             ),
             const SizedBox(width: Theming.offset),
           ]),
-          child: PagedView(
+          child: PagedView<CalendarItem>(
             provider: calendarProvider,
             scrollCtrl: _scrollCtrl,
             onRefresh: (invalidate) => invalidate(calendarProvider),

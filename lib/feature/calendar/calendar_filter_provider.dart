@@ -7,7 +7,7 @@ final calendarFilterProvider =
   CalendarFilterNotifier.new,
 );
 
-class CalendarFilterNotifier extends AutoDisposeNotifier<CalendarFilter> {
+class CalendarFilterNotifier extends Notifier<CalendarFilter> {
   @override
   CalendarFilter build() => ref.watch(
         persistenceProvider.select((s) => s.calendarFilter),

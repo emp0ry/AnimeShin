@@ -14,7 +14,7 @@ FlutterSecureStorage buildSecureStorage() {
     );
   } else if (Platform.isAndroid) {
     return const FlutterSecureStorage(
-      aOptions: AndroidOptions(encryptedSharedPreferences: true),
+      aOptions: AndroidOptions(),
     );
   }
   return const FlutterSecureStorage();

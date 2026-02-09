@@ -3,13 +3,16 @@ import 'package:animeshin/feature/studio/studio_filter_model.dart';
 
 final studioFilterProvider = NotifierProvider.autoDispose
     .family<StudioFilterNotifier, StudioFilter, int>(
-  StudioFilterNotifier.new,
+  (arg) => StudioFilterNotifier(arg),
 );
 
-class StudioFilterNotifier
-    extends AutoDisposeFamilyNotifier<StudioFilter, int> {
+class StudioFilterNotifier extends Notifier<StudioFilter> {
+  StudioFilterNotifier(this.arg);
+
+  final int arg;
+
   @override
-  StudioFilter build(arg) => StudioFilter();
+  StudioFilter build() => StudioFilter();
 
   @override
   set state(StudioFilter newState) => super.state = newState;

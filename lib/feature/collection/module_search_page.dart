@@ -5,6 +5,7 @@ import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/read/module_read_page.dart';
 import 'package:animeshin/feature/watch/module_watch_page.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
+import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:animeshin/util/text_utils.dart';
@@ -156,6 +157,59 @@ class ModuleSearchResultsPage extends StatefulWidget {
 
 class _ModuleSearchResultsPageState extends State<ModuleSearchResultsPage> {
   late final Future<_SearchResults> _resultsFuture;
+
+  Future<void> _showModuleDebug() async {
+    final rt = JsSourcesRuntime.instance;
+    String? lastFetch;
+    String? logs;
+    try {
+      lastFetch = await rt.getLastFetchDebugJson(widget.module.id);
+    } catch (_) {
+      lastFetch = null;
+    }
+    try {
+      logs = await rt.getLogsJson(widget.module.id);
+    } catch (_) {
+      logs = null;
+    }
+
+    final meta = widget.module.meta ?? const <String, dynamic>{};
+    final type = (meta['type'] ?? '').toString().trim();
+    final lang = (meta['language'] ?? meta['lang'] ?? '').toString().trim();
+    final searchBaseUrl = (meta['searchBaseUrl'] ?? '').toString().trim();
+    final asyncJs = (meta['asyncJS'] ?? '').toString().trim();
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Module debug'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              [
+                'Module: ${widget.module.id}',
+                'Type: ${type.isEmpty ? '(null)' : type}',
+                'Language: ${lang.isEmpty ? '(null)' : lang}',
+                'searchBaseUrl: ${searchBaseUrl.isEmpty ? '(null)' : searchBaseUrl}',
+                'asyncJS: ${asyncJs.isEmpty ? '(null)' : asyncJs}',
+                'Last fetch: ${lastFetch == null || lastFetch.isEmpty ? '(null)' : ''}',
+                if (lastFetch != null && lastFetch.isNotEmpty)
+                  '\n$lastFetch',
+                if (logs != null && logs.isNotEmpty) '\nLogs:\n$logs',
+              ].join('\n'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -314,6 +368,14 @@ class _ModuleSearchResultsPageState extends State<ModuleSearchResultsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.module.name),
+        actions: [
+          IconButton(
+            tooltip: 'Debug module',
+            onPressed: _showModuleDebug,
+            icon: const Icon(Icons.bug_report_outlined),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: FutureBuilder<_SearchResults>(
         future: _resultsFuture,

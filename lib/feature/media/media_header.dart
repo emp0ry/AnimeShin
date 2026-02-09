@@ -140,7 +140,8 @@ class MediaHeader extends ConsumerWidget {
                 final viewerId = ref.read(viewerIdProvider);
                 if (viewerId != null && viewerId != 0) {
                   final tag = (userId: viewerId, ofAnime: info.isAnime);
-                  final collection = ref.read(collectionProvider(tag)).valueOrNull;
+                    final collection =
+                      ref.read(collectionProvider(tag)).asData?.value;
                   if (collection != null) {
                     final all = switch (collection) {
                       FullCollection c => c.lists.expand((l) => l.entries),

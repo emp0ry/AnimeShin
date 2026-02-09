@@ -5,9 +5,11 @@ import 'package:ionicons/ionicons.dart';
 import 'package:animeshin/extension/scroll_controller_extension.dart';
 import 'package:animeshin/feature/comment/comment_model.dart';
 import 'package:animeshin/feature/comment/comment_tile.dart';
+import 'package:animeshin/feature/forum/forum_model.dart';
 import 'package:animeshin/feature/forum/thread_item_list.dart';
 import 'package:animeshin/feature/social/social_model.dart';
 import 'package:animeshin/feature/social/social_provider.dart';
+import 'package:animeshin/feature/user/user_item_model.dart';
 import 'package:animeshin/feature/user/user_item_grid.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/paged_controller.dart';
@@ -62,7 +64,7 @@ class _SocialViewState extends ConsumerState<SocialView>
 
     final count = ref.watch(
       socialProvider(widget.id).select(
-        (s) => s.valueOrNull?.getCount(tab) ?? 0,
+        (s) => s.asData?.value.getCount(tab) ?? 0,
       ),
     );
 
@@ -100,7 +102,7 @@ class _SocialViewState extends ConsumerState<SocialView>
         controller: _tabCtrl,
         physics: const ClampingScrollPhysics(),
         children: [
-          PagedView(
+          PagedView<UserItem>(
             scrollCtrl: _scrollCtrl,
             onRefresh: onRefresh,
             provider: socialProvider(widget.id).select(
@@ -108,7 +110,7 @@ class _SocialViewState extends ConsumerState<SocialView>
             ),
             onData: (data) => UserItemGrid(data.items),
           ),
-          PagedView(
+          PagedView<UserItem>(
             scrollCtrl: _scrollCtrl,
             onRefresh: onRefresh,
             provider: socialProvider(widget.id).select(
@@ -116,7 +118,7 @@ class _SocialViewState extends ConsumerState<SocialView>
             ),
             onData: (data) => UserItemGrid(data.items),
           ),
-          PagedView(
+          PagedView<ThreadItem>(
             scrollCtrl: _scrollCtrl,
             onRefresh: onRefresh,
             provider: socialProvider(widget.id).select(
@@ -124,7 +126,7 @@ class _SocialViewState extends ConsumerState<SocialView>
             ),
             onData: (data) => ThreadItemList(data.items, analogClock),
           ),
-          PagedView(
+          PagedView<Comment>(
             scrollCtrl: _scrollCtrl,
             onRefresh: onRefresh,
             provider: socialProvider(widget.id).select(

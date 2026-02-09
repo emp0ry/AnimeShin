@@ -6,7 +6,7 @@ final homeProvider = NotifierProvider.autoDispose<HomeNotifier, Home>(
   HomeNotifier.new,
 );
 
-class HomeNotifier extends AutoDisposeNotifier<Home> {
+class HomeNotifier extends Notifier<Home> {
   @override
   Home build() {
     final options = ref.watch(persistenceProvider.select((s) => s.options));

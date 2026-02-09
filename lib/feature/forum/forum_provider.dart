@@ -13,7 +13,7 @@ final forumProvider =
   ForumNotifier.new,
 );
 
-class ForumNotifier extends AutoDisposeAsyncNotifier<Paged<ThreadItem>> {
+class ForumNotifier extends AsyncNotifier<Paged<ThreadItem>> {
   late ForumFilter _filter;
 
   @override
@@ -23,7 +23,7 @@ class ForumNotifier extends AutoDisposeAsyncNotifier<Paged<ThreadItem>> {
   }
 
   Future<void> fetch() async {
-    final oldState = state.valueOrNull ?? const Paged();
+    final oldState = state.asData?.value ?? const Paged();
     if (!oldState.hasNext) return;
     state = await AsyncValue.guard(() => _fetch(oldState));
   }

@@ -12,18 +12,20 @@ import 'package:animeshin/util/graphql.dart';
 
 final activitiesProvider = AsyncNotifierProvider.autoDispose
     .family<ActivitiesNotifier, Paged<Activity>, int?>(
-  ActivitiesNotifier.new,
+  (arg) => ActivitiesNotifier(arg),
 );
 
-class ActivitiesNotifier
-    extends AutoDisposeFamilyAsyncNotifier<Paged<Activity>, int?> {
+class ActivitiesNotifier extends AsyncNotifier<Paged<Activity>> {
+  ActivitiesNotifier(this.arg);
+
+  final int? arg;
   // Used to skip activities when fetching outdated pages.
   int? _lastId;
   int? _viewerId;
   late ActivitiesFilter _filter;
 
   @override
-  FutureOr<Paged<Activity>> build(arg) {
+  FutureOr<Paged<Activity>> build() {
     if (arg == null) {
       ref.keepAlive();
     }
@@ -36,7 +38,7 @@ class ActivitiesNotifier
   }
 
   Future<void> fetch() async {
-    final oldState = state.valueOrNull ?? const Paged();
+    final oldState = state.asData?.value ?? const Paged();
     if (!oldState.hasNext) return;
     state = await AsyncValue.guard(() => _fetch(oldState));
   }
@@ -83,7 +85,7 @@ class ActivitiesNotifier
   }
 
   void prepend(Map<String, dynamic> map) {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return;
 
     final activity = Activity.maybe(
@@ -101,7 +103,7 @@ class ActivitiesNotifier
   }
 
   void replace(Activity activity) {
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return;
 
     for (int i = 0; i < value.items.length; i++) {
@@ -150,7 +152,7 @@ class ActivitiesNotifier
 
     if (err != null) return err;
 
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return null;
 
     for (int i = 0; i < value.items.length; i++) {
@@ -186,7 +188,7 @@ class ActivitiesNotifier
 
     if (err != null) return err;
 
-    final value = state.valueOrNull;
+    final value = state.asData?.value;
     if (value == null) return null;
 
     for (int i = 0; i < value.items.length; i++) {

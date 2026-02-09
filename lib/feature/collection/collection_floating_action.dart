@@ -20,7 +20,9 @@ class CollectionFloatingAction extends StatelessWidget {
     return Consumer(
       builder: (context, ref, _) {
         final collection = ref.watch(
-          collectionProvider(tag).select((s) => s.unwrapPrevious().valueOrNull),
+          collectionProvider(tag).select(
+            (s) => s.unwrapPrevious().asData?.value,
+          ),
         );
 
         return switch (collection) {

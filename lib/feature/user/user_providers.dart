@@ -14,12 +14,16 @@ UserTag nameUserTag(String name) => (id: null, name: name);
 
 final userProvider =
     AsyncNotifierProvider.autoDispose.family<UserNotifier, User, UserTag>(
-  UserNotifier.new,
+  (arg) => UserNotifier(arg),
 );
 
-class UserNotifier extends AutoDisposeFamilyAsyncNotifier<User, UserTag> {
+class UserNotifier extends AsyncNotifier<User> {
+  UserNotifier(this.arg);
+
+  final UserTag arg;
+
   @override
-  FutureOr<User> build(UserTag arg) async {
+  FutureOr<User> build() async {
     final data = await ref.read(repositoryProvider).request(
           GqlQuery.user,
           arg.id != null ? {'id': arg.id} : {'name': arg.name},

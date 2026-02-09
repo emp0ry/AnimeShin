@@ -14,12 +14,16 @@ import 'package:animeshin/feature/settings/settings_provider.dart';
 
 final characterProvider =
     AsyncNotifierProvider.autoDispose.family<CharacterNotifier, Character, int>(
-  CharacterNotifier.new,
+  (arg) => CharacterNotifier(arg),
 );
 
-class CharacterNotifier extends AutoDisposeFamilyAsyncNotifier<Character, int> {
+class CharacterNotifier extends AsyncNotifier<Character> {
+  CharacterNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Character> build(int arg) async {
+  FutureOr<Character> build() async {
     final data = await ref.read(repositoryProvider).request(
       GqlQuery.character,
       {'id': arg, 'withInfo': true},
@@ -42,21 +46,24 @@ class CharacterNotifier extends AutoDisposeFamilyAsyncNotifier<Character, int> {
 
 final characterMediaProvider = AsyncNotifierProvider.autoDispose
     .family<CharacterMediaNotifier, CharacterMedia, int>(
-  CharacterMediaNotifier.new,
+  (arg) => CharacterMediaNotifier(arg),
 );
 
-class CharacterMediaNotifier
-    extends AutoDisposeFamilyAsyncNotifier<CharacterMedia, int> {
+class CharacterMediaNotifier extends AsyncNotifier<CharacterMedia> {
+  CharacterMediaNotifier(this.arg);
+
+  final int arg;
+
   late CharacterFilter filter;
 
   @override
-  FutureOr<CharacterMedia> build(arg) async {
+  FutureOr<CharacterMedia> build() async {
     filter = ref.watch(characterFilterProvider(arg));
     return await _fetch(const CharacterMedia(), null);
   }
 
   Future<void> fetch(bool onAnime) async {
-    final oldState = state.valueOrNull ?? const CharacterMedia();
+    final oldState = state.asData?.value ?? const CharacterMedia();
     if (onAnime) {
       if (!oldState.anime.hasNext) return;
     } else {

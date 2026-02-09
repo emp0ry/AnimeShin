@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animeshin/feature/character/character_item_model.dart';
 import 'package:animeshin/feature/character/character_item_grid.dart';
 import 'package:animeshin/feature/discover/discover_filter_provider.dart';
 import 'package:animeshin/feature/discover/discover_media_grid.dart';
@@ -7,8 +8,12 @@ import 'package:animeshin/feature/discover/discover_media_simple_grid.dart';
 import 'package:animeshin/feature/discover/discover_model.dart';
 import 'package:animeshin/feature/discover/discover_provider.dart';
 import 'package:animeshin/feature/discover/discover_recommendations_grid.dart';
+import 'package:animeshin/feature/review/review_models.dart';
+import 'package:animeshin/feature/staff/staff_item_model.dart';
 import 'package:animeshin/feature/staff/staff_item_grid.dart';
+import 'package:animeshin/feature/studio/studio_item_model.dart';
 import 'package:animeshin/feature/studio/studio_item_grid.dart';
+import 'package:animeshin/feature/user/user_item_model.dart';
 import 'package:animeshin/feature/user/user_item_grid.dart';
 import 'package:animeshin/feature/review/review_grid.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -31,7 +36,7 @@ class DiscoverSubview extends StatelessWidget {
         final onRefresh = (invalidate) => invalidate(discoverProvider);
 
         final content = switch (type) {
-          DiscoverType.anime => PagedView(
+          DiscoverType.anime => PagedView<DiscoverMediaItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -42,7 +47,7 @@ class DiscoverSubview extends StatelessWidget {
                       ? DiscoverMediaSimpleGrid(data.items)
                       : DiscoverMediaGrid(data.items),
             ),
-          DiscoverType.manga => PagedView(
+          DiscoverType.manga => PagedView<DiscoverMediaItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -53,7 +58,7 @@ class DiscoverSubview extends StatelessWidget {
                       ? DiscoverMediaSimpleGrid(data.items)
                       : DiscoverMediaGrid(data.items),
             ),
-          DiscoverType.character => PagedView(
+          DiscoverType.character => PagedView<CharacterItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -63,7 +68,7 @@ class DiscoverSubview extends StatelessWidget {
               ),
               onData: (data) => CharacterItemGrid(data.items),
             ),
-          DiscoverType.staff => PagedView(
+          DiscoverType.staff => PagedView<StaffItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -71,7 +76,7 @@ class DiscoverSubview extends StatelessWidget {
               ),
               onData: (data) => StaffItemGrid(data.items),
             ),
-          DiscoverType.studio => PagedView(
+          DiscoverType.studio => PagedView<StudioItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -81,7 +86,7 @@ class DiscoverSubview extends StatelessWidget {
               ),
               onData: (data) => StudioItemGrid(data.items),
             ),
-          DiscoverType.user => PagedView(
+          DiscoverType.user => PagedView<UserItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -89,7 +94,7 @@ class DiscoverSubview extends StatelessWidget {
               ),
               onData: (data) => UserItemGrid(data.items),
             ),
-          DiscoverType.review => PagedView(
+          DiscoverType.review => PagedView<ReviewItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(
@@ -99,7 +104,8 @@ class DiscoverSubview extends StatelessWidget {
               ),
               onData: (data) => ReviewGrid(data.items),
             ),
-          DiscoverType.recommendation => PagedView(
+          DiscoverType.recommendation =>
+            PagedView<DiscoverRecommendationItem>(
               scrollCtrl: scrollCtrl,
               onRefresh: onRefresh,
               provider: discoverProvider.select(

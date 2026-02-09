@@ -5,13 +5,16 @@ import 'package:animeshin/feature/collection/collection_models.dart';
 
 final collectionFilterProvider = NotifierProvider.autoDispose
     .family<CollectionFilterNotifier, CollectionFilter, CollectionTag>(
-  CollectionFilterNotifier.new,
+  (arg) => CollectionFilterNotifier(arg),
 );
 
-class CollectionFilterNotifier
-    extends AutoDisposeFamilyNotifier<CollectionFilter, CollectionTag> {
+class CollectionFilterNotifier extends Notifier<CollectionFilter> {
+  CollectionFilterNotifier(this.arg);
+
+  final CollectionTag arg;
+
   @override
-  CollectionFilter build(arg) {
+  CollectionFilter build() {
     final mediaFilter = ref.watch(persistenceProvider.select(
       (s) => arg.ofAnime
           ? s.animeCollectionMediaFilter

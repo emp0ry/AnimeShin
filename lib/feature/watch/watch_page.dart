@@ -56,7 +56,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
 
     final tag = (userId: viewerId, ofAnime: true);
     final collectionAsync = ref.watch(collectionProvider(tag));
-    final collection = collectionAsync.valueOrNull;
+    final collection = collectionAsync.asData?.value;
     if (collection == null) return null;
 
     bool aliasMatches(Entry e) {

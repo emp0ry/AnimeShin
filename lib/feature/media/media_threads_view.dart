@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:animeshin/feature/forum/forum_model.dart';
 import 'package:animeshin/feature/forum/thread_item_list.dart';
 import 'package:animeshin/feature/media/media_provider.dart';
 import 'package:animeshin/widget/paged_view.dart';
@@ -16,7 +17,7 @@ class MediaThreadsSubview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PagedView(
+    return PagedView<ThreadItem>(
       scrollCtrl: scrollCtrl,
       onRefresh: (invalidate) => invalidate(mediaThreadsProvider(id)),
       provider: mediaThreadsProvider(id),

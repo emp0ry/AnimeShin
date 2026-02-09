@@ -229,7 +229,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
           TitleLanguage.native => entry.titleNative,
         };
 
-    final settings = ref.read(settingsProvider).valueOrNull;
+    final settings = ref.read(settingsProvider).asData?.value;
     final preferred = pick(settings?.titleLanguage ?? TitleLanguage.romaji)
       ?.trim();
     if (preferred != null && preferred.isNotEmpty) return preferred;
@@ -253,7 +253,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     final title = media['title'];
     if (title is! Map) return null;
 
-    final settings = ref.read(settingsProvider).valueOrNull;
+    final settings = ref.read(settingsProvider).asData?.value;
     final pref = settings?.titleLanguage ?? TitleLanguage.romaji;
 
     String? val(String key) => (title[key] ?? '').toString().trim();

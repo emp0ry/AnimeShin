@@ -124,11 +124,11 @@ class _UserView extends StatelessWidget {
 
         final header = UserHeader(
           id: tag.id,
-          user: user.valueOrNull,
+          user: user.asData?.value,
           isViewer: isViewer,
-          imageUrl: avatarUrl ?? user.valueOrNull?.imageUrl,
+          imageUrl: avatarUrl ?? user.asData?.value.imageUrl,
           toggleFollow: () {
-            final userId = user.valueOrNull?.id;
+            final userId = user.asData?.value.id;
             if (userId == null) return Future.value(false);
 
             return ref.read(userProvider(tag).notifier).toggleFollow(userId);

@@ -1,6 +1,7 @@
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/read/manga_reader_page.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
+import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:flutter/material.dart';
 
@@ -25,12 +26,69 @@ class ModuleReadPage extends StatefulWidget {
 class _ModuleReadPageState extends State<ModuleReadPage> {
   final JsModuleExecutor _exec = JsModuleExecutor();
   late Future<List<JsModuleEpisode>> _chaptersFuture;
+  List<JsModuleEpisode>? _chaptersCache;
 
   @override
   void initState() {
     super.initState();
     // Reuse extractEpisodes() but interpret it as chapters.
     _chaptersFuture = _exec.extractEpisodes(widget.module.id, widget.href);
+    _chaptersFuture.then((list) {
+      if (!mounted) return;
+      setState(() => _chaptersCache = list);
+    });
+  }
+
+  Future<void> _showModuleDebug() async {
+    final rt = JsSourcesRuntime.instance;
+    String? lastFetch;
+    String? logs;
+    try {
+      lastFetch = await rt.getLastFetchDebugJson(widget.module.id);
+    } catch (_) {
+      lastFetch = null;
+    }
+    try {
+      logs = await rt.getLogsJson(widget.module.id);
+    } catch (_) {
+      logs = null;
+    }
+
+    final chapters = _chaptersCache ?? const <JsModuleEpisode>[];
+    final preview = chapters.take(6).map((ch) {
+      final title = ch.title.trim();
+      final href = ch.href.trim();
+      final image = ch.image.trim();
+      return 'Ch ${ch.number}: title="$title" | href="$href" | image="$image"';
+    }).toList(growable: false);
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Module debug'),
+          content: SingleChildScrollView(
+            child: SelectableText(
+              [
+                'Module: ${widget.module.id}',
+                if (lastFetch != null && lastFetch.isNotEmpty)
+                  '\nLast fetch:\n$lastFetch',
+                if (preview.isNotEmpty)
+                  '\nPreview chapters:\n${preview.join('\n')}',
+                if (logs != null && logs.isNotEmpty) '\nLogs:\n$logs',
+              ].join('\n'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -38,6 +96,14 @@ class _ModuleReadPageState extends State<ModuleReadPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        actions: [
+          IconButton(
+            tooltip: 'Debug module',
+            onPressed: _showModuleDebug,
+            icon: const Icon(Icons.bug_report_outlined),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: FutureBuilder<List<JsModuleEpisode>>(
         future: _chaptersFuture,

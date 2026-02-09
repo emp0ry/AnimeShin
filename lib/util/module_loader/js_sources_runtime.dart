@@ -206,6 +206,20 @@ class JsSourcesRuntime {
     if (typeof fn !== 'function') {
       return '__JS_ERROR__:missing_function:$functionName';
     }
+    if (typeof globalThis.__pushLog === 'function') {
+      try {
+        globalThis.__pushLog('$moduleId', 'info', [
+          'call',
+          '$functionName',
+          'args',
+          $argsJs,
+          'fetch',
+          typeof fetch,
+          'fetchv2',
+          typeof fetchv2
+        ]);
+      } catch (_) {}
+    }
     const out = await fn.apply(null, $argsJs);
     if (typeof out === 'string') return out;
     try { return JSON.stringify(out); } catch (_) { return String(out); }
@@ -300,10 +314,25 @@ class JsSourcesRuntime {
     error: function(){ _push('error', arguments); }
   };
 
+  // Bind global fetch helpers into module scope for compatibility.
+  // Ensure a global console exists for modules that use it directly.
+  if (!globalThis.console) {
+    globalThis.console = console;
+  }
+
+  const fetch = (typeof globalThis.fetch === 'function')
+    ? globalThis.fetch
+    : (typeof globalThis.fetchv2 === 'function'
+        ? async function(url, options){ return await globalThis.fetchv2(url, options); }
+        : undefined);
+  const fetchv2 = (typeof globalThis.fetchv2 === 'function')
+    ? globalThis.fetchv2
+    : undefined;
+
   const prevSource = globalThis.source;
   globalThis.source = __meta;
   try {
-    (function(exports, module, meta, console){
+    (function(exports, module, meta, console, fetch, fetchv2){
 $moduleCode
 
       // --- Compatibility exports (Sora-style modules vary in naming) ---
@@ -323,9 +352,16 @@ $moduleCode
 
       if (typeof extractDetails === 'function') exports.extractDetails = extractDetails;
       if (typeof extractEpisodes === 'function') exports.extractEpisodes = extractEpisodes;
+      if (typeof extractChapters === 'function') exports.extractChapters = extractChapters;
+      if (typeof extractChapterList === 'function') exports.extractChapterList = extractChapterList;
+      if (typeof getChapters === 'function') exports.getChapters = getChapters;
+      if (typeof extractPages === 'function') exports.extractPages = extractPages;
+      if (typeof extractImages === 'function') exports.extractImages = extractImages;
+      if (typeof getPages === 'function') exports.getPages = getPages;
+      if (typeof getImages === 'function') exports.getImages = getImages;
       if (typeof extractStreamUrl === 'function') exports.extractStreamUrl = extractStreamUrl;
       if (typeof getVoiceovers === 'function') exports.getVoiceovers = getVoiceovers;
-    })(exports, module, __meta, console);
+    })(exports, module, __meta, console, fetch, fetchv2);
   } finally {
     globalThis.source = prevSource;
   }
@@ -334,7 +370,20 @@ $moduleCode
   // If a module used CommonJS and replaced module.exports, preserve any
   // function references that were attached to exports.
   try {
-    ['searchResults','extractDetails','extractEpisodes','extractStreamUrl','getVoiceovers'].forEach(function(k){
+    [
+      'searchResults',
+      'extractDetails',
+      'extractEpisodes',
+      'extractChapters',
+      'extractChapterList',
+      'getChapters',
+      'extractPages',
+      'extractImages',
+      'getPages',
+      'getImages',
+      'extractStreamUrl',
+      'getVoiceovers',
+    ].forEach(function(k){
       if (!finalExports[k] && exports[k]) finalExports[k] = exports[k];
     });
   } catch (_) {}

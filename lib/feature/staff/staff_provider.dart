@@ -13,17 +13,21 @@ import 'package:animeshin/util/graphql.dart';
 
 final staffProvider =
     AsyncNotifierProvider.autoDispose.family<StaffNotifier, Staff, int>(
-  StaffNotifier.new,
+  (arg) => StaffNotifier(arg),
 );
 
 final staffRelationsProvider = AsyncNotifierProvider.autoDispose
     .family<StaffRelationsNotifier, StaffRelations, int>(
-  StaffRelationsNotifier.new,
+  (arg) => StaffRelationsNotifier(arg),
 );
 
-class StaffNotifier extends AutoDisposeFamilyAsyncNotifier<Staff, int> {
+class StaffNotifier extends AsyncNotifier<Staff> {
+  StaffNotifier(this.arg);
+
+  final int arg;
+
   @override
-  FutureOr<Staff> build(arg) async {
+  FutureOr<Staff> build() async {
     final data = await ref.read(repositoryProvider).request(
       GqlQuery.staff,
       {'id': arg, 'withInfo': true},
@@ -44,18 +48,21 @@ class StaffNotifier extends AutoDisposeFamilyAsyncNotifier<Staff, int> {
   }
 }
 
-class StaffRelationsNotifier
-    extends AutoDisposeFamilyAsyncNotifier<StaffRelations, int> {
+class StaffRelationsNotifier extends AsyncNotifier<StaffRelations> {
+  StaffRelationsNotifier(this.arg);
+
+  final int arg;
+
   late StaffFilter filter;
 
   @override
-  FutureOr<StaffRelations> build(arg) async {
+  FutureOr<StaffRelations> build() async {
     filter = ref.watch(staffFilterProvider(arg));
     return await _fetch(const StaffRelations(), null);
   }
 
   Future<void> fetch(bool onCharacters) async {
-    final oldState = state.valueOrNull ?? const StaffRelations();
+    final oldState = state.asData?.value ?? const StaffRelations();
     if (onCharacters) {
       if (!oldState.charactersAndMedia.hasNext) return;
     } else {

@@ -17,7 +17,7 @@ class FeedTopBarTrailingContent extends StatelessWidget {
       builder: (context, ref, _) {
         final count = ref.watch(
           settingsProvider.select(
-            (s) => s.valueOrNull?.unreadNotifications ?? 0,
+            (s) => s.asData?.value.unreadNotifications ?? 0,
           ),
         );
 

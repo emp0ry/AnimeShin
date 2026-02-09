@@ -136,7 +136,7 @@ class _CompactViewState extends State<_CompactView>
     final header = CharacterHeader.withTabBar(
       id: widget.id,
       imageUrl: widget.imageUrl,
-      character: widget.character.valueOrNull,
+      character: widget.character.asData?.value,
       tabCtrl: _tabCtrl,
       scrollToTop: widget.scrollCtrl.scrollToTop,
       toggleFavorite: widget.toggleFavorite,
@@ -214,7 +214,7 @@ class _LargeViewState extends State<_LargeView>
     final header = CharacterHeader.withoutTabBar(
       id: widget.id,
       imageUrl: widget.imageUrl,
-      character: widget.character.valueOrNull,
+      character: widget.character.asData?.value,
       toggleFavorite: widget.toggleFavorite,
     );
 

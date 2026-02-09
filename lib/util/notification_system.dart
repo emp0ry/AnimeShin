@@ -122,11 +122,11 @@ class NotificationSystem {
     final tzDateTime = tz.TZDateTime.from(airingAt, tz.local);
 
     await _plugin.zonedSchedule(
-      (animeTitle + episodeNumber.toString()).hashCode,
-      animeTitle,
-      'Episode $episodeNumber is now available!',
-      tzDateTime,
-      NotificationDetails(
+      id: (animeTitle + episodeNumber.toString()).hashCode,
+      title: animeTitle,
+      body: 'Episode $episodeNumber is now available!',
+      scheduledDate: tzDateTime,
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           'episode_channel',
           'Episode releases',
@@ -158,7 +158,9 @@ class NotificationSystem {
 
   /// Cancels scheduled notification for episode (if any).
   static Future<void> cancelEpisodeNotification(String animeTitle, int episodeNumber) async {
-    await _plugin.cancel((animeTitle + episodeNumber.toString()).hashCode);
+    await _plugin.cancel(
+      id: (animeTitle + episodeNumber.toString()).hashCode,
+    );
   }
 
   /// Schedules or cancels a notification for a single anime entry.

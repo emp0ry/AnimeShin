@@ -19,16 +19,19 @@ import 'package:animeshin/repository/shikimori/shikimori_rest_repository.dart';
 
 final collectionProvider = AsyncNotifierProvider.autoDispose
     .family<CollectionNotifier, Collection, CollectionTag>(
-  CollectionNotifier.new,
+  (arg) => CollectionNotifier(arg),
 );
 
-class CollectionNotifier
-    extends AutoDisposeFamilyAsyncNotifier<Collection, CollectionTag> {
+class CollectionNotifier extends AsyncNotifier<Collection> {
+  CollectionNotifier(this.arg);
+
+  final CollectionTag arg;
+
   var _sort = EntrySort.title;
 
   @override
-  FutureOr<Collection> build(arg) async {
-    final index = switch (state.valueOrNull) {
+  FutureOr<Collection> build() async {
+    final index = switch (state.asData?.value) {
       FullCollection c => c.index,
       _ => 0,
     };
@@ -255,7 +258,7 @@ class CollectionNotifier
       data = data['MediaList'];
 
       Entry? oldEntry;
-      final collection = state.valueOrNull;
+      final collection = state.asData?.value;
       if (collection is FullCollection) {
         for (final list in collection.lists) {
           oldEntry = list.entries.firstWhereOrNull((e) => e.mediaId == mediaId);

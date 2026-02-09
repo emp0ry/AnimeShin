@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:animeshin/feature/forum/forum_filter_provider.dart';
 import 'package:animeshin/feature/forum/forum_filter_view.dart';
+import 'package:animeshin/feature/forum/forum_model.dart';
 import 'package:animeshin/feature/forum/forum_provider.dart';
 import 'package:animeshin/feature/forum/thread_item_list.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -68,7 +69,7 @@ class _ForumViewState extends ConsumerState<ForumView> {
         ),
         const SizedBox(width: 8),
       ]),
-      child: PagedView(
+      child: PagedView<ThreadItem>(
         provider: forumProvider,
         scrollCtrl: _scrollCtrl,
         onRefresh: (invalidate) => invalidate(forumProvider),

@@ -99,6 +99,13 @@ class JsModuleExecutor {
     return false;
   }
 
+  static bool _isAsyncModule(Map<String, dynamic>? meta) {
+    return _boolMeta(meta, 'asyncJS') ||
+        _boolMeta(meta, 'supportsLuna') ||
+        _boolMeta(meta, 'supportsLunaJS') ||
+        _boolMeta(meta, 'supportsSora');
+  }
+
   static String? _stringMeta(Map<String, dynamic>? meta, String key) {
     final v = meta?[key];
     if (v is String && v.trim().isNotEmpty) return v;
@@ -116,6 +123,26 @@ class JsModuleExecutor {
       h['Referer'] = referer.trim();
     }
     return h;
+  }
+
+  Future<String?> _callFirstAvailable(
+    String moduleId,
+    List<String> fnNames,
+    List<Object?> args, {
+    Duration? timeout,
+  }) async {
+    String? last;
+    for (final fn in fnNames) {
+      last = await _runtime.callStringArgs(
+        moduleId,
+        fn,
+        args,
+        timeout: timeout ?? const Duration(seconds: 20),
+      );
+      if (last == null) continue;
+      if (!last.startsWith('__JS_ERROR__:missing_function:')) return last;
+    }
+    return last;
   }
 
   static Future<String> _httpRequest(
@@ -186,7 +213,7 @@ class JsModuleExecutor {
     String? raw,
   }) {
     if (!kDebugMode) return;
-    final asyncJs = _boolMeta(meta, 'asyncJS');
+    final asyncJs = _isAsyncModule(meta);
     debugPrint(
         '[JsModuleExecutor] search debug stage=$stage module=$moduleId asyncJS=$asyncJs url=${url ?? ''} status=${httpStatus ?? ''}');
     if (httpSnippet != null && httpSnippet.trim().isNotEmpty) {
@@ -226,13 +253,17 @@ class JsModuleExecutor {
   ) async {
     final d = await _desc(moduleId);
     final meta = d?.meta;
-    final asyncJs = _boolMeta(meta, 'asyncJS');
+    final asyncJs = _isAsyncModule(meta);
 
     String? raw;
 
     const fallbackFnNames = <String>[
       'searchResults',
       'search',
+      'searchManga',
+      'searchMangas',
+      'searchMangaResult',
+      'searchMangaResults',
       'searchAnime',
       'searchAnimes',
       'searchResult',
@@ -264,19 +295,23 @@ class JsModuleExecutor {
     String? httpSnippet;
     if (!asyncJs) {
       final template = _stringMeta(meta, 'searchBaseUrl');
-      if (template == null) return const [];
-      final url = buildModuleSearchUrl(template, query);
-      fetchedUrl = url;
-      final resp = await _fetchTextWithStatus(
-        url,
-        headers: _defaultHeaders(referer: _stringMeta(meta, 'baseUrl')),
-      );
-      httpStatus = resp.statusCode;
-      html = resp.body;
-      httpSnippet = html.isEmpty
-          ? ''
-          : (html.length > 600 ? html.substring(0, 600) : html);
-      raw = await callSearchWithFallback(<Object?>[html]);
+      if (template == null) {
+        // Fallback: some async modules omit asyncJS/searchBaseUrl but still expose search().
+        raw = await callSearchWithFallback(<Object?>[query]);
+      } else {
+        final url = buildModuleSearchUrl(template, query);
+        fetchedUrl = url;
+        final resp = await _fetchTextWithStatus(
+          url,
+          headers: _defaultHeaders(referer: _stringMeta(meta, 'baseUrl')),
+        );
+        httpStatus = resp.statusCode;
+        html = resp.body;
+        httpSnippet = html.isEmpty
+            ? ''
+            : (html.length > 600 ? html.substring(0, 600) : html);
+        raw = await callSearchWithFallback(<Object?>[html]);
+      }
     } else {
       raw = await callSearchWithFallback(<Object?>[query]);
     }
@@ -328,6 +363,8 @@ class JsModuleExecutor {
             image = _pickFirstString(rawMap, const [
               'image',
               'img',
+              'imageURL',
+              'imageUrl',
               'poster',
               'posterUrl',
               'thumbnail',
@@ -371,6 +408,34 @@ class JsModuleExecutor {
           final out2 = decodeTiles(raw2);
           if (out2.isNotEmpty) return out2;
         }
+
+        // Some modules expect a page argument even when optional.
+        final raw2b = await callSearchWithFallback(<Object?>[query, 0]);
+        if (raw2b != null && !raw2b.startsWith('__JS_ERROR__:')) {
+          final out2b = decodeTiles(raw2b);
+          if (out2b.isNotEmpty) return out2b;
+        }
+
+        final raw2c = await callSearchWithFallback(<Object?>[query, 1]);
+        if (raw2c != null && !raw2c.startsWith('__JS_ERROR__:')) {
+          final out2c = decodeTiles(raw2c);
+          if (out2c.isNotEmpty) return out2c;
+        }
+
+        // Extra fallback: some modules expect both html + query.
+        if (html != null) {
+          final raw3 = await callSearchWithFallback(<Object?>[html, query]);
+          if (raw3 != null && !raw3.startsWith('__JS_ERROR__:')) {
+            final out3 = decodeTiles(raw3);
+            if (out3.isNotEmpty) return out3;
+          }
+
+          final raw4 = await callSearchWithFallback(<Object?>[query, html]);
+          if (raw4 != null && !raw4.startsWith('__JS_ERROR__:')) {
+            final out4 = decodeTiles(raw4);
+            if (out4.isNotEmpty) return out4;
+          }
+        }
       } else {
         // If we used query first and have a template, try the HTML mode.
         final template = _stringMeta(meta, 'searchBaseUrl');
@@ -386,6 +451,19 @@ class JsModuleExecutor {
             final out2 = decodeTiles(raw2);
             if (out2.isNotEmpty) return out2;
           }
+        }
+
+        // Also try page args for async modules.
+        final raw3 = await callSearchWithFallback(<Object?>[query, 0]);
+        if (raw3 != null && !raw3.startsWith('__JS_ERROR__:')) {
+          final out3 = decodeTiles(raw3);
+          if (out3.isNotEmpty) return out3;
+        }
+
+        final raw4 = await callSearchWithFallback(<Object?>[query, 1]);
+        if (raw4 != null && !raw4.startsWith('__JS_ERROR__:')) {
+          final out4 = decodeTiles(raw4);
+          if (out4.isNotEmpty) return out4;
         }
       }
     }
@@ -410,11 +488,16 @@ class JsModuleExecutor {
         'url',
         'link',
         'path',
+        'id',
+        'mangaId',
+        'malId',
       ]).trim();
 
       final image = _pickFirstString(item, const [
         'image',
         'img',
+        'imageURL',
+        'imageUrl',
         'poster',
         'posterUrl',
         'thumbnail',
@@ -448,13 +531,22 @@ class JsModuleExecutor {
   ) async {
     final d = await _desc(moduleId);
     final meta = d?.meta;
-    final asyncJs = _boolMeta(meta, 'asyncJS');
+    final asyncJs = _isAsyncModule(meta);
+
+    const episodeFns = <String>[
+      'extractEpisodes',
+      'extractChapters',
+      'extractChapterList',
+      'getChapters',
+    ];
 
     String? raw;
-    if (asyncJs) {
-      raw = await _runtime.callStringArgs(
+    final hrefLooksLikeUrl = _looksLikeUrl(href);
+    if (asyncJs || !hrefLooksLikeUrl) {
+      // For async modules or id-style hrefs, call the JS hook directly.
+      raw = await _callFirstAvailable(
         moduleId,
-        'extractEpisodes',
+        episodeFns,
         <Object?>[href],
       );
     } else {
@@ -462,9 +554,9 @@ class JsModuleExecutor {
         href,
         headers: _defaultHeaders(referer: _stringMeta(meta, 'baseUrl')),
       );
-      raw = await _runtime.callStringArgs(
+      raw = await _callFirstAvailable(
         moduleId,
-        'extractEpisodes',
+        episodeFns,
         <Object?>[html],
       );
     }
@@ -475,18 +567,50 @@ class JsModuleExecutor {
     }
 
     final decoded = _tryJsonDecode(raw);
-    if (decoded is! List) return const [];
-
     final out = <JsModuleEpisode>[];
-    for (final item in decoded) {
+
+    List<Object?> flatten(Object? node) {
+      final list = <Object?>[];
+      void addAny(Object? n) {
+        if (n is List) {
+          for (final e in n) {
+            if (e is List && e.length >= 2 && e[1] is List) {
+              for (final sub in (e[1] as List)) {
+                list.add(sub);
+              }
+            } else {
+              list.add(e);
+            }
+          }
+        }
+      }
+
+      if (node is List) addAny(node);
+      if (node is Map) {
+        for (final v in node.values) {
+          addAny(v);
+        }
+      }
+      return list;
+    }
+
+    final items = flatten(decoded);
+    for (final item in items) {
       if (item is! Map) continue;
 
-      final hrefEp = (item['href'] ?? '').toString().trim();
+      final hrefEp =
+          (item['href'] ?? item['url'] ?? item['id'] ?? '').toString().trim();
       if (hrefEp.isEmpty) continue;
 
-      final number = _parseInt(item['number']) ?? 0;
-      final title = (item['title'] ?? 'Episode $number').toString().trim();
-      final image = (item['image'] ?? '').toString().trim();
+      final numRaw = item['number'] ?? item['chapter'] ?? item['episode'] ?? item['ep'];
+      final parsedInt = _parseInt(numRaw);
+      final parsedDouble = _parseDouble(numRaw);
+      final number = parsedInt ?? (parsedDouble != null ? parsedDouble.round() : 0);
+      final title =
+          (item['title'] ?? item['name'] ?? 'Episode $number').toString().trim();
+      final image = (item['image'] ?? item['img'] ?? item['imageURL'] ?? '')
+          .toString()
+          .trim();
 
       final durationSeconds = _parseInt(item['duration']);
 
@@ -566,13 +690,21 @@ class JsModuleExecutor {
   ) async {
     final d = await _desc(moduleId);
     final meta = d?.meta;
-    final asyncJs = _boolMeta(meta, 'asyncJS');
+    final asyncJs = _isAsyncModule(meta);
+
+    const pageFns = <String>[
+      'extractPages',
+      'extractImages',
+      'getPages',
+      'getImages',
+      'pages',
+    ];
 
     String? raw;
     if (asyncJs) {
-      raw = await _runtime.callStringArgs(
+      raw = await _callFirstAvailable(
         moduleId,
-        'extractPages',
+        pageFns,
         <Object?>[chapterHref],
         timeout: const Duration(seconds: 60),
       );
@@ -581,11 +713,22 @@ class JsModuleExecutor {
         chapterHref,
         headers: _defaultHeaders(referer: _stringMeta(meta, 'baseUrl')),
       );
-      raw = await _runtime.callStringArgs(
+      raw = await _callFirstAvailable(
         moduleId,
-        'extractPages',
+        pageFns,
         <Object?>[html],
+        timeout: const Duration(seconds: 60),
       );
+
+      // Fallback: some async modules omit asyncJS but still expect chapter id.
+      if (raw == null || raw.startsWith('__JS_ERROR__:missing_function:')) {
+        raw = await _callFirstAvailable(
+          moduleId,
+          pageFns,
+          <Object?>[chapterHref],
+          timeout: const Duration(seconds: 60),
+        );
+      }
     }
 
     if (raw == null) return const <String>[];
@@ -645,13 +788,21 @@ class JsModuleExecutor {
   }) async {
     final d = await _desc(moduleId);
     final meta = d?.meta;
-    final asyncJs = _boolMeta(meta, 'asyncJS');
+    final asyncJs = _isAsyncModule(meta);
+
+    const pageFns = <String>[
+      'extractPages',
+      'extractImages',
+      'getPages',
+      'getImages',
+      'pages',
+    ];
 
     String? raw;
     if (asyncJs) {
-      raw = await _runtime.callStringArgs(
+      raw = await _callFirstAvailable(
         moduleId,
-        'extractPages',
+        pageFns,
         <Object?>[chapterHref, offset, limit],
         timeout: const Duration(seconds: 60),
       );
@@ -925,6 +1076,12 @@ class JsModuleExecutor {
     if (v is int) return v;
     if (v is double) return v.toInt();
     if (v is String) return int.tryParse(v);
+    return null;
+  }
+
+  static double? _parseDouble(Object? v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
     return null;
   }
 

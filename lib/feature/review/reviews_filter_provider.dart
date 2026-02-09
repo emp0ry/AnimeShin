@@ -3,13 +3,16 @@ import 'package:animeshin/feature/review/review_models.dart';
 
 final reviewsFilterProvider = NotifierProvider.autoDispose
     .family<ReviewsFilterNotifier, ReviewsFilter, int>(
-  ReviewsFilterNotifier.new,
+  (arg) => ReviewsFilterNotifier(arg),
 );
 
-class ReviewsFilterNotifier
-    extends AutoDisposeFamilyNotifier<ReviewsFilter, int> {
+class ReviewsFilterNotifier extends Notifier<ReviewsFilter> {
+  ReviewsFilterNotifier(this.arg);
+
+  final int arg;
+
   @override
-  ReviewsFilter build(arg) => const ReviewsFilter();
+  ReviewsFilter build() => const ReviewsFilter();
 
   @override
   set state(ReviewsFilter newState) => super.state = newState;

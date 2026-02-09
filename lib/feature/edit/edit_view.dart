@@ -83,7 +83,7 @@ class _EditView extends ConsumerWidget {
     final readableNotifier = entryEditProvider(tag).notifier;
 
     final settings = ref.watch(
-      settingsProvider.select((s) => s.valueOrNull),
+      settingsProvider.select((s) => s.asData?.value),
     );
 
     final statusField = SliverToBoxAdapter(

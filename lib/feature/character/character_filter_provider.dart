@@ -3,13 +3,16 @@ import 'package:animeshin/feature/character/character_filter_model.dart';
 
 final characterFilterProvider = NotifierProvider.autoDispose
     .family<CharacterFilterNotifier, CharacterFilter, int>(
-  CharacterFilterNotifier.new,
+  (arg) => CharacterFilterNotifier(arg),
 );
 
-class CharacterFilterNotifier
-    extends AutoDisposeFamilyNotifier<CharacterFilter, int> {
+class CharacterFilterNotifier extends Notifier<CharacterFilter> {
+  CharacterFilterNotifier(this.arg);
+
+  final int arg;
+
   @override
-  CharacterFilter build(arg) => CharacterFilter();
+  CharacterFilter build() => CharacterFilter();
 
   @override
   set state(CharacterFilter newState) => super.state = newState;

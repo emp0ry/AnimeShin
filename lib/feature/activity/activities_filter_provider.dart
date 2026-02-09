@@ -4,15 +4,22 @@ import 'package:animeshin/feature/viewer/persistence_provider.dart';
 
 final activitiesFilterProvider = NotifierProvider.autoDispose
     .family<ActivitiesFilterNotifier, ActivitiesFilter, int?>(
-  ActivitiesFilterNotifier.new,
+  (arg) => ActivitiesFilterNotifier(arg),
 );
 
-class ActivitiesFilterNotifier
-    extends AutoDisposeFamilyNotifier<ActivitiesFilter, int?> {
+class ActivitiesFilterNotifier extends Notifier<ActivitiesFilter> {
+  ActivitiesFilterNotifier(this.arg);
+
+  final int? arg;
+
   @override
-  ActivitiesFilter build(arg) => arg == null
-      ? ref.watch(persistenceProvider.select((s) => s.homeActivitiesFilter))
-      : UserActivitiesFilter(ActivityType.values, arg);
+  ActivitiesFilter build() {
+    final userId = arg;
+
+    return userId == null
+        ? ref.watch(persistenceProvider.select((s) => s.homeActivitiesFilter))
+        : UserActivitiesFilter(ActivityType.values, userId);
+  }
 
   @override
   set state(ActivitiesFilter newState) {
