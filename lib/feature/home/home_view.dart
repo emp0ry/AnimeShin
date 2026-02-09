@@ -192,6 +192,15 @@ class _HomeViewState extends ConsumerState<HomeView>
       },
     );
 
+    double? safePixels(ScrollController ctrl) {
+      try {
+        if (!ctrl.hasClients) return null;
+        return ctrl.position.pixels;
+      } catch (_) {
+        return null;
+      }
+    }
+
     final navigationConfig = NavigationConfig(
       items: _homeTabs,
       selected: _tabCtrl.index,
@@ -203,21 +212,24 @@ class _HomeViewState extends ConsumerState<HomeView>
           case HomeTab.feed:
             _feedScrollCtrl.scrollToTop();
           case HomeTab.anime:
-            if (_animeScrollCtrl.position.pixels > 0) {
+            final animePixels = safePixels(_animeScrollCtrl);
+            if (animePixels != null && animePixels > 0) {
               _animeScrollCtrl.scrollToTop();
               return;
             }
 
             _toggleSearchFocus(_animeFocusNode);
           case HomeTab.manga:
-            if (_mangaScrollCtrl.position.pixels > 0) {
+            final mangaPixels = safePixels(_mangaScrollCtrl);
+            if (mangaPixels != null && mangaPixels > 0) {
               _mangaScrollCtrl.scrollToTop();
               return;
             }
 
             _toggleSearchFocus(_mangaFocusNode);
           case HomeTab.discover:
-            if (_discoverScrollCtrl.position.pixels > 0) {
+            final discoverPixels = safePixels(_discoverScrollCtrl);
+            if (discoverPixels != null && discoverPixels > 0) {
               _discoverScrollCtrl.scrollToTop();
               return;
             }
@@ -225,7 +237,8 @@ class _HomeViewState extends ConsumerState<HomeView>
             _toggleSearchFocus(_discoverFocusNode);
             return;
           case HomeTab.profile:
-            if (primaryScrollCtrl.positions.last.pixels > 0) {
+            final primaryPixels = safePixels(primaryScrollCtrl);
+            if (primaryPixels != null && primaryPixels > 0) {
               primaryScrollCtrl.scrollToTop();
               return;
             }

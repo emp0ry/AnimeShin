@@ -5,9 +5,12 @@ import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:animeshin/util/graphql.dart';
 import 'package:animeshin/util/theming.dart';
+import 'package:animeshin/feature/settings/settings_provider.dart';
+import 'package:animeshin/feature/settings/settings_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
+import 'dart:convert';
 
 import '../collection/collection_models.dart';
 import '../viewer/repository_provider.dart';
@@ -36,6 +39,10 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   List<JsModuleEpisode>? _episodesCache;
 
   Map<int, String>? _anilistThumbs;
+  Map<int, String>? _anilistEpisodeTitles;
+  String? _lastFetchOrigin;
+  String? _fallbackSearchTitle;
+  int? _anilistMediaId;
 
   static int? _parseEpisodeNumberFromTitle(String title) {
     final t = title.trim();
@@ -66,17 +73,111 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     if (eps is! List) return const <int, String>{};
 
     final out = <int, String>{};
+    final titles = <int, String>{};
     for (final raw in eps) {
       if (raw is! Map) continue;
       final title = (raw['title'] ?? '').toString().trim();
       final thumb = (raw['thumbnail'] ?? '').toString().trim();
-      if (thumb.isEmpty) continue;
       final n = _parseEpisodeNumberFromTitle(title);
       if (n == null || n <= 0) continue;
-      out.putIfAbsent(n, () => thumb);
+      if (thumb.isNotEmpty) {
+        out.putIfAbsent(n, () => thumb);
+      }
+      if (title.isNotEmpty) {
+        titles.putIfAbsent(n, () => title);
+      }
     }
+    _anilistEpisodeTitles = titles.isEmpty ? null : titles;
     return out;
   }
+
+  Future<Map<int, String>> _fetchAniListEpisodeThumbnailsBySearch(
+    String title,
+  ) async {
+    final variants = _buildAniListSearchVariants(title);
+    if (variants.isEmpty) return const <int, String>{};
+
+    for (final q in variants) {
+      final data = await ref.read(repositoryProvider).request(
+        GqlQuery.mediaPage,
+        {
+          'page': 1,
+          'type': 'ANIME',
+          'search': q,
+          'sort': 'SEARCH_MATCH',
+        },
+      );
+
+      final list = data['Page']?['media'];
+      if (list is! List || list.isEmpty) continue;
+
+      final first = list.first;
+      if (first is! Map || first['id'] is! int) continue;
+
+      final id = first['id'] as int;
+      _anilistMediaId = id;
+      return _fetchAniListEpisodeThumbnails(id);
+    }
+
+    return const <int, String>{};
+  }
+
+  static List<String> _buildAniListSearchVariants(String title) {
+    String normalize(String s) => s
+        .replaceAll(RegExp(r'[\(\[\{].*?[\)\]\}]'), ' ')
+        .replaceAll(RegExp(r'[:\-–—]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    String stripSeasonParts(String s) {
+      var out = s;
+      out = out.replaceAll(
+        RegExp(
+          r'\b(season|part|cour|arc|chapter|series)\b\s*\d+\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+      out = out.replaceAll(
+        RegExp(
+          r'\b(season|part|cour|arc|chapter|series)\b\s*[ivx]+\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      );
+      out = out.replaceAll(
+        RegExp(r'\b(\d+)(st|nd|rd|th)\b', caseSensitive: false),
+        ' ',
+      );
+      out = out.replaceAll(
+        RegExp(r'\b(i|ii|iii|iv|v|vi|vii|viii|ix|x)\b', caseSensitive: false),
+        ' ',
+      );
+      out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
+      return out;
+    }
+
+    final raw = title.trim();
+    if (raw.isEmpty) return const <String>[];
+
+    final normalized = normalize(raw);
+    final stripped = stripSeasonParts(normalized);
+
+    final variants = <String>[raw, normalized, stripped]
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final unique = <String>[];
+    final seen = <String>{};
+    for (final v in variants) {
+      final key = v.toLowerCase();
+      if (seen.add(key)) unique.add(v);
+    }
+
+    return unique;
+  }
+
 
   static String? _moduleImageReferer(SourcesModuleDescriptor module) {
     // Universal referer: use module baseUrl origin when available.
@@ -86,6 +187,95 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     if (uri == null) return null;
     if (uri.scheme != 'http' && uri.scheme != 'https') return null;
     return '${uri.origin}/';
+  }
+
+  static String? _originFromReferer(String? referer) {
+    final raw = (referer ?? '').trim();
+    if (raw.isEmpty) return null;
+    final uri = Uri.tryParse(raw);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      return null;
+    }
+    return uri.origin;
+  }
+
+  static String _resolveImageUrl(
+    String raw, {
+    String? baseOrigin,
+    String? imageReferer,
+  }) {
+    final t = raw.trim();
+    if (t.isEmpty) return '';
+    if (t.startsWith('//')) return 'https:$t';
+
+    final hasScheme = Uri.tryParse(t)?.hasScheme ?? false;
+    if (hasScheme) return t;
+
+    final origin = baseOrigin ?? _originFromReferer(imageReferer);
+    if (origin == null || origin.isEmpty) return t;
+
+    if (t.startsWith('/')) return '$origin$t';
+    return '$origin/$t';
+  }
+
+  String _preferredSearchTitle() {
+    final entry = widget.item;
+    if (entry == null) return widget.title;
+
+    String? pick(TitleLanguage lang) => switch (lang) {
+          TitleLanguage.english => entry.titleEnglish,
+          TitleLanguage.romaji => entry.titleRomaji,
+          TitleLanguage.native => entry.titleNative,
+        };
+
+    final settings = ref.read(settingsProvider).valueOrNull;
+    final preferred = pick(settings?.titleLanguage ?? TitleLanguage.romaji)
+      ?.trim();
+    if (preferred != null && preferred.isNotEmpty) return preferred;
+
+    final romaji = entry.titleRomaji?.trim();
+    if (romaji != null && romaji.isNotEmpty) return romaji;
+
+    final native = entry.titleNative?.trim();
+    if (native != null && native.isNotEmpty) return native;
+
+    final english = entry.titleEnglish?.trim();
+    if (english != null && english.isNotEmpty) return english;
+
+    final fallback = _fallbackSearchTitle?.trim();
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+
+    return widget.title;
+  }
+
+  String? _pickTitleFromMedia(Map media) {
+    final title = media['title'];
+    if (title is! Map) return null;
+
+    final settings = ref.read(settingsProvider).valueOrNull;
+    final pref = settings?.titleLanguage ?? TitleLanguage.romaji;
+
+    String? val(String key) => (title[key] ?? '').toString().trim();
+
+    String? pick() => switch (pref) {
+          TitleLanguage.english => val('english'),
+          TitleLanguage.romaji => val('romaji'),
+          TitleLanguage.native => val('native'),
+        };
+
+    final preferred = pick();
+    if (preferred != null && preferred.isNotEmpty) return preferred;
+
+    final romaji = val('romaji');
+    if (romaji != null && romaji.isNotEmpty) return romaji;
+
+    final native = val('native');
+    if (native != null && native.isNotEmpty) return native;
+
+    final english = val('english');
+    if (english != null && english.isNotEmpty) return english;
+
+    return null;
   }
 
   static bool _isQualityLabel(String? raw) {
@@ -158,15 +348,64 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     final rt = JsSourcesRuntime.instance;
     String? lastFetch;
     String? logs;
+    String? parsedLastFetchOrigin;
     try {
       lastFetch = await rt.getLastFetchDebugJson(widget.module.id);
     } catch (_) {
       lastFetch = null;
     }
+    if (lastFetch != null && lastFetch.isNotEmpty) {
+      try {
+        final parsed = jsonDecode(lastFetch);
+        if (parsed is Map && parsed['url'] is String) {
+          final uri = Uri.tryParse(parsed['url'] as String);
+          final origin = uri?.origin;
+          if (origin != null && origin.isNotEmpty) {
+            parsedLastFetchOrigin = origin;
+          }
+        }
+      } catch (_) {
+        // Ignore parse errors; debug info is best-effort.
+      }
+    }
     try {
       logs = await rt.getLogsJson(widget.module.id);
     } catch (_) {
       logs = null;
+    }
+
+    final moduleReferer = _moduleImageReferer(widget.module);
+    final effectiveLastFetchOrigin =
+      parsedLastFetchOrigin ?? _lastFetchOrigin;
+    final baseOrigin =
+      effectiveLastFetchOrigin ?? _originFromReferer(moduleReferer);
+
+    final eps = _episodesCache ?? const <JsModuleEpisode>[];
+    final debugEps = eps.take(6).toList(growable: false);
+    final previewLines = <String>[];
+    for (final ep in debugEps) {
+      final epTitle = ep.title.trim();
+      final raw = (ep.image).trim();
+      final resolved = _resolveImageUrl(
+        raw,
+        baseOrigin: baseOrigin,
+        imageReferer: moduleReferer,
+      );
+      final anilist = _anilistThumbs?[ep.number];
+      final resolvedAni = (anilist == null || anilist.trim().isEmpty)
+          ? ''
+          : _resolveImageUrl(
+              anilist,
+              baseOrigin: baseOrigin,
+              imageReferer: moduleReferer,
+            );
+      final anilistTitle = _anilistEpisodeTitles?[ep.number]?.trim() ?? '';
+      previewLines.add(
+        'Ep ${ep.number}: title="$epTitle"'
+            '${anilistTitle.isNotEmpty ? ' | anilistTitle="$anilistTitle"' : ''}'
+            ' | raw="$raw" | resolved="$resolved"'
+            '${anilist != null ? ' | anilist="$anilist" | anilistResolved="$resolvedAni"' : ''}',
+      );
     }
 
     if (!mounted) return;
@@ -179,7 +418,12 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
             child: SelectableText(
               [
                 'Module: ${widget.module.id}',
+                'AniList id: ${_anilistMediaId ?? '(null)'}',
+                'Image referer: ${moduleReferer ?? '(null)'}',
+                'Last fetch origin: ${effectiveLastFetchOrigin ?? '(null)'}',
                 if (lastFetch != null) '\nLast fetch:\n$lastFetch',
+                if (previewLines.isNotEmpty)
+                  '\nPreview images:\n${previewLines.join('\n')}',
                 if (logs != null) '\nLogs:\n$logs',
               ].join('\n'),
             ),
@@ -199,11 +443,37 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   void initState() {
     super.initState();
     _episodesFuture = _exec.extractEpisodes(widget.module.id, widget.href);
+    _loadLastFetchOrigin();
 
     final mediaId = widget.item?.mediaId;
     if (mediaId != null && mediaId > 0) {
+      if (widget.title.trim().isEmpty) {
+        ref.read(repositoryProvider)
+            .request(GqlQuery.media, {'id': mediaId, 'withInfo': true})
+            .then((data) {
+          if (!mounted) return;
+          final media = data['Media'];
+          if (media is! Map) return;
+          final title = _pickTitleFromMedia(media);
+          if (title == null || title.trim().isEmpty) return;
+          setState(() => _fallbackSearchTitle = title.trim());
+        }).catchError((_) {
+          // Ignore; fallback title is optional.
+        });
+      }
+
       _fetchAniListEpisodeThumbnails(mediaId).then((m) {
         if (!mounted) return;
+        _anilistMediaId = mediaId;
+        setState(() => _anilistThumbs = m);
+      }).catchError((_) {
+        // Ignore; fallback to module episode images.
+      });
+    } else {
+      final searchTitle = _preferredSearchTitle();
+      _fetchAniListEpisodeThumbnailsBySearch(searchTitle).then((m) {
+        if (!mounted) return;
+        if (m.isEmpty) return;
         setState(() => _anilistThumbs = m);
       }).catchError((_) {
         // Ignore; fallback to module episode images.
@@ -218,6 +488,23 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       await _maybeInitServers(eps);
       setState(() {});
     });
+  }
+
+  Future<void> _loadLastFetchOrigin() async {
+    final rt = JsSourcesRuntime.instance;
+    try {
+      final lastFetch = await rt.getLastFetchDebugJson(widget.module.id);
+      if (lastFetch == null || lastFetch.isEmpty) return;
+      final parsed = jsonDecode(lastFetch);
+      if (parsed is! Map || parsed['url'] is! String) return;
+      final uri = Uri.tryParse(parsed['url'] as String);
+      final origin = uri?.origin;
+      if (origin == null || origin.isEmpty) return;
+      if (!mounted) return;
+      setState(() => _lastFetchOrigin = origin);
+    } catch (_) {
+      // Best-effort; ignore.
+    }
   }
 
   Future<void> _maybeInitServers(List<JsModuleEpisode> eps) async {
@@ -594,6 +881,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     final continued = widget.item?.progress ?? 0;
     final eps = _episodesCache;
     final moduleReferer = _moduleImageReferer(widget.module);
+    final lastFetchOrigin = _lastFetchOrigin;
 
     int? continueEp;
     if (eps != null && eps.isNotEmpty) {
@@ -658,6 +946,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
               final ep = eps[i];
 
               final anilistThumb = _anilistThumbs?[ep.number];
+              final anilistTitle = _anilistEpisodeTitles?[ep.number];
 
               final watched = ep.number <= continued;
               final isContinue = ep.number == continued + 1;
@@ -665,9 +954,11 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
               return _ModuleEpisodeTile(
                 episode: ep,
                 overrideImageUrl: anilistThumb,
+                fallbackTitle: anilistTitle,
                 watched: watched,
                 isContinue: isContinue,
                 imageReferer: moduleReferer,
+                imageBaseOrigin: lastFetchOrigin,
                 onPlay: () => _openEpisode(ep),
               );
             },
@@ -703,50 +994,134 @@ class _ModuleEpisodeTile extends StatelessWidget {
   const _ModuleEpisodeTile({
     required this.episode,
     required this.overrideImageUrl,
+    required this.fallbackTitle,
     required this.watched,
     required this.isContinue,
     required this.imageReferer,
+    required this.imageBaseOrigin,
     required this.onPlay,
   });
 
   final JsModuleEpisode episode;
   final String? overrideImageUrl;
+  final String? fallbackTitle;
   final bool watched;
   final bool isContinue;
   final String? imageReferer;
+  final String? imageBaseOrigin;
   final VoidCallback onPlay;
 
   @override
   Widget build(BuildContext context) {
     final surface = Theme.of(context).colorScheme.surfaceContainerHighest;
     final header = 'Episode ${episode.number}';
-    final subtitle = episode.title.trim();
+    bool isGenericEpisodeTitle(String t) {
+      final raw = t.trim();
+      if (raw.isEmpty) return true;
+      final lower = raw.toLowerCase();
+      if (lower == header.toLowerCase()) return true;
+      return RegExp(r'^\s*(episode|ep)\s*\d+\s*$', caseSensitive: false)
+          .hasMatch(raw);
+    }
+
+    String cleanEpisodePrefix(String t) {
+      var out = t.trim();
+      if (out.isEmpty) return out;
+      out = out.replaceFirst(
+        RegExp(r'^\s*(episode|ep)\s*\d+\s*[-:–—]?\s*',
+            caseSensitive: false),
+        '',
+      );
+      return out.trim();
+    }
+
+    final moduleTitle = episode.title.trim();
+    final fallback = cleanEpisodePrefix((fallbackTitle ?? '').trim());
+    final subtitle = !isGenericEpisodeTitle(moduleTitle)
+        ? moduleTitle
+        : fallback;
     final showSubtitle =
         subtitle.isNotEmpty && subtitle.toLowerCase() != header.toLowerCase();
 
-    final imageUrl = (overrideImageUrl ?? episode.image).trim();
-    final uri = imageUrl.isEmpty ? null : Uri.tryParse(imageUrl);
-    final String? referer =
-        (imageReferer != null && imageReferer!.trim().isNotEmpty)
-            ? imageReferer!.trim()
-            : (uri != null && (uri.scheme == 'http' || uri.scheme == 'https'))
-                ? '${uri.origin}/'
-                : null;
+    final override = _ModuleWatchPageState._resolveImageUrl(
+      overrideImageUrl ?? '',
+      baseOrigin: imageBaseOrigin,
+      imageReferer: imageReferer,
+    );
+    final episodeImage = _ModuleWatchPageState._resolveImageUrl(
+      episode.image,
+      baseOrigin: imageBaseOrigin,
+      imageReferer: imageReferer,
+    );
+    final candidates = <String>[
+      if (episodeImage.isNotEmpty) episodeImage,
+      if (override.isNotEmpty) override,
+    ];
 
-    final String? effectiveReferer = (referer != null && uri != null)
-        ? (Uri.tryParse(referer)?.origin == uri.origin
-            ? referer
-            : '${uri.origin}/')
-        : referer;
+    final primaryImageUrl = candidates.isNotEmpty ? candidates.first : '';
 
-    final imageHeaders =
-        (uri != null && (uri.scheme == 'http' || uri.scheme == 'https'))
-            ? <String, String>{
-                if (effectiveReferer != null) 'Referer': effectiveReferer,
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-              }
-            : null;
+    Map<String, String>? headersFor(String url) {
+      final uri = Uri.tryParse(url);
+      if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+        return null;
+      }
+
+      final trimmedReferer = imageReferer?.trim();
+      final String? referer =
+          (trimmedReferer != null && trimmedReferer.isNotEmpty)
+              ? trimmedReferer
+              : null;
+
+      final String effectiveReferer = (referer != null &&
+              Uri.tryParse(referer)?.origin == uri.origin)
+          ? referer
+          : '${uri.origin}/';
+
+      return <String, String>{
+        if (effectiveReferer.isNotEmpty) 'Referer': effectiveReferer,
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+      };
+    }
+
+    Widget placeholder() {
+      final color = Theme.of(context).colorScheme.onSurfaceVariant;
+      return Center(
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: color,
+        ),
+      );
+    }
+
+    List<String> alternateImageUrls(String url) {
+      final uri = Uri.tryParse(url);
+      if (uri == null || uri.host.isEmpty) return const <String>[];
+      const hosts = <String>[
+        'aniliberty.top',
+        'anilibria.top',
+        'anilibria.wtf',
+      ];
+      if (!hosts.contains(uri.host)) return const <String>[];
+      return hosts
+          .where((h) => h != uri.host)
+          .map((h) => uri.replace(host: h).toString())
+          .toList(growable: false);
+    }
+
+    Widget buildImageSequence(List<String> urls, {int index = 0}) {
+      if (index >= urls.length) return placeholder();
+      final url = urls[index];
+      final headers = headersFor(url);
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        headers: headers,
+        errorBuilder: (context, error, stackTrace) {
+          return buildImageSequence(urls, index: index + 1);
+        },
+      );
+    }
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -762,12 +1137,15 @@ class _ModuleEpisodeTile extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     Container(color: surface),
-                    if (imageUrl.isNotEmpty)
-                      Image.network(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        headers: imageHeaders,
-                      ),
+                    if (primaryImageUrl.isNotEmpty)
+                      buildImageSequence(
+                        <String>{
+                          ...candidates,
+                          for (final c in candidates) ...alternateImageUrls(c),
+                        }.where((e) => e.trim().isNotEmpty).toList(),
+                      )
+                    else
+                      placeholder(),
                     if (watched || isContinue)
                       _WatchedBadge(isContinue: isContinue),
                   ],
