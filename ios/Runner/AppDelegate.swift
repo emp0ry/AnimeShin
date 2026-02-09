@@ -118,6 +118,15 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
       // Build player & item
       let item = AVPlayerItem(url: url)
+
+      // Prevent iOS from automatically rendering in-band (system) subtitles.
+      // We want only the app/player-side subtitles to be visible.
+      if #available(iOS 9.0, *) {
+        item.appliesMediaSelectionCriteriaAutomatically = false
+      }
+      if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
+        item.select(nil, in: group)
+      }
       let player = AVPlayer(playerItem: item)
 
       // Prefer brief stalls over "catch-up" jumps that look like random skips
