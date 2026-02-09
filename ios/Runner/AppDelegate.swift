@@ -123,7 +123,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       func buildAsset(_ url: URL, headers: [String: String]?) -> AVURLAsset {
         if let headers = headers, !headers.isEmpty {
           return AVURLAsset(url: url, options: [
-            AVURLAssetHTTPHeaderFieldsKey: headers
+            "AVURLAssetHTTPHeaderFieldsKey": headers
           ])
         }
         return AVURLAsset(url: url)
