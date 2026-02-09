@@ -282,9 +282,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   static bool _isQualityLabel(String? raw) {
     final t = (raw ?? '').trim().toLowerCase();
     if (t.isEmpty) return false;
-    if (RegExp(r'^\d{3,4}p$').hasMatch(t)) return true;
-    return RegExp(r'\b(2160|1440|1080|720|480|360)\s*p\b').hasMatch(t) ||
-        RegExp(r'\b(2160|1440|1080|720|480|360)p\b').hasMatch(t);
+    return RegExp(r'^\s*(2160|1440|1080|720|480|360)\s*p\s*$').hasMatch(t) ||
+      RegExp(r'^\s*(2160|1440|1080|720|480|360)p\s*$').hasMatch(t);
   }
 
   static int _uniqueHostsCount(Iterable<JsStreamCandidate> streams) {
@@ -333,6 +332,68 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       }
     }
     return null;
+  }
+
+  static String _stripVoiceoverTitle(String raw) {
+    var out = raw.trim();
+    if (out.isEmpty) return out;
+    if (out.contains('|')) {
+      final parts = out.split('|').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      if (parts.isNotEmpty) {
+        out = parts.first;
+      }
+    }
+    out = out.replaceAll(RegExp(r'\s*\([^)]*\)'), ' ');
+    out = out.replaceAll(RegExp(r'\s*\[[^\]]*\]'), ' ');
+    out = out.replaceAll(RegExp(r'\b(2160|1440|1080|720|480|360)\s*p\b', caseSensitive: false), ' ');
+    out = out.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return out;
+  }
+
+  static bool _titleHasQualityOrProvider(String raw) {
+    final t = raw.toLowerCase();
+    if (RegExp(r'\b(2160|1440|1080|720|480|360)\s*p\b').hasMatch(t)) {
+      return true;
+    }
+    if (t.contains('kodik') || t.contains('sub') || t.contains('dub') || t.contains('voice')) {
+      return true;
+    }
+    return RegExp(r'\([^)]*\)').hasMatch(t);
+  }
+
+  static bool _isNumericVoiceoverLabel(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return false;
+    return RegExp(r'^\d{1,3}$').hasMatch(t);
+  }
+
+  static List<String> _uniqueVoiceoverBases(Iterable<String> titles) {
+    final unique = <String>[];
+    final seen = <String>{};
+    for (final t in titles) {
+      final base = _stripVoiceoverTitle(t).toLowerCase();
+      if (base.isEmpty) continue;
+      if (seen.add(base)) unique.add(base);
+    }
+    return unique;
+  }
+
+  static List<String> _buildVoiceoverCandidates(
+    Iterable<JsStreamCandidate> streams,
+  ) {
+    final out = <String>[];
+    final seen = <String>{};
+    for (final s in streams) {
+      final raw = s.title.trim();
+      if (raw.isEmpty) continue;
+      if (_isQualityLabel(raw)) continue;
+      final base = _stripVoiceoverTitle(raw).toLowerCase();
+      if (base.isEmpty) continue;
+      if (seen.add(base)) {
+        out.add(raw);
+      }
+    }
+    return out;
   }
 
   int _voiceoverInitAttempts = 0;
@@ -559,9 +620,16 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
     if (eps.isEmpty) return;
 
+    debugPrint(
+      '[VoiceoverDebug] init module=${widget.module.id} epHref=${eps.first.href}',
+    );
+
     try {
       // 1) Prefer explicit hook.
       var list = await _exec.getVoiceovers(widget.module.id, eps.first.href);
+      debugPrint(
+        '[VoiceoverDebug] getVoiceovers raw module=${widget.module.id}: ${list.join(" | ")}',
+      );
 
       // Never treat qualities as voiceovers.
       list = list.where((t) => !_isQualityLabel(t)).toList(growable: false);
@@ -576,50 +644,74 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       if (!mounted) return;
       setState(() => _voiceoverTitles = normalized);
 
+      debugPrint(
+        '[VoiceoverDebug] getVoiceovers normalized module=${widget.module.id}: ${normalized.join(" | ")}',
+      );
+
       if (normalized.length >= 2 && _preferredVoiceoverTitle == null) {
         await _pickVoiceover(showAuto: true);
+        _voiceoverInitDone = true;
+        return;
       }
 
-      _voiceoverInitDone = true;
+      if (normalized.isNotEmpty) {
+        _voiceoverInitDone = true;
+        return;
+      }
+
+      final inferred = await _inferVoiceoversFromStreams(eps.first);
+      if (inferred) {
+        _voiceoverInitDone = true;
+      }
+      return;
     } catch (_) {
+      debugPrint(
+        '[VoiceoverDebug] getVoiceovers failed module=${widget.module.id}, falling back to stream inference',
+      );
       // Allow a retry on next frame; do not mark done.
-
-      // 2) If module doesn't expose getVoiceovers:
-      // - for voiceover-first modules, treat stream titles as voiceovers directly.
-      // - otherwise, try a conservative host-based inference.
-      try {
-        final selection = await _exec.extractStreams(widget.module.id, eps.first.href);
-        final nonQuality = selection.streams
-            .where((s) => !_isQualityLabel(s.title))
-            .toList(growable: false);
-        final titles = nonQuality
-            .map((s) => s.title.trim())
-            .where((t) => t.isNotEmpty)
-            .toList(growable: false);
-
-        final unique = <String>[];
-        final seen = <String>{};
-        for (final t in titles) {
-          final k = t.toLowerCase();
-          if (seen.add(k)) unique.add(t);
-        }
-
-        final inferred = _modulePrefersVoiceoverPicker ||
-            (unique.length >= 2 && _uniqueHostsCount(nonQuality) <= 1);
-        if (inferred) {
-          unique.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-          if (!mounted) return;
-          setState(() => _voiceoverTitles = unique);
-          if (unique.length >= 2 && _preferredVoiceoverTitle == null) {
-            await _pickVoiceover(showAuto: true);
-          }
-          _voiceoverInitDone = true;
-          return;
-        }
-      } catch (_) {
-        // Ignore; allow a retry on next frame.
+      final inferred = await _inferVoiceoversFromStreams(eps.first);
+      if (inferred) {
+        _voiceoverInitDone = true;
       }
     }
+  }
+
+  Future<bool> _inferVoiceoversFromStreams(JsModuleEpisode ep) async {
+    // If module doesn't expose getVoiceovers:
+    // - for voiceover-first modules, treat stream titles as voiceovers directly.
+    // - otherwise, infer based on host + provider/quality patterns.
+    try {
+      final selection = await _exec.extractStreams(widget.module.id, ep.href);
+      debugPrint(
+        '[VoiceoverDebug] infer selection.count module=${widget.module.id}: ${selection.streams.length}',
+      );
+      final candidates = _buildVoiceoverCandidates(selection.streams);
+      debugPrint(
+        '[VoiceoverDebug] infer candidates.count module=${widget.module.id}: ${candidates.length}',
+      );
+      debugPrint(
+        '[VoiceoverDebug] infer candidates module=${widget.module.id}: ${candidates.join(" | ")}',
+      );
+
+      if (candidates.length >= 2) {
+        candidates.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        if (!mounted) return false;
+        setState(() => _voiceoverTitles = candidates);
+        debugPrint(
+          '[VoiceoverDebug] infer setVoiceoverTitles module=${widget.module.id}: ${candidates.length}',
+        );
+        if (_preferredVoiceoverTitle == null) {
+          debugPrint(
+            '[VoiceoverDebug] infer prompting dialog module=${widget.module.id}',
+          );
+          await _pickVoiceover(showAuto: true);
+        }
+        return true;
+      }
+    } catch (_) {
+      // Ignore; allow a retry on next frame.
+    }
+    return false;
   }
 
   Future<void> _pickVoiceover({required bool showAuto}) async {
@@ -723,6 +815,21 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       return;
     }
 
+    debugPrint(
+      '[VoiceoverDebug] openEpisode selection.count module=${widget.module.id}: ${selection.streams.length}',
+    );
+
+    final rawTitles = selection.streams
+        .map((s) => s.title.trim())
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList();
+    if (rawTitles.isNotEmpty) {
+      debugPrint(
+        '[VoiceoverDebug] openEpisode module=${widget.module.id} titles: ${rawTitles.join(" | ")}',
+      );
+    }
+
     final allQuality = selection.streams.every((s) => _isQualityLabel(s.title));
 
     String? url480;
@@ -755,33 +862,42 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       }
     } else {
       // Non-quality mode: either voiceover choices or server choices.
-      final titles = selection.streams
-          .map((s) => s.title.trim())
-          .where((t) => t.isNotEmpty)
-          .toList(growable: false);
+      final candidates = _buildVoiceoverCandidates(selection.streams);
+      final looksLikeVoiceovers = _voiceoverTitles.length >= 2 ||
+          candidates.length >= 2 ||
+          (_modulePrefersVoiceoverPicker && candidates.isNotEmpty);
 
-      final uniqueTitles = <String>[];
-      final seen = <String>{};
-      for (final t in titles) {
-        final k = t.toLowerCase();
-        if (seen.add(k)) uniqueTitles.add(t);
-      }
-
-      final nonQuality = selection.streams.where((s) => !_isQualityLabel(s.title));
-
-        // Prefer explicit voiceover list when available; otherwise:
-        // - if module meta indicates voiceover-first, treat titles as voiceovers
-        // - else, infer based on host.
-        final looksLikeVoiceovers = _voiceoverTitles.length >= 2 ||
-          (_modulePrefersVoiceoverPicker && uniqueTitles.length >= 2) ||
-          (uniqueTitles.length >= 2 && _uniqueHostsCount(nonQuality) <= 1);
+      debugPrint(
+        '[VoiceoverDebug] openEpisode module=${widget.module.id} candidates: ${candidates.join(" | ")}',
+      );
+      debugPrint(
+        '[VoiceoverDebug] openEpisode module=${widget.module.id} looksLikeVoiceovers: $looksLikeVoiceovers',
+      );
 
       if (looksLikeVoiceovers) {
-        if (_voiceoverTitles.length < 2 && uniqueTitles.length >= 2) {
-          setState(() => _voiceoverTitles = uniqueTitles);
+        debugPrint(
+          '[VoiceoverDebug] openEpisode voiceoverTitles.count module=${widget.module.id}: ${_voiceoverTitles.length}',
+        );
+        if (_voiceoverTitles.length < 2 && candidates.length >= 2) {
+          setState(() => _voiceoverTitles = candidates);
+          debugPrint(
+            '[VoiceoverDebug] openEpisode setVoiceoverTitles module=${widget.module.id}: ${candidates.length}',
+          );
         }
-        if (_preferredVoiceoverTitle == null && uniqueTitles.length >= 2) {
+        if (_preferredVoiceoverTitle == null && candidates.length >= 2) {
+          debugPrint(
+            '[VoiceoverDebug] openEpisode prompting dialog (uniqueTitles) module=${widget.module.id}',
+          );
           await _pickVoiceover(showAuto: true);
+        } else if (_preferredVoiceoverTitle == null && _voiceoverTitles.length >= 2) {
+          debugPrint(
+            '[VoiceoverDebug] openEpisode prompting dialog (cached) module=${widget.module.id}',
+          );
+          await _pickVoiceover(showAuto: true);
+        } else {
+          debugPrint(
+            '[VoiceoverDebug] openEpisode dialog skipped module=${widget.module.id} preferred=${_preferredVoiceoverTitle ?? "(null)"}',
+          );
         }
 
         // Some modules need the voiceover passed into extractStreamUrl; refetch after pick.
@@ -798,8 +914,21 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
           }
         }
       } else {
-        if (uniqueTitles.length >= 2 && _preferredServerTitle == null) {
-          await _pickServer(uniqueTitles);
+        final serverTitles = selection.streams
+            .map((s) => s.title.trim())
+            .where((t) => t.isNotEmpty)
+            .toList(growable: false);
+        final uniqueServerTitles = <String>[];
+        final seenServers = <String>{};
+        for (final t in serverTitles) {
+          final k = t.toLowerCase();
+          if (seenServers.add(k)) uniqueServerTitles.add(t);
+        }
+        if (uniqueServerTitles.length >= 2 && _preferredServerTitle == null) {
+          debugPrint(
+            '[VoiceoverDebug] openEpisode prompting server dialog module=${widget.module.id}',
+          );
+          await _pickServer(uniqueServerTitles);
         }
       }
 
