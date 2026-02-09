@@ -192,7 +192,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       }
 
       // Honor subtitle toggle: when disabled, explicitly deselect legible tracks.
-      if #available(iOS 9.0, *) {
+      if #available(iOS 11.0, *) {
         item.appliesMediaSelectionCriteriaAutomatically = subtitlesEnabled
       }
       if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
