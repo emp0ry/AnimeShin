@@ -28,6 +28,27 @@ class _ModuleReadPageState extends State<ModuleReadPage> {
   late Future<List<JsModuleEpisode>> _chaptersFuture;
   List<JsModuleEpisode>? _chaptersCache;
 
+  static String _normalizeChapterTitle(String raw, int number) {
+    final t = raw.trim();
+    if (t.isEmpty) return 'Chapter $number';
+    return t.replaceFirst(
+      RegExp(r'^\s*episode\b', caseSensitive: false),
+      'Chapter',
+    ).trim();
+  }
+
+  int? _findContinueIndex(List<JsModuleEpisode> chapters, int progress) {
+    if (chapters.isEmpty) return null;
+    final nextNumber = (progress <= 0) ? chapters.first.number : (progress + 1);
+    for (var i = 0; i < chapters.length; i++) {
+      if (chapters[i].number == nextNumber) return i;
+    }
+    for (var i = 0; i < chapters.length; i++) {
+      if (chapters[i].number > progress) return i;
+    }
+    return 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -131,34 +152,80 @@ class _ModuleReadPageState extends State<ModuleReadPage> {
             return const Center(child: Text('No chapters found'));
           }
 
-          return ListView.builder(
-            itemCount: chapters.length,
-            itemBuilder: (context, i) {
-              final ch = chapters[i];
-              final subtitle = ch.title.trim().isEmpty
-                  ? 'Chapter ${ch.number}'
-                  : ch.title.trim();
+          final progress = widget.item?.progress ?? 0;
+          final continueIndex = _findContinueIndex(chapters, progress);
+          final continueChapter = continueIndex != null
+              ? chapters[continueIndex]
+              : null;
 
-              return ListTile(
-                title: Text('Chapter ${ch.number}'),
-                subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: const Icon(Icons.chrome_reader_mode_outlined),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => MangaReaderPage(
-                        moduleId: widget.module.id,
-                        mangaTitle: widget.title,
-                        chapterTitle: subtitle,
-                        chapterHref: ch.href,
-                        chapterOrdinal: ch.number,
-                        entry: widget.item,
-                      ),
+          return Stack(
+            children: [
+              ListView.builder(
+                itemCount: chapters.length,
+                itemBuilder: (context, i) {
+                  final ch = chapters[i];
+                  final subtitle = _normalizeChapterTitle(ch.title, ch.number);
+
+                  return ListTile(
+                    title: Text('Chapter ${ch.number}'),
+                    subtitle: Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    trailing: const Icon(Icons.chrome_reader_mode_outlined),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MangaReaderPage(
+                            moduleId: widget.module.id,
+                            mangaTitle: widget.title,
+                            chapterTitle: subtitle,
+                            chapterHref: ch.href,
+                            chapterOrdinal: ch.number,
+                            entry: widget.item,
+                            chapterList: chapters,
+                            chapterIndex: i,
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
-              );
-            },
+              ),
+              if (continueChapter != null)
+                Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: FloatingActionButton.extended(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MangaReaderPage(
+                            moduleId: widget.module.id,
+                            mangaTitle: widget.title,
+                            chapterTitle: _normalizeChapterTitle(
+                              continueChapter.title,
+                              continueChapter.number,
+                            ),
+                            chapterHref: continueChapter.href,
+                            chapterOrdinal: continueChapter.number,
+                            entry: widget.item,
+                            chapterList: chapters,
+                            chapterIndex: continueIndex,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.play_arrow),
+                    label: Text(
+                      progress > 0
+                          ? 'Continue • Chapter ${continueChapter.number}'
+                          : 'Read • Chapter ${continueChapter.number}',
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),

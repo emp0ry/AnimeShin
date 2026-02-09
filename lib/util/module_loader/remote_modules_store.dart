@@ -293,7 +293,7 @@ class RemoteModulesStore {
 				final uri = Uri.parse(jsonUrl);
 				final path = uri.path;
 				if (path.endsWith('.json')) {
-					final jsPath = path.substring(0, path.length - 5) + '.js';
+					final jsPath = '${path.substring(0, path.length - 5)}.js';
 					scriptUrl = uri.replace(path: jsPath).toString();
 				} else {
 					scriptUrl = uri.replace(path: '$path.js').toString();

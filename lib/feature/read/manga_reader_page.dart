@@ -8,6 +8,7 @@ import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/scheduler.dart';
 
 class MangaReaderPage extends ConsumerStatefulWidget {
   const MangaReaderPage({
@@ -18,6 +19,8 @@ class MangaReaderPage extends ConsumerStatefulWidget {
     required this.chapterHref,
     required this.chapterOrdinal,
     required this.entry,
+    this.chapterList,
+    this.chapterIndex,
   });
 
   final String moduleId;
@@ -30,6 +33,12 @@ class MangaReaderPage extends ConsumerStatefulWidget {
 
   /// AniList entry (nullable when user not logged in / not on list).
   final Entry? entry;
+
+  /// Optional full chapter list (for Next button navigation).
+  final List<JsModuleEpisode>? chapterList;
+
+  /// Index within [chapterList].
+  final int? chapterIndex;
 
   @override
   ConsumerState<MangaReaderPage> createState() => _MangaReaderPageState();
@@ -49,13 +58,14 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   PageController? _pageCtrl;
 
   final ValueNotifier<bool> _uiVisible = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _atEnd = ValueNotifier<bool>(false);
 
   bool _autoProgressDone = false;
+  bool _navigatingNext = false;
 
   @override
   void initState() {
     super.initState();
-
     // Load incrementally so big chapters don't block the UI.
     unawaited(_loadMorePages(initial: true));
   }
@@ -63,9 +73,27 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   @override
   void dispose() {
     _uiVisible.dispose();
+    _atEnd.dispose();
     _scroll.dispose();
     _pageCtrl?.dispose();
     super.dispose();
+  }
+
+  String _displayChapterTitle() {
+    final raw = widget.chapterTitle.trim();
+    if (raw.isEmpty) return widget.mangaTitle;
+    return raw
+        .replaceFirst(RegExp(r'^\s*episode\b', caseSensitive: false), 'Chapter')
+        .trim();
+  }
+
+  JsModuleEpisode? _nextChapter() {
+    final list = widget.chapterList;
+    final idx = widget.chapterIndex;
+    if (list == null || idx == null) return null;
+    final nextIdx = idx + 1;
+    if (nextIdx < 0 || nextIdx >= list.length) return null;
+    return list[nextIdx];
   }
 
   void _resetControllers() {
@@ -133,8 +161,7 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
     }
   }
 
-  Future<void> _maybeAutoProgress({required bool atEnd}) async {
-    if (!atEnd) return;
+  Future<void> _updateProgressIfEnabled() async {
     if (_autoProgressDone) return;
 
     final prefs = ref.read(mangaReaderPrefsProvider);
@@ -166,6 +193,37 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
 
     _autoProgressDone = true;
     SnackBarExtension.show(context, 'Progress updated to ${entry.progress}');
+  }
+
+  Future<void> _openNextChapter() async {
+    if (_navigatingNext) return;
+    final next = _nextChapter();
+    if (next == null) return;
+
+    _navigatingNext = true;
+    await _updateProgressIfEnabled();
+    if (!mounted) return;
+
+    final nextIdx = (widget.chapterIndex ?? 0) + 1;
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => MangaReaderPage(
+          moduleId: widget.moduleId,
+          mangaTitle: widget.mangaTitle,
+          chapterTitle: next.title.trim().isEmpty
+              ? 'Chapter ${next.number}'
+              : next.title.trim().replaceFirst(
+                    RegExp(r'^\s*episode\b', caseSensitive: false),
+                    'Chapter',
+                  ),
+          chapterHref: next.href,
+          chapterOrdinal: next.number,
+          entry: widget.entry,
+          chapterList: widget.chapterList,
+          chapterIndex: nextIdx,
+        ),
+      ),
+    );
   }
 
   Future<void> _pickMode() async {
@@ -218,7 +276,7 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
                     size: 18,
                   ),
                   const SizedBox(width: 8),
-                  const Text('Book (pages)'),
+                  const Text('Book (tap left/right)'),
                 ],
               ),
             ),
@@ -239,14 +297,12 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
     final mq = MediaQuery.of(context);
     final dpr = mq.devicePixelRatio;
     final cacheWidth = (mq.size.width * dpr).round();
-    final cacheHeight = (mq.size.height * dpr).round();
 
     return Center(
       child: Image.network(
         url,
         headers: headers,
         cacheWidth: cacheWidth,
-        cacheHeight: cacheHeight,
         fit: BoxFit.contain,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
@@ -267,26 +323,45 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   }
 
   Map<String, String>? _imageHeadersFor(String url) {
-    // Some manga sources rely on hotlink protection.
-    // When Referer/UA are missing, the CDN often returns 403/blank.
     final uri = Uri.tryParse(url);
-    final origin = (uri != null && (uri.scheme == 'http' || uri.scheme == 'https'))
-        ? uri.origin
-        : null;
+    final origin =
+        (uri != null && (uri.scheme == 'http' || uri.scheme == 'https'))
+            ? uri.origin
+            : null;
     if (origin == null) return null;
 
-    // Use the chapter page as the referer; some CDNs reject only-root referers.
     final referer = widget.chapterHref.trim().isNotEmpty
-      ? widget.chapterHref.trim()
-      : '$origin/';
+        ? widget.chapterHref.trim()
+        : '$origin/';
 
     return <String, String>{
       'Referer': referer,
-      'Origin': origin,
       'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
     };
+  }
+
+  void _setAtEnd(bool v) {
+    if (_atEnd.value == v) return;
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final inFrame = phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks;
+
+    if (inFrame) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_atEnd.value != v) _atEnd.value = v;
+      });
+    } else {
+      _atEnd.value = v;
+    }
+  }
+
+  bool _isReallyAtListEnd(ScrollMetrics m) {
+    const epsilon = 24.0;
+    return m.pixels >= (m.maxScrollExtent - epsilon);
   }
 
   Widget _buildWebScroll(List<String> pages, {required bool tapToScroll}) {
@@ -331,16 +406,18 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
       child: NotificationListener<ScrollNotification>(
         onNotification: (n) {
           if (n.metrics.axis != Axis.vertical) return false;
-          final nearEnd = _scroll.hasClients &&
+
+          final nearEndForPrefetch = _scroll.hasClients &&
               (n.metrics.pixels >=
                   n.metrics.maxScrollExtent - n.metrics.viewportDimension * 2);
-          if (nearEnd) {
-            if (_hasMorePages) {
-              unawaited(_loadMorePages(initial: false));
-            } else {
-              unawaited(_maybeAutoProgress(atEnd: true));
-            }
+
+          if (nearEndForPrefetch && _hasMorePages) {
+            unawaited(_loadMorePages(initial: false));
           }
+
+          final reallyAtEnd = _isReallyAtListEnd(n.metrics);
+          _setAtEnd(reallyAtEnd && !_hasMorePages && !_loadingMore);
+
           return false;
         },
         child: ListView.builder(
@@ -370,11 +447,50 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
   Widget _buildBook(List<String> pages) {
     final ctrl = _pageCtrl ??= PageController();
 
+    void goNext() {
+      if (!ctrl.hasClients) return;
+      final nextPage = ctrl.page == null ? 1 : (ctrl.page!.round() + 1);
+      if (nextPage >= pages.length) return;
+      ctrl.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+
+    void goPrev() {
+      if (!ctrl.hasClients) return;
+      final prevPage = ctrl.page == null ? 0 : (ctrl.page!.round() - 1);
+      if (prevPage < 0) return;
+      ctrl.animateToPage(
+        prevPage,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    }
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _uiVisible.value = !_uiVisible.value,
+      onTapDown: (TapDownDetails d) {
+        final box = context.findRenderObject() as RenderBox?;
+        final size = box?.size;
+        if (size == null) return;
+
+        final x = d.localPosition.dx;
+        final w = size.width;
+
+        // Left side -> previous, right side -> next, middle -> toggle UI
+        if (x < w * 0.33) {
+          goPrev();
+        } else if (x > w * 0.66) {
+          goNext();
+        } else {
+          _uiVisible.value = !_uiVisible.value;
+        }
+      },
       child: PageView.builder(
         controller: ctrl,
+        // Keep swipe enabled too; tap just adds an easier control.
         itemCount: pages.length + (_loadingMore ? 1 : 0),
         onPageChanged: (i) {
           final nearEnd = i >= pages.length - 2;
@@ -382,7 +498,7 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
             unawaited(_loadMorePages(initial: false));
           }
           final atEnd = i >= pages.length - 1;
-          unawaited(_maybeAutoProgress(atEnd: atEnd && !_hasMorePages));
+          _atEnd.value = atEnd && !_hasMorePages && !_loadingMore;
         },
         itemBuilder: (context, i) {
           if (i >= pages.length) {
@@ -400,25 +516,12 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.chapterTitle.isNotEmpty
-            ? widget.chapterTitle
-            : widget.mangaTitle),
+        title: Text(_displayChapterTitle()),
         actions: [
           IconButton(
             tooltip: 'Reader mode',
             icon: const Icon(Icons.menu_book_outlined),
             onPressed: _pickMode,
-          ),
-          IconButton(
-            tooltip: prefs.autoProgress ? 'Auto progress: On' : 'Auto progress: Off',
-            icon: Icon(
-              prefs.autoProgress ? Icons.check_circle_outline : Icons.block,
-            ),
-            onPressed: () async {
-              await ref
-                  .read(mangaReaderPrefsProvider.notifier)
-                  .setAutoProgress(!prefs.autoProgress);
-            },
           ),
           const SizedBox(width: 8),
         ],
@@ -426,13 +529,9 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
       body: ValueListenableBuilder<bool>(
         valueListenable: _uiVisible,
         builder: (context, visible, child) {
-          // Keep AppBar behavior simple: hide just by shrinking its height.
           return Column(
             children: [
-              if (!visible)
-                const SizedBox(height: 0)
-              else
-                const SizedBox(height: 0),
+              if (!visible) const SizedBox(height: 0) else const SizedBox(height: 0),
               Expanded(
                 child: Builder(
                   builder: (context) {
@@ -471,6 +570,77 @@ class _MangaReaderPageState extends ConsumerState<MangaReaderPage> {
                 ),
               ),
             ],
+          );
+        },
+      ),
+      bottomNavigationBar: ValueListenableBuilder<bool>(
+        valueListenable: _atEnd,
+        builder: (context, atEnd, _) {
+          final next = _nextChapter();
+          if (!atEnd || next == null) return const SizedBox.shrink();
+
+          final prefs = ref.watch(mangaReaderPrefsProvider);
+          final title = next.title.trim().isEmpty
+              ? 'Chapter ${next.number}'
+              : next.title.trim().replaceFirst(
+                    RegExp(r'^\s*episode\b', caseSensitive: false),
+                    'Chapter',
+                  );
+
+          final hintStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              );
+
+          return SafeArea(
+            top: false,
+            child: Material(
+              elevation: 4,
+              color: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _openNextChapter,
+                            icon: const Icon(Icons.arrow_forward),
+                            label: Text('Next • $title'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              prefs.autoProgress
+                                  ? 'Auto Progress: On'
+                                  : 'Auto Progress: Off',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                            Switch(
+                              value: prefs.autoProgress,
+                              onChanged: (v) async {
+                                await ref
+                                    .read(mangaReaderPrefsProvider.notifier)
+                                    .setAutoProgress(v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '    To update AniList progress, tap Next.',
+                      style: hintStyle,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
       ),
