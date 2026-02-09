@@ -150,8 +150,11 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
         let player = AVPlayer(playerItem: item)
 
-        // Prefer brief stalls over "catch-up" jumps that look like random skips
-        player.automaticallyWaitsToMinimizeStalling = false
+        // Allow buffering on large seeks to avoid stuck playback.
+        player.automaticallyWaitsToMinimizeStalling = true
+        if #available(iOS 10.0, *) {
+          player.currentItem?.preferredForwardBufferDuration = 10
+        }
 
         // Configure view controller
         let vc = ReportingAVPlayerViewController()
@@ -248,7 +251,9 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       ) { [weak vc] _ in
         guard let vc = vc else { return }
         if vc.desiredRate > 0 {
-          vc.player?.playImmediately(atRate: vc.desiredRate)
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            vc.player?.playImmediately(atRate: vc.desiredRate)
+          }
         }
       }
 
@@ -265,6 +270,10 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         // Send final position & duration back to Flutter
         let pos = CMTimeGetSeconds(vc.player?.currentTime() ?? .zero)
         let dur = CMTimeGetSeconds(vc.player?.currentItem?.duration ?? .zero)
+        // Ignore false "completed" signals when not near the real end.
+        if dur.isFinite && dur > 0, pos < dur - 1.0 {
+          return
+        }
         vc.channel?.invokeMethod("ios_player_completed", arguments: [
           "position": pos,
           "duration": dur
