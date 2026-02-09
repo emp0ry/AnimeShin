@@ -183,6 +183,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Lifecycle guard flags
   bool _isDisposed = false;
 
+  // Native iOS player state (avoid Flutter subs while native player is active).
+  bool _iosNativeActive = false;
+
   // Helper: only do player ops while the widget is alive & not navigating away.
   bool get _alive => mounted && !_navigatingAway && !_isDisposed;
 
@@ -603,8 +606,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _applyExternalSubtitleIfAny({bool force = false}) async {
     if (!_alive) return;
 
-    // On iOS, rely on native in-band subtitles only.
-    if (_isIOS) return;
+    // On iOS, avoid Flutter-side subs only while native player is active.
+    if (_isIOS && _iosNativeActive) return;
 
     // Don't attempt to attach subtitles before the first media is opened.
     if (!_hasOpenedMedia) return;
@@ -953,6 +956,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       switch (call.method) {
         case 'ios_player_dismissed':
           {
+            _iosNativeActive = false;
             // Native VC was dismissed (not PiP).
             final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
             final posSec = (map['position'] as num?)?.toDouble() ?? 0.0;
@@ -996,6 +1000,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
         case 'ios_player_completed':
           {
+            _iosNativeActive = false;
             // Clear local persisted playback for this episode.
             await _playback.clearEpisode(
               widget.animeVoice,
@@ -1037,6 +1042,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
         case 'ios_pip_restored':
           {
+            _iosNativeActive = false;
             // User exited PiP and native VC was restored to fullscreen.
             // Persist current position to keep Flutter-side "continue watching" in sync.
             final map = (call.arguments as Map?)?.cast<String, dynamic>() ?? {};
@@ -1757,9 +1763,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     };
 
     try {
+      _iosNativeActive = true;
       await _iosNativePlayer.invokeMethod<void>('present', args);
       // No further action here; callbacks will sync back on dismiss/completion.
     } on PlatformException catch (e) {
+      _iosNativeActive = false;
       _log('iOS native player failed: ${e.code}: ${e.message}');
       if (_controlsCtx != null && !_wasFullscreen) {
         try {

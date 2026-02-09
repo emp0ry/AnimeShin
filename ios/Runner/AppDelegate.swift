@@ -131,6 +131,70 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
 
       let mainAsset = buildAsset(url, headers: headers)
 
+      func buildSubtitleAsset(_ url: URL, headers: [String: String]?) -> AVURLAsset {
+        if let headers = headers, !headers.isEmpty {
+          return AVURLAsset(url: url, options: [
+            "AVURLAssetHTTPHeaderFieldsKey": headers
+          ])
+        }
+        return AVURLAsset(url: url)
+      }
+
+      func buildPlayerItem() -> AVPlayerItem {
+        guard subtitlesEnabled,
+              let subtitleUrlStr = subtitleUrlStr,
+              !subtitleUrlStr.isEmpty,
+              let subtitleUrl = URL(string: subtitleUrlStr) else {
+          return AVPlayerItem(asset: mainAsset)
+        }
+
+        let subtitleAsset = buildSubtitleAsset(subtitleUrl, headers: headers)
+        let composition = AVMutableComposition()
+
+        // Copy video tracks.
+        if let videoTrack = mainAsset.tracks(withMediaType: .video).first {
+          let compVideo = composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+          )
+          try? compVideo?.insertTimeRange(
+            CMTimeRange(start: .zero, duration: mainAsset.duration),
+            of: videoTrack,
+            at: .zero
+          )
+        }
+
+        // Copy audio tracks.
+        for audioTrack in mainAsset.tracks(withMediaType: .audio) {
+          let compAudio = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+          )
+          try? compAudio?.insertTimeRange(
+            CMTimeRange(start: .zero, duration: mainAsset.duration),
+            of: audioTrack,
+            at: .zero
+          )
+        }
+
+        // Attach external subtitle track (text/subtitle).
+        let textTracks = subtitleAsset.tracks(withMediaType: .text)
+        let subTracks = subtitleAsset.tracks(withMediaType: .subtitle)
+        if let subTrack = (textTracks + subTracks).first {
+          let compSub = composition.addMutableTrack(
+            withMediaType: .text,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+          )
+          try? compSub?.insertTimeRange(
+            CMTimeRange(start: .zero, duration: mainAsset.duration),
+            of: subTrack,
+            at: .zero
+          )
+        }
+
+        return AVPlayerItem(asset: composition)
+      }
+
       func startWithItem(_ item: AVPlayerItem) {
         func applySubtitleSelection() {
           guard let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else {
@@ -322,8 +386,7 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
         result(nil)
       }
 
-      _ = subtitleUrlStr
-      startWithItem(AVPlayerItem(asset: mainAsset))
+      startWithItem(buildPlayerItem())
     }
 
     GeneratedPluginRegistrant.register(with: self)
