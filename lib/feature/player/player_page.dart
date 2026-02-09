@@ -2330,7 +2330,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         ),
         body: Padding(
           padding: _isMobile && !_wasFullscreen
-              ? const EdgeInsets.only(bottom: 42, left: 16, right: 16)
+              ? const EdgeInsets.only(bottom: 56, left: 24, right: 24)
               : EdgeInsets.zero,
           child: Listener(
             behavior: HitTestBehavior.translucent,
