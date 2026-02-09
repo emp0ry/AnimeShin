@@ -42,6 +42,16 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
     );
   }
 
+  String _moduleSubtitle(SourcesModuleDescriptor m) {
+    final type = (m.meta?['type'] ?? '').toString().trim();
+    final lang = (m.meta?['language'] ?? m.meta?['lang'] ?? '').toString().trim();
+
+    final parts = <String>[];
+    if (type.isNotEmpty) parts.add(type);
+    if (lang.isNotEmpty) parts.add(lang);
+    return parts.isEmpty ? '' : parts.join(' • ');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -99,7 +109,11 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
                 child: ListTile(
                   leading: _moduleLeadingIcon(module),
                   title: Text(module.name),
-                  subtitle: Text(module.id),
+                  subtitle: Text(
+                    _moduleSubtitle(module).isEmpty
+                        ? module.id
+                        : _moduleSubtitle(module),
+                  ),
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
