@@ -136,12 +136,12 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
           guard let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else {
             return
           }
+          // Always clear existing selection first to avoid multiple tracks.
+          item.select(nil, in: group)
           if subtitlesEnabled {
-            if let opt = group.options.first {
+            if let opt = group.defaultOption ?? group.options.first {
               item.select(opt, in: group)
             }
-          } else {
-            item.select(nil, in: group)
           }
         }
 
@@ -225,9 +225,17 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       ) { [weak vc] _ in
         guard let vc = vc else { return }
         if vc.programmaticSeekInFlight { return }
-        if let last = vc.wasPlayingRecentlyAt, Date().timeIntervalSince(last) < 5.0 {
-          if vc.desiredRate > 0 {
-            vc.player?.playImmediately(atRate: vc.desiredRate)
+        let shouldResume: Bool
+        if let last = vc.wasPlayingRecentlyAt {
+          shouldResume = Date().timeIntervalSince(last) < 30.0
+        } else {
+          shouldResume = false
+        }
+        if shouldResume && vc.desiredRate > 0 {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            if vc.player?.rate == 0 {
+              vc.player?.playImmediately(atRate: vc.desiredRate)
+            }
           }
         }
       }
