@@ -100,13 +100,15 @@ class MediaHeader extends ConsumerWidget {
             )
           : null,
       trailingTopButtons: [
-        if (media != null && media!.info.isAnime)
+        if (media != null)
           Container(
             key: menuAnchorKey,
-            child: IconButton(
-              tooltip: 'Search modules',
-              icon: const Icon(Ionicons.search_outline),
-              onPressed: () async {
+            child: Tooltip(
+              message: 'Search modules',
+              child: TextButton.icon(
+                icon: const Icon(Ionicons.search_outline),
+                label: Text(media!.info.isAnime ? 'Watch' : 'Read'),
+                onPressed: () async {
                 final m = media;
                 if (m == null) return;
 
@@ -449,7 +451,8 @@ class MediaHeader extends ConsumerWidget {
                     ),
                   ),
                 );
-              },
+                },
+              ),
             ),
           ),
         if (media != null) _FavoriteButton(media!.info, toggleFavorite),
