@@ -912,6 +912,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
             onPressed: _showModuleDebug,
             icon: const Icon(Icons.bug_report_outlined),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: FutureBuilder<List<JsModuleEpisode>>(

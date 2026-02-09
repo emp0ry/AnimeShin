@@ -260,17 +260,17 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
             top: topInset,
           ),
           children: [
-            Text(
-              'Add Sora-style modules by JSON URL.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 6),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Text(
+                      '  Add Sora-style modules by JSON URL',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 7),
                     TextField(
                       controller: _urlCtrl,
                       enabled: !_busy,
@@ -331,7 +331,6 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
                       final s = _subtitleLine(d);
                       return s.isEmpty ? null : Text(s);
                     }(),
-                    isThreeLine: true,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
