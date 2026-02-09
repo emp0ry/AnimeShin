@@ -7,6 +7,7 @@ import 'package:animeshin/util/graphql.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/feature/settings/settings_provider.dart';
 import 'package:animeshin/feature/settings/settings_model.dart';
+import 'package:animeshin/widget/cached_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
@@ -1094,30 +1095,15 @@ class _ModuleEpisodeTile extends StatelessWidget {
       );
     }
 
-    List<String> alternateImageUrls(String url) {
-      final uri = Uri.tryParse(url);
-      if (uri == null || uri.host.isEmpty) return const <String>[];
-      const hosts = <String>[
-        'aniliberty.top',
-        'anilibria.top',
-        'anilibria.wtf',
-      ];
-      if (!hosts.contains(uri.host)) return const <String>[];
-      return hosts
-          .where((h) => h != uri.host)
-          .map((h) => uri.replace(host: h).toString())
-          .toList(growable: false);
-    }
-
     Widget buildImageSequence(List<String> urls, {int index = 0}) {
       if (index >= urls.length) return placeholder();
       final url = urls[index];
       final headers = headersFor(url);
-      return Image.network(
+      return CachedImage(
         url,
         fit: BoxFit.cover,
         headers: headers,
-        errorBuilder: (context, error, stackTrace) {
+        errorWidget: (context, _, __) {
           return buildImageSequence(urls, index: index + 1);
         },
       );
@@ -1141,7 +1127,6 @@ class _ModuleEpisodeTile extends StatelessWidget {
                       buildImageSequence(
                         <String>{
                           ...candidates,
-                          for (final c in candidates) ...alternateImageUrls(c),
                         }.where((e) => e.trim().isNotEmpty).toList(),
                       )
                     else

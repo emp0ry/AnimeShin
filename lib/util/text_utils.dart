@@ -1,6 +1,6 @@
 
 // lib/util/text_utils.dart
-/// Text normalization utilities for robust matching between AniList and Anilibria/AniLiberty.
+/// Text normalization utilities for robust matching.
 String stripDiacritics(String input) {
   if (input.isEmpty) return input;
   const Map<String, String> map = {

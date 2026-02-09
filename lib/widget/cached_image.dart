@@ -23,12 +23,16 @@ class CachedImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.width = double.infinity,
     this.height = double.infinity,
+    this.headers,
+    this.errorWidget,
   });
 
   final String imageUrl;
   final BoxFit fit;
   final double? width;
   final double? height;
+  final Map<String, String>? headers;
+  final Widget Function(BuildContext, String, dynamic)? errorWidget;
 
   @override
   Widget build(BuildContext context) {
@@ -37,15 +41,17 @@ class CachedImage extends StatelessWidget {
       fit: fit,
       width: width,
       height: height,
+      httpHeaders: headers,
       cacheManager: _cacheManager,
       fadeInDuration: const Duration(milliseconds: 300),
       fadeOutDuration: const Duration(milliseconds: 300),
-      errorWidget: (context, _, __) => IconButton(
-        tooltip: 'Error',
-        icon: const Icon(Icons.close_outlined),
-        onPressed: () =>
-            SnackBarExtension.show(context, 'Failed to load image'),
-      ),
+      errorWidget: errorWidget ??
+          (context, _, __) => IconButton(
+                tooltip: 'Error',
+                icon: const Icon(Icons.close_outlined),
+                onPressed: () =>
+                    SnackBarExtension.show(context, 'Failed to load image'),
+              ),
     );
   }
 }
