@@ -110,23 +110,102 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       let pos = (args["position"] as? Double) ?? 0.0
       let rate = (args["rate"] as? Double) ?? 1.0
       let title = (args["title"] as? String) ?? ""
+      let subtitlesEnabled = (args["subtitlesEnabled"] as? Bool) ?? true
+      let subtitleUrlStr = (args["subtitleUrl"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+      let headers = args["headers"] as? [String: String]
       let openingStart = args["openingStart"] as? Double
       let openingEnd   = args["openingEnd"]   as? Double
       let endingStart  = args["endingStart"]  as? Double
       let endingEnd    = args["endingEnd"]    as? Double
       let wasPlaying   = (args["wasPlaying"] as? Bool) ?? true
 
-      // Build player & item
-      let item = AVPlayerItem(url: url)
+      // Build assets with optional headers (required for some module streams).
+      func buildAsset(_ url: URL, headers: [String: String]?) -> AVURLAsset {
+        if let headers = headers, !headers.isEmpty {
+          return AVURLAsset(url: url, options: [
+            AVURLAssetHTTPHeaderFieldsKey: headers
+          ])
+        }
+        return AVURLAsset(url: url)
+      }
 
-      // Prevent iOS from automatically rendering in-band (system) subtitles.
-      // We want only the app/player-side subtitles to be visible.
+      let mainAsset = buildAsset(url, headers: headers)
+      let subtitleUrl = (subtitleUrlStr?.isEmpty ?? true) ? nil : subtitleUrlStr
+
+      // Build player item. If external subtitles are provided, try to attach them.
+      var item: AVPlayerItem
+      if let s = subtitleUrl, let sUrl = URL(string: s) {
+        let subAsset = buildAsset(sUrl, headers: headers)
+        let composition = AVMutableComposition()
+        let duration = mainAsset.duration
+
+        // If duration is not ready, skip composition to avoid invalid inserts.
+        if duration.isIndefinite || duration.isInvalid {
+          item = AVPlayerItem(asset: mainAsset)
+        } else {
+          // Copy video & audio tracks from main asset
+          for track in mainAsset.tracks(withMediaType: .video) {
+            if let compTrack = composition.addMutableTrack(
+              withMediaType: .video,
+              preferredTrackID: kCMPersistentTrackID_Invalid
+            ) {
+              try? compTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: duration),
+                of: track,
+                at: .zero
+              )
+            }
+          }
+          for track in mainAsset.tracks(withMediaType: .audio) {
+            if let compTrack = composition.addMutableTrack(
+              withMediaType: .audio,
+              preferredTrackID: kCMPersistentTrackID_Invalid
+            ) {
+              try? compTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: duration),
+                of: track,
+                at: .zero
+              )
+            }
+          }
+
+          // Attach subtitle / text tracks from subtitle asset (best-effort)
+          let textTracks = subAsset.tracks(withMediaType: .text)
+          let subTracks = subAsset.tracks(withMediaType: .subtitle)
+          for track in textTracks + subTracks {
+            if let compTrack = composition.addMutableTrack(
+              withMediaType: track.mediaType,
+              preferredTrackID: kCMPersistentTrackID_Invalid
+            ) {
+              try? compTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: duration),
+                of: track,
+                at: .zero
+              )
+            }
+          }
+
+          item = AVPlayerItem(asset: composition)
+        }
+      } else {
+        item = AVPlayerItem(asset: mainAsset)
+      }
+
+      // Honor subtitle toggle: when disabled, explicitly deselect legible tracks.
       if #available(iOS 9.0, *) {
-        item.appliesMediaSelectionCriteriaAutomatically = false
+        item.appliesMediaSelectionCriteriaAutomatically = subtitlesEnabled
       }
       if let group = item.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
-        item.select(nil, in: group)
+        if subtitlesEnabled {
+          // Only force-select when an external subtitle is attached; otherwise let iOS decide.
+          if subtitleUrl != nil, let opt = group.options.first {
+            item.select(opt, in: group)
+          }
+        } else {
+          item.select(nil, in: group)
+        }
       }
+
       let player = AVPlayer(playerItem: item)
 
       // Prefer brief stalls over "catch-up" jumps that look like random skips

@@ -1711,12 +1711,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final wasPlaying = _player.state.playing;
     await _player.pause();
 
+    final rawSubtitle = widget.args.subtitleUrl?.trim();
+    final normalizedSubtitle = (rawSubtitle == null || rawSubtitle.isEmpty)
+        ? null
+        : (rawSubtitle.startsWith('//') ? 'https:$rawSubtitle' : rawSubtitle);
+
     final args = <String, dynamic>{
       // IMPORTANT: pass the ORIGINAL remote URL to native iOS player.
       'url': _chosenUrl!,
       'position': _player.state.position.inSeconds.toDouble(),
       'rate': _speed,
       'title': widget.args.title,
+      'subtitlesEnabled': _subtitlesEnabled,
+      'subtitleUrl': normalizedSubtitle,
+      'headers': widget.args.httpHeaders,
       // Pass skip ranges so native player can auto-skip as well.
       'openingStart': widget.args.openingStart?.toDouble(),
       'openingEnd': widget.args.openingEnd?.toDouble(),
