@@ -65,7 +65,7 @@
 
 ---
 
-## 📸 Preview
+## 📸 Preview (outdated)
 
 <p align="center">
   <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/1.PNG?raw=true" width="32%">
