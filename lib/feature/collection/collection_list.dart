@@ -333,8 +333,8 @@ class __TileContentState extends State<_TileContent> {
 
     Widget buildWatchButton() {
       // Modules-only: always open module search.
-      final icon = isManga ? Ionicons.book_outline : Ionicons.play;
-      final label = isManga ? 'Read' : 'Search';
+      final icon = isManga ? Ionicons.book : Ionicons.play;
+      final label = isManga ? 'Read' : 'Watch';
       return FilledButton(
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -346,7 +346,7 @@ class __TileContentState extends State<_TileContent> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 16),
-              const SizedBox(width: 2),
+              SizedBox(width: isManga ? 5 : 2),
               Text(
                 label,
                 style:

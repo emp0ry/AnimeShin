@@ -15,10 +15,12 @@ class ModuleSearchPage extends StatefulWidget {
     super.key,
     required this.item,
     required this.isManga,
+    this.searchQueries,
   });
 
-  final Entry item;
+  final Entry? item;
   final bool isManga;
+  final List<({String by, String query})>? searchQueries;
 
   @override
   State<ModuleSearchPage> createState() => _ModuleSearchPageState();
@@ -95,6 +97,7 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
                           item: widget.item,
                           isManga: widget.isManga,
                           module: module,
+                          searchQueries: widget.searchQueries,
                         ),
                       ),
                     );
@@ -115,11 +118,13 @@ class ModuleSearchResultsPage extends StatefulWidget {
     required this.item,
     required this.isManga,
     required this.module,
+    this.searchQueries,
   });
 
-  final Entry item;
+  final Entry? item;
   final bool isManga;
   final SourcesModuleDescriptor module;
+  final List<({String by, String query})>? searchQueries;
 
   @override
   State<ModuleSearchResultsPage> createState() => _ModuleSearchResultsPageState();
@@ -226,18 +231,20 @@ class _ModuleSearchResultsPageState extends State<ModuleSearchResultsPage> {
       return out;
     }
 
-    final base = <({String by, String query})>[
-      if (widget.item.titleRussian?.trim().isNotEmpty == true)
-        qv('RU', widget.item.titleRussian!.trim()),
-      if (widget.item.titleRomaji?.trim().isNotEmpty == true)
-        qv('RO', widget.item.titleRomaji!.trim()),
-      if (widget.item.titleShikimoriRomaji?.trim().isNotEmpty == true &&
-          widget.item.titleShikimoriRomaji!.trim() !=
-              widget.item.titleRomaji?.trim())
-        qv('RO', widget.item.titleShikimoriRomaji!.trim()),
-      if (widget.item.titleEnglish?.trim().isNotEmpty == true)
-        qv('EN', widget.item.titleEnglish!.trim()),
-    ];
+    final base = widget.searchQueries != null && widget.searchQueries!.isNotEmpty
+        ? widget.searchQueries!
+        : <({String by, String query})>[
+            if (widget.item?.titleRussian?.trim().isNotEmpty == true)
+              qv('RU', widget.item!.titleRussian!.trim()),
+            if (widget.item?.titleRomaji?.trim().isNotEmpty == true)
+              qv('RO', widget.item!.titleRomaji!.trim()),
+            if (widget.item?.titleShikimoriRomaji?.trim().isNotEmpty == true &&
+                widget.item!.titleShikimoriRomaji!.trim() !=
+                    widget.item!.titleRomaji?.trim())
+              qv('RO', widget.item!.titleShikimoriRomaji!.trim()),
+            if (widget.item?.titleEnglish?.trim().isNotEmpty == true)
+              qv('EN', widget.item!.titleEnglish!.trim()),
+          ];
 
     final queries = <({String by, String query})>[];
     for (final b in base) {

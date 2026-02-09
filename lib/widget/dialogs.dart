@@ -157,7 +157,7 @@ class _ImageDialogState extends State<ImageDialog>
   void _animateMatrixTo(Matrix4 goal) {
     _endAnimation();
     _animation = Matrix4Tween(
-      begin: _transformCtrl.value,
+      begin: _transformCtrl.value.clone(),
       end: goal,
     ).animate(_curveWrapper);
     _animation!.addListener(_updateState);
@@ -184,8 +184,8 @@ class _ImageDialogState extends State<ImageDialog>
 
           // If zoomed out, zoom in towards the tapped spot.
           final zoomed = _transformCtrl.value.clone();
-          zoomed.translate(-_lastOffset!.dx, -_lastOffset!.dy, 0);
-          zoomed.scale(2.0, 2.0, 1.0);
+          zoomed.translateByDouble(-_lastOffset!.dx, -_lastOffset!.dy, 0, 1.0);
+          zoomed.scaleByDouble(2.0, 2.0, 1.0, 1.0);
           _animateMatrixTo(zoomed);
         },
         child: InteractiveViewer(
