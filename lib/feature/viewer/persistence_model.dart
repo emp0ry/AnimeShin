@@ -10,7 +10,7 @@ import 'package:animeshin/feature/home/home_model.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/util/theming.dart';
 
-const appVersion = '1.2.0';
+const appVersion = '1.2.1';
 
 class Persistence {
   const Persistence({
