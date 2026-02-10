@@ -61,7 +61,7 @@
   OAuth-based login with AniList.
 
 - **💻 Multi-Platform**  
-  Android, iOS, Windows - macOS & Linux planned.
+  Android, iOS, Windows - macOS & Linux.
 
 - **⚙️ Settings**  
   Toggle options for Russian title visibility and scheduled new episode air notifications.
@@ -94,7 +94,6 @@
 ## 📈 Roadmap
 
 - Full stable anime player  
-- Linux support  
 - Apple widgets  
 - Full Russian UI localization  
 
@@ -236,7 +235,7 @@ sudo apt install libgtk-3-0 liblzma5
 * Click **Open**
 * Confirm **Open**
 
-(Apple Gatekeeper limitation — normal for unsigned apps)
+(Apple Gatekeeper limitation - normal for unsigned apps)
 
 ---
 
