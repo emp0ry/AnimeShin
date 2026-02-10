@@ -125,27 +125,27 @@ jobs:
           import sys
           import urllib.request
 
-            api = "https://api.github.com/repos/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest"
-            req = urllib.request.Request(
-              api,
-              headers={
-                "User-Agent": "AnimeShin-CI",
-                "Accept": "application/vnd.github+json",
-              },
-            )
-            with urllib.request.urlopen(req) as response:
-              data = json.load(response)
+          api = "https://api.github.com/repos/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest"
+          req = urllib.request.Request(
+            api,
+            headers={
+              "User-Agent": "AnimeShin-CI",
+              "Accept": "application/vnd.github+json",
+            },
+          )
+          with urllib.request.urlopen(req) as response:
+            data = json.load(response)
 
           url = None
           for asset in data.get("assets", []):
-              name = asset.get("name", "")
-              if name.endswith("x86_64.AppImage"):
-                  url = asset.get("browser_download_url")
-                  break
+            name = asset.get("name", "")
+            if name.endswith("x86_64.AppImage"):
+              url = asset.get("browser_download_url")
+              break
 
           if not url:
-              print("ERROR: linuxdeploy-plugin-gtk AppImage asset not found", file=sys.stderr)
-              sys.exit(1)
+            print("ERROR: linuxdeploy-plugin-gtk AppImage asset not found", file=sys.stderr)
+            sys.exit(1)
 
           print(f"Downloading {url}")
           urllib.request.urlretrieve(url, "linuxdeploy-plugin-gtk-x86_64.AppImage")
