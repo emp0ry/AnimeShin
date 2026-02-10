@@ -120,8 +120,29 @@ jobs:
 
           curl -L -o linuxdeploy-x86_64.AppImage \
             https://github.com/linuxdeploy/linuxdeploy/releases/latest/download/linuxdeploy-x86_64.AppImage
-          curl -L -o linuxdeploy-plugin-gtk-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest/download/linuxdeploy-plugin-gtk-x86_64.AppImage
+          python3 - <<'PY'
+          import json
+          import sys
+          import urllib.request
+
+          api = "https://api.github.com/repos/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest"
+          with urllib.request.urlopen(api) as response:
+              data = json.load(response)
+
+          url = None
+          for asset in data.get("assets", []):
+              name = asset.get("name", "")
+              if name.endswith("x86_64.AppImage"):
+                  url = asset.get("browser_download_url")
+                  break
+
+          if not url:
+              print("ERROR: linuxdeploy-plugin-gtk AppImage asset not found", file=sys.stderr)
+              sys.exit(1)
+
+          print(f"Downloading {url}")
+          urllib.request.urlretrieve(url, "linuxdeploy-plugin-gtk-x86_64.AppImage")
+          PY
 
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
 
