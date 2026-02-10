@@ -6,7 +6,7 @@
 <p align="center">
   A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).
   <br>
-  Track anime & manga, update progress with gestures, watch episodes, and get notifications — all in one place.
+  Track anime & manga, update progress with gestures, watch episodes, and get notifications - all in one place.
 </p>
 
 <p align="center">
@@ -58,7 +58,7 @@
   OAuth-based login with AniList.
 
 - **💻 Multi-Platform**  
-  Android, iOS, Windows — macOS & Linux planned.
+  Android, iOS, Windows - macOS & Linux planned.
 
 - **⚙️ Settings**  
   Toggle options for Russian title visibility and scheduled new episode air notifications.
@@ -99,7 +99,7 @@
 
 ## 💖 Support
 
-If you love AnimeShin — fuel development with a coffee!  
+If you love AnimeShin - fuel development with a coffee!  
 
 [![Buy Me a Coffee](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/emp0ry)  
 
@@ -151,7 +151,7 @@ flutter build windows
 
 ## 🙏 Credits
 
-Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https://github.com/lotusprey/otraku) — the inspiration for AnimeShin.  
+Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https://github.com/lotusprey/otraku) - the inspiration for AnimeShin.  
 Thanks to [Sora](https://github.com/cranci1) for the source ecosystem and compatibility inspiration.  
 Thanks to [Shikimori](https://shikimori.one/) for Russian titles & metadata.
 
