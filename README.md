@@ -105,28 +105,14 @@ If you love AnimeShin - fuel development with a coffee!
 
 ---
 
-## 🧪 Development
-
-```bash
-# Windows
-flutter run -d windows
-
-# Android
-flutter emulators --launch <your_emulator_name>
-flutter run --flavor dev
-
-# iOS
-flutter run -d ios
-```
-
----
-
 ## 📦 Release Builds
+
+Use these commands to produce release locally.
 
 **Android (split by ABI):**
 
 ```bash
-flutter build apk --flavor dev --split-per-abi
+flutter build apk --release --flavor dev --split-per-abi
 ```
 
 **iOS (no code signing):**
@@ -135,7 +121,7 @@ flutter build apk --flavor dev --split-per-abi
 flutter build ios --no-codesign
 ```
 
-**MacOS**
+**macOS:**
 
 ```bash
 flutter build macos
@@ -144,8 +130,198 @@ flutter build macos
 **Windows:**
 
 ```bash
-flutter build windows
+flutter build windows --release
 ```
+
+**Linux:**
+
+```bash
+flutter build linux --release
+```
+
+---
+
+# Installation Guide
+
+This guide explains how to install **AnimeShin** on different operating systems.
+
+---
+
+## 🪟 Windows
+
+### Download
+
+* File: `AnimeShin-win-vX.Y.Z.zip`
+
+### Install
+
+1. Download the `.zip` file
+2. Right-click → **Extract All**
+3. Open the extracted folder
+4. Run **AnimeShin.exe**
+
+✅ No installation required  
+✅ Portable (can be moved anywhere)
+
+> If Windows SmartScreen appears, click **More info → Run anyway**
+
+---
+
+## 🐧 Linux (Ubuntu, Debian, Arch, Fedora, etc.)
+
+### Option 1 (Recommended): AppImage
+
+#### Download
+
+* File: `AnimeShin-linux-vX.Y.Z.AppImage`
+
+#### Install & Run
+
+```bash
+chmod +x AnimeShin-linux-vX.Y.Z.AppImage
+./AnimeShin-linux-vX.Y.Z.AppImage
+```
+
+Or:
+
+* Right-click → **Properties**
+* Enable **Allow executing file as program**
+* Double-click to run
+
+✅ Works on most Linux distributions  
+✅ No installation needed
+
+---
+
+### Option 2: Portable tar.gz
+
+#### Download
+
+* File: `AnimeShin-linux-vX.Y.Z.tar.gz`
+
+#### Install & Run
+
+```bash
+tar -xzf AnimeShin-linux-vX.Y.Z.tar.gz
+cd AnimeShin
+./AnimeShin
+```
+
+⚠️ May require system libraries:
+
+```bash
+sudo apt install libgtk-3-0 liblzma5
+```
+
+---
+
+## 🍎 macOS
+
+### Download
+
+* File: `AnimeShin-macos-vX.Y.Z.dmg`
+
+### Install
+
+1. Open the `.dmg` file
+2. Drag **AnimeShin** into **Applications**
+3. Open **Applications → AnimeShin**
+
+⚠️ First launch warning:
+
+* Right-click **AnimeShin**
+* Click **Open**
+* Confirm **Open**
+
+(Apple Gatekeeper limitation — normal for unsigned apps)
+
+---
+
+## 🤖 Android
+
+### Download
+
+* File: `AnimeShin-android-vX.Y.Z.apk`
+
+### Important
+
+⚠️ This APK is **unsigned**  
+You must **sign it before installing**, or install using a custom installer.
+
+### Install (after signing)
+
+```bash
+adb install AnimeShin-android-vX.Y.Z.apk
+```
+
+Or install via file manager if your device allows unsigned APKs.
+
+---
+
+## 🍏 iOS
+
+### Download
+
+* File: `AnimeShin-ios-vX.Y.Z.ipa`
+
+### Important
+
+⚠️ This IPA is **NOT signed**  
+You must sign it manually before installation.
+
+### Install options
+
+* [SideStore](https://sidestore.io/) + [LiveContainer](https://github.com/LiveContainer/LiveContainer) (recommended)
+* Xcode
+* AltStore
+* Sideloadly
+* Fastlane / codesign
+
+---
+
+## ❓ Troubleshooting
+
+**App does not open on macOS**
+
+* Use **Right-click → Open** the first time
+
+**Android APK won’t install**
+
+* APK must be signed
+* Enable “Install unknown apps”
+
+**Linux AppImage doesn’t start**
+
+```bash
+chmod +x AnimeShin-linux-vX.Y.Z.AppImage
+```
+
+---
+
+## Install
+
+### Android
+
+- Download the APK for your device/ABI and install it.
+- If Android blocks installation, enable “Install unknown apps” for your browser/file manager.
+
+### Windows
+
+- Download and unzip the Windows build.
+- Run `AnimeShin.exe`.
+
+### iOS
+
+- Use [SideStore](https://sidestore.io/) & [LiveContainer](https://github.com/LiveContainer/LiveContainer) (recommended)
+
+### macOS
+
+- Download the macOS build (`.dmg`) and move `AnimeShin.app` to **Applications**.
+- If macOS blocks opening the app:
+  - Right-click `AnimeShin.app` → **Open** → **Open**, or
+  - Go to **System Settings → Privacy & Security** → **Open Anyway**.
+- If the app is still blocked due to quarantine (advanced, Terminal):
+  - `xattr -dr com.apple.quarantine /Applications/AnimeShin.app`
 
 ---
 

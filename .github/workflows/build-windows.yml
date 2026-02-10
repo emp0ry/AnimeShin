@@ -1,0 +1,63 @@
+name: Build Windows (ZIP)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Windows (release)
+        run: flutter build windows --release
+
+      - name: Read version from pubspec.yaml
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Get-Content "pubspec.yaml" | Where-Object { $_ -match '^version:' } | ForEach-Object {
+            ($_ -split ':')[1].Trim().Split(' ')[0]
+          } | Select-Object -First 1)
+          if (-not $v) { throw "Version not found in pubspec.yaml" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Create ZIP from Release folder contents
+        id: zip
+        shell: pwsh
+        run: |
+          $sourceDir = "build/windows/x64/runner/Release"
+          if (-not (Test-Path $sourceDir)) { throw "Source folder not found: $sourceDir" }
+
+          $version = "${{ steps.ver.outputs.version }}"
+          $zipFile = "AnimeShin-win-v$version.zip"
+
+          if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
+
+          Compress-Archive -Path (Join-Path $sourceDir '*') -DestinationPath $zipFile -Force
+
+          "zip_path=$zipFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Create GitHub Release and upload ZIP
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: win-v${{ steps.ver.outputs.version }}
+          name: Windows v${{ steps.ver.outputs.version }}
+          body: |
+            Built with:
+            - flutter build windows --release
+          files: ${{ steps.zip.outputs.zip_path }}
