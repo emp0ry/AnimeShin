@@ -70,6 +70,8 @@ class NoSwipeBackMaterialPageRoute<T> extends MaterialPageRoute<T> {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
+  // Disable unexpected jump detector logging.
+  static const bool _enableJumpDetector = false;
   // ---- Fake wrap-to-end heal tuning ----
   // Consider "near start" if previous position <= this value.
   final Duration _wrapNearStart = PlayerTuning.wrapNearStart;
@@ -1258,7 +1260,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       final prev = _lastPos;
       _lastPos = pos;
 
-      if (_player.state.duration != Duration.zero &&
+      if (_enableJumpDetector &&
+          _player.state.duration != Duration.zero &&
           !_plannedSeek &&
           prev > Duration.zero &&
           !_inQuarantine &&
@@ -1897,12 +1900,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final wasFs = _wasFullscreen;
     _log('_openNextEpisode(); wasFs=$wasFs');
 
-    if (wasFs && _controlsCtx != null) {
-      _log('exiting only lib fullscreen (keep native on)');
-      try {
-        await exitFullscreen(_controlsCtx!);
-      } catch (_) {}
-      await Future.delayed(const Duration(milliseconds: 60));
+    if (wasFs) {
+      _log('exiting fullscreen (lib + native) before auto-next');
+      if (_controlsCtx != null) {
+        try {
+          await exitFullscreen(_controlsCtx!);
+        } catch (_) {}
+      }
+      _wasFullscreen = false;
+      await _exitNativeFullscreen();
+      await Future.delayed(const Duration(milliseconds: 120));
     }
 
     try {
@@ -2003,38 +2010,51 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _autoIncDoneForThisEp = false;
       _autoIncGuardForOrdinal = null;
 
-      Navigator.of(context).pushReplacement(
-        NoSwipeBackMaterialPageRoute(
-          builder: (_) => PlayerPage(
-            args: PlayerArgs(
-              id: widget.args.id,
-              url: widget.args.url,
-              ordinal: nextEp.number,
-              title: widget.args.title,
-              moduleId: moduleId,
-              preferredStreamTitle: widget.args.preferredStreamTitle,
-              subtitleUrl: subtitleUrl,
-              url480: url480,
-              url720: url720,
-              url1080: url1080,
-              duration: nextEp.durationSeconds,
-              openingStart: nextEp.openingStart,
-              openingEnd: nextEp.openingEnd,
-              endingStart: nextEp.endingStart,
-              endingEnd: nextEp.endingEnd,
-              httpHeaders: headers,
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (!navigator.mounted) return;
+
+      // Close any fullscreen/overlay routes above the player, then close the player.
+      navigator.popUntil((route) => route.settings.name == 'player');
+      if (navigator.mounted) {
+        navigator.pop();
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!navigator.mounted) return;
+        navigator.push(
+          NoSwipeBackMaterialPageRoute(
+            settings: const RouteSettings(name: 'player'),
+            builder: (_) => PlayerPage(
+              args: PlayerArgs(
+                id: widget.args.id,
+                url: widget.args.url,
+                ordinal: nextEp.number,
+                title: widget.args.title,
+                moduleId: moduleId,
+                preferredStreamTitle: widget.args.preferredStreamTitle,
+                subtitleUrl: subtitleUrl,
+                url480: url480,
+                url720: url720,
+                url1080: url1080,
+                duration: nextEp.durationSeconds,
+                openingStart: nextEp.openingStart,
+                openingEnd: nextEp.openingEnd,
+                endingStart: nextEp.endingStart,
+                endingEnd: nextEp.endingEnd,
+                httpHeaders: headers,
+              ),
+              item: widget.item,
+              sync: widget.sync,
+              animeVoice: widget.animeVoice,
+              startupBannerText: (picked.title.trim().isNotEmpty)
+                  ? 'Now playing: Episode ${nextEp.number} • ${picked.title}'
+                  : 'Now playing: Episode ${nextEp.number}',
+              startFullscreen: wasFs,
+              startWithProxy: widget.startWithProxy,
             ),
-            item: widget.item,
-            sync: widget.sync,
-            animeVoice: widget.animeVoice,
-            startupBannerText: (picked.title.trim().isNotEmpty)
-                ? 'Now playing: Episode ${nextEp.number} • ${picked.title}'
-                : 'Now playing: Episode ${nextEp.number}',
-            startFullscreen: wasFs,
-            startWithProxy: widget.startWithProxy,
           ),
-        ),
-      );
+        );
+      });
       _log('pushReplacement issued');
     } catch (e, st) {
       _log('failed to open next episode: $e\n$st');

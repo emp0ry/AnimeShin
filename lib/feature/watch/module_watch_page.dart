@@ -945,6 +945,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
     await Navigator.of(context).push(
       NoSwipeBackMaterialPageRoute(
+        settings: const RouteSettings(name: 'player'),
         builder: (_) => PlayerPage(
           args: PlayerArgs(
             id: 0,

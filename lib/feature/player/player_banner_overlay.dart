@@ -20,7 +20,7 @@ class PlayerBannerOverlay extends StatelessWidget {
 
     return Positioned(
       right: 16,
-      top: 16,
+      top: 70,
       child: Material(
         color: Colors.black.withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(10),
