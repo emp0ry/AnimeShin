@@ -13,6 +13,9 @@
   <a href="https://github.com/emp0ry/AnimeShin/releases/latest">
     <img src="https://img.shields.io/github/v/release/emp0ry/AnimeShin?logo=github&color=5865F2" alt="Latest Release">
   </a>
+  <a href="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all.yml">
+    <img src="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all.yml/badge.svg" alt="Build All (bundle)">
+  </a>
   <a href="https://img.shields.io/github/downloads/emp0ry/AnimeShin/total?color=ff6d00&label=Total%20Downloads">
     <img src="https://img.shields.io/github/downloads/emp0ry/AnimeShin/total?color=ff6d00&label=Total%20Downloads" alt="Total Downloads">
   </a>
