@@ -127,6 +127,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Timer? _bannerTimer;
   Timer? _autosaveTimer;
   Timer? _volumePersistDebounce; // <- debounce saves to prefs
+  Timer? _uiHideTimer;
 
   // Quality
   String? _chosenUrl; // stores the ORIGINAL remote HLS URL (master or media)
@@ -206,6 +207,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       CursorAutoHideController();
   OverlayEntry? _cursorOverlayEntry;
   final ValueNotifier<bool> _cursorForceVisible = ValueNotifier<bool>(false);
+
+  bool _uiVisible = true;
 
   // Mirrors effective progress; updated locally after successful persist
   int? _knownProgress;
@@ -464,6 +467,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _cursorOverlayEntry = null;
   }
 
+  void _bumpUiVisibility() {
+    if (_uiVisible == false) {
+      _uiVisible = true;
+      _safeSetState(() {});
+    }
+
+    _uiHideTimer?.cancel();
+    _uiHideTimer = Timer(PlayerTuning.cursorIdleHide, () {
+      if (!mounted || _navigatingAway) return;
+      if (_uiVisible) {
+        _uiVisible = false;
+        _safeSetState(() {});
+      }
+    });
+  }
+
   void _hideCursorInstant() {
     if (_isDesktop) _cursorHideController.hideNow();
   }
@@ -495,6 +514,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _bannerTimer = null;
     _volumePersistDebounce?.cancel();
     _volumePersistDebounce = null;
+    _uiHideTimer?.cancel();
+    _uiHideTimer = null;
   }
 
   Future<void> _enterNativeFullscreen() async {
@@ -786,6 +807,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     super.initState();
 
     _hotkeysFocusNode = FocusNode(debugLabel: 'player_hotkeys');
+
+    _bumpUiVisibility();
 
     final raw = widget.item?.progress; // real stored progress
     _knownProgress = _progressBaselineForOrdinal(widget.args.ordinal, raw);
@@ -2030,6 +2053,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _bannerText = text;
     _bannerVisible = true;
 
+    _bumpUiVisibility();
+
     // Only force cursor visible if requested.
     _cursorForceVisible.value = affectCursor;
 
@@ -2235,6 +2260,41 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     Widget buildPlayerStack() {
+      final overlayAppBar = Positioned(
+        left: 0,
+        right: 0,
+        top: 0,
+        child: IgnorePointer(
+          ignoring: !_uiVisible,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            opacity: _uiVisible ? 1.0 : 0.0,
+            child: Material(
+              color: Colors.black.withOpacity(0.6),
+              child: SafeArea(
+                bottom: false,
+                child: SizedBox(
+                  height: kToolbarHeight,
+                  child: AppBar(
+                    // title: Text(widget.args.title),
+                    title: Text('Episode ${widget.args.ordinal}'),
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: Colors.white,
+                    centerTitle: false,
+                    titleSpacing: 0,
+                    actions: actions,
+                    elevation: 0,
+                    scrolledUnderElevation: 0,
+                    primary: false,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -2304,6 +2364,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             },
           ),
           banner,
+          overlayAppBar,
         ],
       );
     }
@@ -2331,15 +2392,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        appBar: AppBar(
-          // title: Text(widget.args.title),
-          title: Text('Episode ${widget.args.ordinal}'),
-          backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-          centerTitle: false,
-          titleSpacing: 0,
-          actions: actions,
-        ),
         body: Padding(
           padding: _isMobile && !_wasFullscreen
               ? const EdgeInsets.only(bottom: 56, left: 24, right: 24)
@@ -2347,10 +2399,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           child: Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: (_) {
+              _bumpUiVisibility();
               if (!_hotkeysFocusNode.hasFocus) {
                 _hotkeysFocusNode.requestFocus();
               }
             },
+            onPointerMove: (_) => _bumpUiVisibility(),
+            onPointerHover: (_) => _bumpUiVisibility(),
             child: Focus(
               autofocus: true,
               focusNode: _hotkeysFocusNode,
