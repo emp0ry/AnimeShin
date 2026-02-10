@@ -810,6 +810,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     _bumpUiVisibility();
 
+    if (_isMobile) {
+      _wasFullscreen = true;
+    }
+
     final raw = widget.item?.progress; // real stored progress
     _knownProgress = _progressBaselineForOrdinal(widget.args.ordinal, raw);
 
@@ -2314,6 +2318,29 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 _log(
                     'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
+                // Force fullscreen on mobile.
+                if (_isMobile && !_startFsHandled) {
+                  _startFsHandled = true;
+                  WidgetsBinding.instance.endOfFrame.then((_) async {
+                    if (!mounted || _navigatingAway) return;
+                    final c = _controlsCtx;
+                    if (c == null || !c.mounted) return;
+
+                    if (!_isIOS && !isFullscreen(c)) {
+                      try {
+                        await enterFullscreen(c); // lib fullscreen
+                      } catch (_) {}
+                    }
+
+                    _wasFullscreen = true;
+                    await _enterNativeFullscreen();
+                    _insertCursorOverlayIfNeeded();
+                    _cursorHideController.kick();
+                    _log('forced fullscreen on mobile');
+                  });
+                  return;
+                }
+
                 // Start in fullscreen (lib) only for non-iOS platforms.
                 if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
                   _startFsHandled = true;
@@ -2351,7 +2378,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               _log('native fullscreen requested from onEnterFullscreen()');
             },
             onExitFullscreen: () async {
-              if (_isIOS) return;
+              if (_isIOS || _isMobile) return;
               _log('onExitFullscreen() fired (lib)');
               _wasFullscreen = false;
               if (!mounted || _navigatingAway) return;
