@@ -120,17 +120,7 @@ jobs:
           # Icon placeholder: try to use project icon, otherwise create a stub
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           if [ -f "assets/icons/ios.png" ]; then
-            python3 - <<'PY'
-import sys
-from PIL import Image
-
-src = "assets/icons/ios.png"
-dst = "AppDir/usr/share/icons/hicolor/256x256/apps/animeshin.png"
-
-img = Image.open(src)
-img = img.resize((256, 256), Image.LANCZOS)
-img.save(dst)
-PY
+            python3 -c 'from PIL import Image; Image.open("assets/icons/ios.png").resize((256, 256), Image.LANCZOS).save("AppDir/usr/share/icons/hicolor/256x256/apps/animeshin.png")'
           else
             # An empty icon is acceptable for AppImage build
             printf '\x89PNG\r\n\x1a\n' > AppDir/usr/share/icons/hicolor/256x256/apps/animeshin.png
