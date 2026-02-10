@@ -364,34 +364,33 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist_raw
+          path: dist
 
       - name: Normalize bundle structure
         shell: bash
         run: |
           set -e
-          rm -rf dist
-          mkdir -p dist
+          rm -rf bundle
+          mkdir -p bundle
 
           # Keep top-level folders named by platform.
-          for d in dist_raw/*; do
+          for d in dist/*; do
             [ -d "$d" ] || continue
             base="$(basename "$d")"
-            mkdir -p "dist/$base"
-            cp -R "$d/"* "dist/$base/" || true
+            mkdir -p "bundle/$base"
+            cp -R "$d/"* "bundle/$base/" || true
           done
 
       - name: Create bundle zip
         shell: bash
         run: |
           set -e
-          VERSION="${{ steps.ver.outputs.version }}"
-          BUNDLE="AnimeShin-all-v${VERSION}.zip"
-          cd dist
-          zip -r "../$BUNDLE" *
+          BUNDLE="AnimeShin-all.zip"
+          cd bundle
+          zip -r "../$BUNDLE" .
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
         with:
           name: AnimeShin-all
-          path: AnimeShin-all-v*.zip
+          path: AnimeShin-all.zip
