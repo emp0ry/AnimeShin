@@ -2271,7 +2271,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             curve: Curves.easeOut,
             opacity: _uiVisible ? 1.0 : 0.0,
             child: Material(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               child: SafeArea(
                 bottom: false,
                 child: SizedBox(
