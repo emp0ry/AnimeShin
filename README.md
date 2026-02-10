@@ -298,33 +298,6 @@ chmod +x AnimeShin-linux-vX.Y.Z.AppImage
 
 ---
 
-## Install
-
-### Android
-
-- Download the APK for your device/ABI and install it.
-- If Android blocks installation, enable “Install unknown apps” for your browser/file manager.
-
-### Windows
-
-- Download and unzip the Windows build.
-- Run `AnimeShin.exe`.
-
-### iOS
-
-- Use [SideStore](https://sidestore.io/) & [LiveContainer](https://github.com/LiveContainer/LiveContainer) (recommended)
-
-### macOS
-
-- Download the macOS build (`.dmg`) and move `AnimeShin.app` to **Applications**.
-- If macOS blocks opening the app:
-  - Right-click `AnimeShin.app` → **Open** → **Open**, or
-  - Go to **System Settings → Privacy & Security** → **Open Anyway**.
-- If the app is still blocked due to quarantine (advanced, Terminal):
-  - `xattr -dr com.apple.quarantine /Applications/AnimeShin.app`
-
----
-
 ## 🙏 Credits
 
 Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https://github.com/lotusprey/otraku) - the inspiration for AnimeShin.  
