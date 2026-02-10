@@ -94,7 +94,7 @@ class _WatchPageState extends ConsumerState<WatchPage> {
   ) async {
     final ep = release.episodes.firstWhere((e) => e.ordinal == ordinal);
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      NoSwipeBackMaterialPageRoute(
         builder: (_) => PlayerPage(
           args: PlayerArgs(
             id: release.id,

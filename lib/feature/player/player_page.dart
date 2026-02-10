@@ -57,6 +57,18 @@ class PlayerPage extends ConsumerStatefulWidget {
   ConsumerState<PlayerPage> createState() => _PlayerPageState();
 }
 
+class NoSwipeBackMaterialPageRoute<T> extends MaterialPageRoute<T> {
+  NoSwipeBackMaterialPageRoute({
+    required super.builder,
+    super.settings,
+    super.maintainState,
+    super.fullscreenDialog,
+  });
+
+  @override
+  bool get popGestureEnabled => false;
+}
+
 class _PlayerPageState extends ConsumerState<PlayerPage> {
   // ---- Fake wrap-to-end heal tuning ----
   // Consider "near start" if previous position <= this value.
@@ -1969,7 +1981,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _autoIncGuardForOrdinal = null;
 
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
+        NoSwipeBackMaterialPageRoute(
           builder: (_) => PlayerPage(
             args: PlayerArgs(
               id: widget.args.id,

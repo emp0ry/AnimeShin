@@ -944,7 +944,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     if (!mounted) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      NoSwipeBackMaterialPageRoute(
         builder: (_) => PlayerPage(
           args: PlayerArgs(
             id: 0,
