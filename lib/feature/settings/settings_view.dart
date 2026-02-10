@@ -135,14 +135,24 @@ class _SettingsViewState extends ConsumerState<SettingsView>
     };
 
     return AdaptiveScaffold(
-      topBar: TopBarAnimatedSwitcher(
-        switch (_tabCtrl.index) {
-          0 => const TopBar(key: Key('0'), title: 'App'),
-          1 => const TopBar(key: Key('1'), title: 'Content'),
-          2 => const TopBar(key: Key('2'), title: 'Modules'),
-          3 => const TopBar(key: Key('3'), title: 'Notifications'),
-          _ => const TopBar(key: Key('4'), title: 'About'),
-        },
+      topBar: PreferredSize(
+        preferredSize: const Size.fromHeight(Theming.normalTapTarget),
+        child: Row(
+          children: [
+            const SizedBox(width: 8),
+            Expanded(
+              child: TopBarAnimatedSwitcher(
+                switch (_tabCtrl.index) {
+                  0 => const TopBar(key: Key('0'), title: ' App'),
+                  1 => const TopBar(key: Key('1'), title: ' Content'),
+                  2 => const TopBar(key: Key('2'), title: ' Modules'),
+                  3 => const TopBar(key: Key('3'), title: ' Notifications'),
+                  _ => const TopBar(key: Key('4'), title: ' About'),
+                },
+              ),
+            ),
+          ],
+        ),
       ),
       floatingAction: floatingAction,
       navigationConfig: NavigationConfig(
