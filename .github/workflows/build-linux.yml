@@ -69,9 +69,9 @@ jobs:
 
           # Tools
           curl -L -o linuxdeploy-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+            https://github.com/linuxdeploy/linuxdeploy/releases/latest/download/linuxdeploy-x86_64.AppImage
           curl -L -o linuxdeploy-plugin-gtk-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/download/continuous/linuxdeploy-plugin-gtk-x86_64.AppImage
+            https://github.com/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest/download/linuxdeploy-plugin-gtk-x86_64.AppImage
 
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
 
