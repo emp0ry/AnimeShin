@@ -30,6 +30,9 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
       - name: Build Linux (release)
         run: flutter build linux --release
 

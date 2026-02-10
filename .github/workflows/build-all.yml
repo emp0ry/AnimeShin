@@ -28,6 +28,9 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
       - name: Build APK (release, flavor=dev)
         run: flutter build apk --release --flavor dev
 
@@ -332,7 +335,22 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          path: dist_raw
+
+      - name: Normalize bundle structure
+        shell: bash
+        run: |
+          set -e
+          rm -rf dist
+          mkdir -p dist
+
+          # Keep top-level folders named by platform.
+          for d in dist_raw/*; do
+            [ -d "$d" ] || continue
+            base="$(basename "$d")"
+            mkdir -p "dist/$base"
+            cp -R "$d/"* "dist/$base/" || true
+          done
 
       - name: Create bundle zip
         shell: bash
@@ -341,7 +359,7 @@ jobs:
           VERSION="${{ steps.ver.outputs.version }}"
           BUNDLE="AnimeShin-all-v${VERSION}.zip"
           cd dist
-          zip -r "../$BUNDLE" .
+          zip -r "../$BUNDLE" *
 
       - name: Upload bundle artifact
         uses: actions/upload-artifact@v4
