@@ -3,6 +3,12 @@ import Flutter
 import AVKit
 import AVFoundation
 
+// Root Flutter VC that hides the home indicator globally.
+class HomeIndicatorHidingFlutterViewController: FlutterViewController {
+  override var prefersHomeIndicatorAutoHidden: Bool { true }
+  override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
+}
+
 // AVPlayer VC that reports position/rate on real dismissal & owns observers safely.
 class ReportingAVPlayerViewController: AVPlayerViewController {
   // Bridge back to Flutter
