@@ -3,9 +3,6 @@ name: Build Linux (tar.gz + AppImage)
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build-linux:
     runs-on: ubuntu-latest
@@ -157,15 +154,10 @@ jobs:
 
           echo "appimage_path=$FINAL" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release and upload Linux files
-        uses: softprops/action-gh-release@v2
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: linux-v${{ steps.ver.outputs.version }}
-          name: Linux v${{ steps.ver.outputs.version }}
-          body: |
-            Linux builds:
-            - AppImage (recommended for most distros)
-            - tar.gz portable bundle
-          files: |
+          name: AnimeShin-linux
+          path: |
             ${{ steps.appimage.outputs.appimage_path }}
             ${{ steps.tgz.outputs.tgz_path }}

@@ -1,10 +1,7 @@
-name: Build Android APK (dev flavor) for GitHub Releases
+name: Build Android APK (dev flavor)
 
 on:
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build-android-apk:
@@ -50,20 +47,8 @@ jobs:
           cp "$SRC_APK" "$DEST_APK"
           echo "apk_path=$DEST_APK" >> "$GITHUB_OUTPUT"
 
-      - name: Upload artifact (optional)
+      - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AnimeShin-android-apk
-          path: AnimeShin-android-v*.apk
-
-      - name: Create GitHub Release and upload APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: android-v${{ steps.ver.outputs.version }}
-          name: Android v${{ steps.ver.outputs.version }}
-          body: |
-            Built with:
-            - flutter build apk --release --flavor dev
-            Notes:
-            - Unsigned release APK (sign it before installing).
-          files: ${{ steps.apk.outputs.apk_path }}
+          name: AnimeShin-android
+          path: ${{ steps.apk.outputs.apk_path }}

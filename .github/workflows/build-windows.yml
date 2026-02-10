@@ -3,9 +3,6 @@ name: Build Windows (ZIP)
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -52,12 +49,8 @@ jobs:
 
           "zip_path=$zipFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: Create GitHub Release and upload ZIP
-        uses: softprops/action-gh-release@v2
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: win-v${{ steps.ver.outputs.version }}
-          name: Windows v${{ steps.ver.outputs.version }}
-          body: |
-            Built with:
-            - flutter build windows --release
-          files: ${{ steps.zip.outputs.zip_path }}
+          name: AnimeShin-windows
+          path: ${{ steps.zip.outputs.zip_path }}
