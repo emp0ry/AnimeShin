@@ -125,8 +125,15 @@ jobs:
           import sys
           import urllib.request
 
-          api = "https://api.github.com/repos/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest"
-          with urllib.request.urlopen(api) as response:
+            api = "https://api.github.com/repos/linuxdeploy/linuxdeploy-plugin-gtk/releases/latest"
+            req = urllib.request.Request(
+              api,
+              headers={
+                "User-Agent": "AnimeShin-CI",
+                "Accept": "application/vnd.github+json",
+              },
+            )
+            with urllib.request.urlopen(req) as response:
               data = json.load(response)
 
           url = None
