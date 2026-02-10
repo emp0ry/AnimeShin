@@ -151,6 +151,18 @@ jobs:
           urllib.request.urlretrieve(url, "linuxdeploy-plugin-gtk-x86_64.AppImage")
           PY
 
+          GTK_PLUGIN_OK=0
+          if [ -f linuxdeploy-plugin-gtk-x86_64.AppImage ]; then
+            SIZE=$(stat -c%s linuxdeploy-plugin-gtk-x86_64.AppImage || echo 0)
+            if [ "$SIZE" -gt 1000000 ]; then
+              GTK_PLUGIN_OK=1
+            fi
+          fi
+
+          if [ "$GTK_PLUGIN_OK" -ne 1 ]; then
+            echo "WARN: linuxdeploy-plugin-gtk AppImage not available, building without GTK plugin"
+          fi
+
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk-x86_64.AppImage
 
           mkdir -p AppDir/usr/bin
@@ -185,15 +197,26 @@ jobs:
           fi
 
           export LINUXDEPLOY=./linuxdeploy-x86_64.AppImage
-          export LINUXDEPLOY_PLUGIN_GTK=./linuxdeploy-plugin-gtk-x86_64.AppImage
+          if [ "$GTK_PLUGIN_OK" -eq 1 ]; then
+            export LINUXDEPLOY_PLUGIN_GTK=./linuxdeploy-plugin-gtk-x86_64.AppImage
+          fi
 
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --executable "$APP_BIN" \
-            --desktop-file AppDir/usr/share/applications/animeshin.desktop \
-            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/animeshin.png \
-            --plugin gtk \
-            --output appimage
+          if [ "$GTK_PLUGIN_OK" -eq 1 ]; then
+            ./linuxdeploy-x86_64.AppImage \
+              --appdir AppDir \
+              --executable "$APP_BIN" \
+              --desktop-file AppDir/usr/share/applications/animeshin.desktop \
+              --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/animeshin.png \
+              --plugin gtk \
+              --output appimage
+          else
+            ./linuxdeploy-x86_64.AppImage \
+              --appdir AppDir \
+              --executable "$APP_BIN" \
+              --desktop-file AppDir/usr/share/applications/animeshin.desktop \
+              --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/animeshin.png \
+              --output appimage
+          fi
 
           APPIMAGE_OUT=$(ls -1 *.AppImage | head -n 1)
           FINAL="AnimeShin-linux-v${VERSION}.AppImage"
