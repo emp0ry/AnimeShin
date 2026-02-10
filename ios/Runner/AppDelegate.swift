@@ -4,6 +4,7 @@ import AVKit
 import AVFoundation
 
 // Root Flutter VC that hides the home indicator globally.
+@objc(HomeIndicatorHidingFlutterViewController)
 class HomeIndicatorHidingFlutterViewController: FlutterViewController {
   override var prefersHomeIndicatorAutoHidden: Bool { true }
   override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
