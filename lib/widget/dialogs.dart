@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/html_content.dart';
+import 'package:vector_math/vector_math_64.dart' show Vector3;
 
 class InputDialog extends StatelessWidget {
   const InputDialog({required this.initial, required this.onChanged});
@@ -184,8 +185,8 @@ class _ImageDialogState extends State<ImageDialog>
 
           // If zoomed out, zoom in towards the tapped spot.
           final zoomed = _transformCtrl.value.clone();
-          zoomed.translateByDouble(-_lastOffset!.dx, -_lastOffset!.dy, 0, 1.0);
-          zoomed.scaleByDouble(2.0, 2.0, 1.0, 1.0);
+          zoomed.translateByVector3(Vector3(-_lastOffset!.dx, -_lastOffset!.dy, 0));
+          zoomed.scaleByVector3(Vector3(2.0, 2.0, 1.0));
           _animateMatrixTo(zoomed);
         },
         child: InteractiveViewer(
