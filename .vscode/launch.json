@@ -2,24 +2,38 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Dev Android",
+      "name": "Dev Android (flavor dev)",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
       "flutterMode": "debug",
       "deviceId": "emulator-5554",
+      "program": "lib/main.dart",
       "args": [
         "--flavor",
-        "dev",
-        "-t",
-        "lib/main.dart"
+        "dev"
       ]
     },
     {
-      "name": "Dev IOS",
+      "name": "Dev iOS (flavor dev)",
       "request": "launch",
-      "type": "dart"
+      "type": "dart",
+      "flutterMode": "debug",
+      "deviceId": "ios",
+      "program": "lib/main.dart",
+      "args": [
+        "--flavor",
+        "dev"
+      ]
     },
+    {
+      "name": "Dev Windows (no flavor)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "debug",
+      "deviceId": "windows",
+      "program": "lib/main.dart"
+    },
+
     {
       "name": "C/C++ Runner: Debug Session",
       "type": "cppdbg",
@@ -27,8 +41,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "e:/Projects/Flutter/AnimeShin",
-      "program": "e:/Projects/Flutter/AnimeShin/build/Debug/outDebug",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [

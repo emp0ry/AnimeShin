@@ -104,6 +104,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   BuildContext? _controlsCtx;
   bool _startFsHandled = false;
   bool _wasFullscreen = false;
+  bool _fsToggleInFlight = false;
+  DateTime? _lastFsToggleAt;
+  static const Duration _fsToggleCooldown = Duration(milliseconds: 400);
 
   // Navigation / lifecycle guards
   bool _navigatingAway = false;
@@ -485,6 +488,57 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     });
   }
 
+  bool _canToggleFullscreen() {
+    if (_fsToggleInFlight) return false;
+    final now = DateTime.now();
+    final last = _lastFsToggleAt;
+    if (last != null && now.difference(last) < _fsToggleCooldown) {
+      return false;
+    }
+    _lastFsToggleAt = now;
+    return true;
+  }
+
+  Future<void> _toggleFullscreenHotkey({required bool forceExit}) async {
+    if (_isIOS) return;
+    final c = _controlsCtx;
+    if (c == null || !c.mounted) return;
+    if (!_canToggleFullscreen()) return;
+
+    _fsToggleInFlight = true;
+    try {
+      if (forceExit) {
+        if (isFullscreen(c)) {
+          await exitFullscreen(c);
+          _wasFullscreen = false;
+          await _exitNativeFullscreen();
+          _removeCursorOverlayIfAny();
+          _log('hotkey: escape fullscreen');
+        }
+        return;
+      }
+
+      if (!isFullscreen(c)) {
+        await enterFullscreen(c);
+        _wasFullscreen = true;
+        await _enterNativeFullscreen();
+        _insertCursorOverlayIfNeeded();
+        _cursorHideController.kick();
+        _log('hotkey: enter fullscreen');
+      } else {
+        await exitFullscreen(c);
+        _wasFullscreen = false;
+        await _exitNativeFullscreen();
+        _removeCursorOverlayIfAny();
+        _log('hotkey: exit fullscreen');
+      }
+    } catch (_) {
+      // Ignore; native/window manager may be mid-transition.
+    } finally {
+      _fsToggleInFlight = false;
+    }
+  }
+
   void _hideCursorInstant() {
     if (_isDesktop) _cursorHideController.hideNow();
   }
@@ -523,7 +577,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _enterNativeFullscreen() async {
     try {
       if (_isDesktop) {
-        await windowManager.setFullScreen(true);
+        final isFs = await windowManager.isFullScreen();
+        if (!isFs) {
+          await windowManager.setFullScreen(true);
+        }
       } else if (!_isIOS) {
         // Do not touch SystemChrome on iOS; native VC handles overlays there.
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -534,7 +591,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Future<void> _exitNativeFullscreen() async {
     try {
       if (_isDesktop) {
-        await windowManager.setFullScreen(false);
+        final isFs = await windowManager.isFullScreen();
+        if (isFs) {
+          await windowManager.setFullScreen(false);
+        }
       } else if (!_isIOS) {
         // Do not touch SystemChrome on iOS; native VC handles overlays there.
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -1902,13 +1962,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     if (wasFs) {
       _log('exiting fullscreen (lib + native) before auto-next');
+      bool exitedViaControls = false;
       if (_controlsCtx != null) {
         try {
           await exitFullscreen(_controlsCtx!);
+          exitedViaControls = true;
         } catch (_) {}
       }
       _wasFullscreen = false;
-      await _exitNativeFullscreen();
+      // Avoid double native fullscreen toggles; onExitFullscreen already calls it.
+      if (!exitedViaControls) {
+        await _exitNativeFullscreen();
+      }
       await Future.delayed(const Duration(milliseconds: 120));
     }
 
@@ -2451,45 +2516,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 }
 
                 if (key == LogicalKeyboardKey.keyF) {
-                  if (_isIOS) return KeyEventResult.handled;
-                  final c = _controlsCtx;
-                  if (c == null || !c.mounted) return KeyEventResult.handled;
-                  unawaited(() async {
-                    try {
-                      if (!isFullscreen(c)) {
-                        await enterFullscreen(c);
-                        _wasFullscreen = true;
-                        await _enterNativeFullscreen();
-                        _insertCursorOverlayIfNeeded();
-                        _cursorHideController.kick();
-                        _log('hotkey: enter fullscreen');
-                      } else {
-                        await exitFullscreen(c);
-                        _wasFullscreen = false;
-                        await _exitNativeFullscreen();
-                        _removeCursorOverlayIfAny();
-                        _log('hotkey: exit fullscreen');
-                      }
-                    } catch (_) {}
-                  }());
+                  unawaited(_toggleFullscreenHotkey(forceExit: false));
                   return KeyEventResult.handled;
                 }
 
                 if (key == LogicalKeyboardKey.escape) {
-                  if (_isIOS) return KeyEventResult.handled;
-                  final c = _controlsCtx;
-                  if (c == null || !c.mounted) return KeyEventResult.handled;
-                  unawaited(() async {
-                    try {
-                      if (isFullscreen(c)) {
-                        await exitFullscreen(c);
-                        _wasFullscreen = false;
-                        await _exitNativeFullscreen();
-                        _removeCursorOverlayIfAny();
-                        _log('hotkey: escape fullscreen');
-                      }
-                    } catch (_) {}
-                  }());
+                  unawaited(_toggleFullscreenHotkey(forceExit: true));
                   return KeyEventResult.handled;
                 }
 
