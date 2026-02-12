@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:animeshin/util/theming.dart';
-import 'package:animeshin/widget/shadowed_overflow_list.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 
 /// A horizontal list of chips, where only one can be selected at a time.
@@ -217,6 +217,30 @@ class _ChipSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scrollController = ScrollController();
+    const arrowSize = 32.0;
+    const scrollAmount = 120.0;
+
+    void scrollLeft() {
+      scrollController.animateTo(
+        (scrollController.offset - scrollAmount).clamp(0.0, scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.ease,
+      );
+    }
+
+    void scrollRight() {
+      scrollController.animateTo(
+        (scrollController.offset + scrollAmount).clamp(0.0, scrollController.position.maxScrollExtent),
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.ease,
+      );
+    }
+
+    final isDesktop = defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,9 +255,64 @@ class _ChipSelector extends StatelessWidget {
         ),
         SizedBox(
           height: 40,
-          child: ShadowedOverflowList(
-            itemCount: length,
-            itemBuilder: itemBuilder,
+          child: ScrollbarTheme(
+            data: const ScrollbarThemeData(
+              thumbVisibility: WidgetStatePropertyAll(false),
+              trackVisibility: WidgetStatePropertyAll(false),
+              thickness: WidgetStatePropertyAll(0),
+              thumbColor: WidgetStatePropertyAll(Colors.transparent),
+              trackColor: WidgetStatePropertyAll(Colors.transparent),
+              trackBorderColor: WidgetStatePropertyAll(Colors.transparent),
+            ),
+            child: isDesktop
+                ? Row(
+                    children: [
+                      SizedBox(
+                        width: arrowSize,
+                        height: arrowSize,
+                        child: IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: scrollLeft,
+                          tooltip: 'Scroll left',
+                          padding: EdgeInsets.zero,
+                          splashRadius: 18,
+                        ),
+                      ),
+                      Expanded(
+                        child: Scrollbar(
+                          controller: scrollController,
+                          thumbVisibility: false,
+                          child: ListView.builder(
+                            controller: scrollController,
+                            scrollDirection: Axis.horizontal,
+                            itemCount: length,
+                            itemBuilder: itemBuilder,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: arrowSize,
+                        height: arrowSize,
+                        child: IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: scrollRight,
+                          tooltip: 'Scroll right',
+                          padding: EdgeInsets.zero,
+                          splashRadius: 18,
+                        ),
+                      ),
+                    ],
+                  )
+                : Scrollbar(
+                    controller: scrollController,
+                    thumbVisibility: false,
+                    child: ListView.builder(
+                      controller: scrollController,
+                      scrollDirection: Axis.horizontal,
+                      itemCount: length,
+                      itemBuilder: itemBuilder,
+                    ),
+                  ),
           ),
         ),
       ],
