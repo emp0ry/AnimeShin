@@ -99,6 +99,86 @@ Rect _computeShareOrigin(BuildContext context) {
   return const Rect.fromLTWH(0, 0, 1, 1);
 }
 
+// Public variant to compute origin when caller still has a BuildContext.
+Rect computeShareOrigin(BuildContext context) => _computeShareOrigin(context);
+
+/// Variant of `saveBytesChooseLocation` that does not require a BuildContext.
+///
+/// Callers should compute `origin` (e.g. via `computeShareOrigin(context)`)
+/// and the optional `messenger` (via `ScaffoldMessenger.maybeOf(context)`) before
+/// performing async work so they don't depend on a `BuildContext` after awaits.
+Future<String?> saveBytesChooseLocationNoContext(
+  Rect origin,
+  ScaffoldMessengerState? messenger, {
+  required String filename,
+  required Uint8List bytes,
+  required String mimeType,
+  required String fileExtension,
+  String? shareText,
+  bool revealAfterSave = false,
+}) async {
+  try {
+    // --- iOS: Share a real file (NO 'text' param) ---
+    if (!kIsWeb && Platform.isIOS) {
+      final tmpDir = await getTemporaryDirectory();
+      final tmpPath = p.join(tmpDir.path, filename);
+      // Overwrite if exists.
+      await File(tmpPath).writeAsBytes(bytes, flush: true);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          // DO NOT set 'text' on iOS to avoid extra text.txt
+          files: [XFile(tmpPath, mimeType: mimeType)],
+          sharePositionOrigin: origin,
+        ),
+      );
+      return null; // Shared; no path returned by iOS share sheet
+    }
+
+    // --- Android: SAF "Create document" (user picks folder & name) ---
+    if (!kIsWeb && Platform.isAndroid) {
+      final params = SaveFileDialogParams(
+        data: bytes,
+        fileName: filename,
+        mimeTypesFilter: [mimeType],
+      );
+      final savedPath = await FlutterFileDialog.saveFile(params: params);
+      if (savedPath == null) {
+        messenger?.showSnackBar(const SnackBar(content: Text('Save cancelled')));
+        return null;
+      }
+      return savedPath;
+    }
+
+    // --- Desktop/Web: native "Save As..." ---
+    final location = await getSaveLocation(
+      suggestedName: filename,
+      acceptedTypeGroups: [
+        XTypeGroup(
+          label: fileExtension.toUpperCase(),
+          extensions: [fileExtension],
+          mimeTypes: [mimeType],
+        ),
+      ],
+    );
+    if (location == null) {
+      messenger?.showSnackBar(const SnackBar(content: Text('Save cancelled')));
+      return null;
+    }
+
+    final xfile = XFile.fromData(bytes, name: filename, mimeType: mimeType);
+    await xfile.saveTo(location.path);
+
+    if (revealAfterSave) {
+      await _revealFile(location.path);
+    }
+    return location.path;
+  } catch (e) {
+    messenger?.showSnackBar(SnackBar(content: Text('Failed to export: $e')));
+    return null;
+  }
+}
+
 Future<void> _revealFile(String absPath) async {
   try {
     if (Platform.isWindows) {

@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Platform;
 
 import 'package:animeshin/extension/snack_bar_extension.dart';
+import 'package:animeshin/feature/export/save_and_share.dart';
 import 'package:animeshin/util/module_loader/remote_modules_store.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
@@ -10,11 +10,9 @@ import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/layout/navigation_tool.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 class SettingsModulesSubview extends StatefulWidget {
   const SettingsModulesSubview(this.scrollCtrl, {super.key});
@@ -123,42 +121,31 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
     setState(() => _busy = true);
     try {
       final raw = await _remote.exportJson();
-      final bytes = utf8.encode(raw);
+      final bytes = Uint8List.fromList(utf8.encode(raw));
 
-      if (Platform.isIOS || Platform.isAndroid) {
-        final dir = await getApplicationDocumentsDirectory();
-        final filePath = p.join(dir.path, _exportFileName);
-        final file = XFile.fromData(
-          bytes,
-          mimeType: 'application/json',
-          name: _exportFileName,
-        );
-        await file.saveTo(filePath);
-        if (!mounted) return;
-        await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile(filePath, mimeType: 'application/json')],
-            text: 'AnimeShin modules export',
-          ),
-        );
-        if (!mounted) return;
-        SnackBarExtension.show(context, 'Exported');
-        return;
-      }
-
-      final path = await getSaveLocation(
-        suggestedName: _exportFileName,
-        acceptedTypeGroups: <XTypeGroup>[_jsonTypeGroup()],
-      );
-      if (path == null) return;
-      final file = XFile.fromData(
-        bytes,
-        mimeType: 'application/json',
-        name: _exportFileName,
-      );
-      await file.saveTo(path.path);
+      // Compute UI objects now (before awaiting) so we don't use `context`
+      // across async gaps. The saved helper will not touch BuildContext.
+      // Guard with mounted before using context for UI objects
       if (!mounted) return;
-      SnackBarExtension.show(context, 'Exported');
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      final origin = computeShareOrigin(context);
+
+      final savedPath = await saveBytesChooseLocationNoContext(
+        origin,
+        messenger,
+        filename: _exportFileName,
+        bytes: bytes,
+        mimeType: 'application/json',
+        fileExtension: 'json',
+        shareText: 'AnimeShin modules export',
+      );
+      if (!mounted) return;
+      final didShare = !kIsWeb && Platform.isIOS;
+      if (savedPath == null && !didShare) return;
+      final msg = (savedPath != null && savedPath.isNotEmpty)
+          ? 'Exported to: $savedPath'
+          : 'Export file shared';
+      messenger?.showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       SnackBarExtension.show(context, e.toString());
