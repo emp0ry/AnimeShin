@@ -8,6 +8,7 @@ import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/feature/settings/settings_provider.dart';
 import 'package:animeshin/feature/settings/settings_model.dart';
 import 'package:animeshin/widget/cached_image.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui';
@@ -41,6 +42,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
   Map<int, String>? _anilistThumbs;
   Map<int, String>? _anilistEpisodeTitles;
+  Map<int, String>? _aniZipEpisodeImages;
+  Map<int, String>? _aniZipEpisodeTitles;
   String? _lastFetchOrigin;
   String? _fallbackSearchTitle;
   int? _anilistMediaId;
@@ -121,6 +124,74 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     }
 
     return const <int, String>{};
+  }
+
+  Future<_AniZipEpisodeData?> _fetchAniZipEpisodeAssets(int mediaId) async {
+    final uri = Uri.parse('https://api.ani.zip/mappings?anilist_id=$mediaId');
+    final resp = await http.get(uri);
+    if (resp.statusCode != 200) return null;
+
+    final decoded = jsonDecode(resp.body);
+    if (decoded is! Map) return null;
+
+    final episodes = decoded['episodes'];
+    if (episodes is! Map) return null;
+
+    final images = <int, String>{};
+    final titles = <int, String>{};
+
+    for (final entry in episodes.entries) {
+      final key = entry.key;
+      if (key is! String) continue;
+      final epNum = int.tryParse(key);
+      if (epNum == null || epNum <= 0) continue;
+
+      final value = entry.value;
+      if (value is! Map) continue;
+
+      final image = (value['image'] ?? '').toString().trim();
+      if (image.isNotEmpty) {
+        images.putIfAbsent(epNum, () => image);
+      }
+
+      final title = value['title'];
+      if (title is Map) {
+        final picked = _pickAniZipEpisodeTitle(title);
+        if (picked != null && picked.isNotEmpty) {
+          titles.putIfAbsent(epNum, () => picked);
+        }
+      }
+    }
+
+    if (images.isEmpty && titles.isEmpty) return null;
+    return _AniZipEpisodeData(images: images, titles: titles);
+  }
+
+  String? _pickAniZipEpisodeTitle(Map raw) {
+    String? val(String key) {
+      final v = raw[key];
+      if (v == null) return null;
+      final s = v.toString().trim();
+      return s.isEmpty ? null : s;
+    }
+
+    final settings = ref.read(settingsProvider).asData?.value;
+    final pref = settings?.titleLanguage ?? TitleLanguage.romaji;
+
+    String? preferred;
+    switch (pref) {
+      case TitleLanguage.english:
+        preferred = val('en');
+        break;
+      case TitleLanguage.romaji:
+        preferred = val('x-jat');
+        break;
+      case TitleLanguage.native:
+        preferred = val('ja');
+        break;
+    }
+
+    return preferred ?? val('en') ?? val('x-jat') ?? val('ja') ?? val('x-unk');
   }
 
   static List<String> _buildAniListSearchVariants(String title) {
@@ -503,12 +574,35 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       }).catchError((_) {
         // Ignore; fallback to module episode images.
       });
+
+      _fetchAniZipEpisodeAssets(mediaId).then((data) {
+        if (!mounted) return;
+        if (data == null) return;
+        setState(() {
+          _aniZipEpisodeImages = data.images;
+          _aniZipEpisodeTitles = data.titles;
+        });
+      }).catchError((_) {
+        // Ignore; fallback to module/AniList episode images.
+      });
     } else {
       final searchTitle = _preferredSearchTitle();
       _fetchAniListEpisodeThumbnailsBySearch(searchTitle).then((m) {
         if (!mounted) return;
-        if (m.isEmpty) return;
         setState(() => _anilistThumbs = m);
+
+        final id = _anilistMediaId;
+        if (id == null || id <= 0) return;
+        _fetchAniZipEpisodeAssets(id).then((data) {
+          if (!mounted) return;
+          if (data == null) return;
+          setState(() {
+            _aniZipEpisodeImages = data.images;
+            _aniZipEpisodeTitles = data.titles;
+          });
+        }).catchError((_) {
+          // Ignore; fallback to module/AniList episode images.
+        });
       }).catchError((_) {
         // Ignore; fallback to module episode images.
       });
@@ -1051,6 +1145,12 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
               final anilistThumb = _anilistThumbs?[ep.number];
               final anilistTitle = _anilistEpisodeTitles?[ep.number];
+              final aniZipThumb = _aniZipEpisodeImages?[ep.number];
+              final aniZipTitle = _aniZipEpisodeTitles?[ep.number];
+              final resolvedFallbackTitle =
+                  (anilistTitle != null && anilistTitle.trim().isNotEmpty)
+                      ? anilistTitle
+                      : aniZipTitle;
 
               final watched = ep.number <= continued;
               final isContinue = ep.number == continued + 1;
@@ -1058,7 +1158,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
               return _ModuleEpisodeTile(
                 episode: ep,
                 overrideImageUrl: anilistThumb,
-                fallbackTitle: anilistTitle,
+                fallbackImageUrl: aniZipThumb,
+                fallbackTitle: resolvedFallbackTitle,
                 watched: watched,
                 isContinue: isContinue,
                 imageReferer: moduleReferer,
@@ -1098,6 +1199,7 @@ class _ModuleEpisodeTile extends StatelessWidget {
   const _ModuleEpisodeTile({
     required this.episode,
     required this.overrideImageUrl,
+    required this.fallbackImageUrl,
     required this.fallbackTitle,
     required this.watched,
     required this.isContinue,
@@ -1108,6 +1210,7 @@ class _ModuleEpisodeTile extends StatelessWidget {
 
   final JsModuleEpisode episode;
   final String? overrideImageUrl;
+  final String? fallbackImageUrl;
   final String? fallbackTitle;
   final bool watched;
   final bool isContinue;
@@ -1152,6 +1255,11 @@ class _ModuleEpisodeTile extends StatelessWidget {
       baseOrigin: imageBaseOrigin,
       imageReferer: imageReferer,
     );
+    final fallbackImage = _ModuleWatchPageState._resolveImageUrl(
+      fallbackImageUrl ?? '',
+      baseOrigin: imageBaseOrigin,
+      imageReferer: imageReferer,
+    );
     final episodeImage = _ModuleWatchPageState._resolveImageUrl(
       episode.image,
       baseOrigin: imageBaseOrigin,
@@ -1160,6 +1268,7 @@ class _ModuleEpisodeTile extends StatelessWidget {
     final candidates = <String>[
       if (episodeImage.isNotEmpty) episodeImage,
       if (override.isNotEmpty) override,
+      if (fallbackImage.isNotEmpty) fallbackImage,
     ];
 
     final primaryImageUrl = candidates.isNotEmpty ? candidates.first : '';
@@ -1271,6 +1380,12 @@ class _ModuleEpisodeTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AniZipEpisodeData {
+  const _AniZipEpisodeData({required this.images, required this.titles});
+  final Map<int, String> images;
+  final Map<int, String> titles;
 }
 
 /// Frosted/blurred ribbon for "Watched" / "Continue".
