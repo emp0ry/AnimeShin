@@ -1,5 +1,6 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/util/module_loader/remote_modules_store.dart';
@@ -11,6 +12,9 @@ import 'package:animeshin/widget/layout/navigation_tool.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class SettingsModulesSubview extends StatefulWidget {
   const SettingsModulesSubview(this.scrollCtrl, {super.key});
@@ -27,6 +31,16 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   final _loader = SourcesModuleLoader();
 
   bool _busy = false;
+  static const String _exportFileName = 'animeshin_modules.json';
+
+  XTypeGroup _jsonTypeGroup() {
+    return const XTypeGroup(
+      label: 'JSON',
+      extensions: ['json'],
+      uniformTypeIdentifiers: ['public.json'],
+      mimeTypes: ['application/json'],
+    );
+  }
 
   @override
   void dispose() {
@@ -109,17 +123,38 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
     setState(() => _busy = true);
     try {
       final raw = await _remote.exportJson();
+      final bytes = utf8.encode(raw);
+
+      if (Platform.isIOS || Platform.isAndroid) {
+        final dir = await getApplicationDocumentsDirectory();
+        final filePath = p.join(dir.path, _exportFileName);
+        final file = XFile.fromData(
+          bytes,
+          mimeType: 'application/json',
+          name: _exportFileName,
+        );
+        await file.saveTo(filePath);
+        if (!mounted) return;
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(filePath, mimeType: 'application/json')],
+            text: 'AnimeShin modules export',
+          ),
+        );
+        if (!mounted) return;
+        SnackBarExtension.show(context, 'Exported');
+        return;
+      }
+
       final path = await getSaveLocation(
-        suggestedName: 'animeshin_modules.json',
-        acceptedTypeGroups: <XTypeGroup>[
-          XTypeGroup(label: 'JSON', extensions: ['json'])
-        ],
+        suggestedName: _exportFileName,
+        acceptedTypeGroups: <XTypeGroup>[_jsonTypeGroup()],
       );
       if (path == null) return;
       final file = XFile.fromData(
-        utf8.encode(raw),
+        bytes,
         mimeType: 'application/json',
-        name: 'animeshin_modules.json',
+        name: _exportFileName,
       );
       await file.saveTo(path.path);
       if (!mounted) return;
@@ -137,7 +172,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
     try {
       final open = await openFile(
         acceptedTypeGroups: <XTypeGroup>[
-          XTypeGroup(label: 'JSON', extensions: ['json'])
+          _jsonTypeGroup(),
         ],
       );
       if (open == null) return;
