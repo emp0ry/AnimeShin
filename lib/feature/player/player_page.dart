@@ -1394,6 +1394,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     );
     final saved = entry?.seconds ?? 0;
 
+    _log('restore: read from ordinal=${widget.args.ordinal}, got=${saved}s');
+
     // If user never watched (or only a tiny accidental start), treat as new episode.
     // This keeps new episodes starting from 0:00 while still resuming when user
     // intentionally stopped mid-episode.
@@ -1433,10 +1435,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final isCompleted = pos.inMilliseconds >= (dur.inMilliseconds * 0.98);
     if (clearIfCompleted || isCompleted) {
-      if (isCompleted) _log('save: episode completed, clearing position');
+      if (isCompleted) _log('save: episode completed, clearing position for ordinal=${widget.args.ordinal}');
       await _playback.clearEpisode(
           widget.animeVoice, widget.args.id, widget.args.ordinal);
     } else {
+      _log('save: saving position=${pos.inSeconds}s to ordinal=${widget.args.ordinal}');
       await _playback.saveEntry(
         widget.animeVoice,
         widget.args.id,
@@ -2062,6 +2065,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         navigator.pop();
       }
 
+      // Wait for old player to fully dispose and clean up textures before creating new one
+      await Future.delayed(const Duration(milliseconds: 500));
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!navigator.mounted) return;
         navigator.push(
@@ -2388,6 +2394,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                       try {
                         await enterFullscreen(c); // lib fullscreen
                         _wasFullscreen = true;
+                        // Wait for previous page's texture cleanup before native fullscreen
+                        await Future.delayed(const Duration(milliseconds: 1000));
+                        if (!mounted || _navigatingAway) return;
                         await _enterNativeFullscreen();
                         _insertCursorOverlayIfNeeded();
                         _cursorHideController.kick();
@@ -2404,6 +2413,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               _log('onEnterFullscreen() fired (lib)');
               _wasFullscreen = true;
               if (!mounted || _navigatingAway) return;
+              
+              // Delay native fullscreen to prevent race with previous page's texture cleanup
+              await Future.delayed(const Duration(milliseconds: 1000));
+              if (!mounted || _navigatingAway) return;
+              
               await _enterNativeFullscreen();
 
               // Insert cursor overlay on desktop while fullscreen is active.
