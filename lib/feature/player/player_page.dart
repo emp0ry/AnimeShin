@@ -2158,8 +2158,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       onSelectQuality: (q) async {
         _currentQuality = q;
         _safeSetState(() {});
-        unawaited(
-            ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
+        unawaited(ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
         _suppressPrefQualityReopen = true;
         try {
           await _changeQuality(q);
