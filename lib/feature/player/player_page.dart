@@ -414,15 +414,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final tgt = _clampSeekAbsolute(target);
     await _seekPlanned(tgt, reason: 'ios_dismiss_restore');
-    await Future.delayed(const Duration(milliseconds: 200));
-    if (!_alive) return;
-    final actualPos = _player.state.position;
-    // Only confirm if position has moved (seek took effect)
-    if (actualPos > const Duration(milliseconds: 500)) {
-      if ((actualPos - tgt).abs() > PlayerTuning.openAtSeekConfirmTolerance) {
-        await _seekPlanned(tgt, reason: 'ios_dismiss_restore_confirm');
-      }
-    }
 
     // Re-apply rate (the native VC may have changed it).
     try {
@@ -1621,29 +1612,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final tgt = _clampSeekAbsolute(position);
     if (tgt > Duration.zero) {
       await _seekPlanned(tgt, reason: 'openAt_restore');
-      // Wait for position state to update after seek
-      await Future.delayed(const Duration(milliseconds: 200));
-      if (!_alive) return;
-      final actualPos = _player.state.position;
-      // Only check accuracy if position has moved (seek took effect).
-      // If still at 0:00:00, the seek is processing and we should wait, not re-seek.
-      if (actualPos > const Duration(milliseconds: 500)) {
-        final diff = (actualPos - tgt).abs();
-        if (diff > PlayerTuning.openAtSeekConfirmTolerance) {
-          _log('restore: first seek missed by ${diff.inMilliseconds}ms, confirming');
-          await _seekPlanned(tgt, reason: 'openAt_restore_confirm');
-        }
-      }
     } else {
       // Some HLS sources occasionally open a new episode at a non-zero offset.
       // If no resume was requested, force a seek back to 0.
       final startedAt = _player.state.position;
       if (startedAt > PlayerTuning.openAtForceZeroIfStartedAfter) {
         await _seekPlanned(Duration.zero, reason: 'openAt_force_zero');
-        if (_player.state.position > PlayerTuning.openAtSeekConfirmTolerance) {
-          await _seekPlanned(Duration.zero,
-              reason: 'openAt_force_zero_confirm');
-        }
       }
     }
 
