@@ -169,54 +169,6 @@ This guide explains how to install **AnimeShin** on different operating systems.
 
 ---
 
-## 🐧 Linux (Ubuntu, Debian, Arch, Fedora, etc.)
-
-### Option 1 (Recommended): AppImage
-
-#### Download
-
-* File: `AnimeShin-linux-vX.Y.Z.AppImage`
-
-#### Install & Run
-
-```bash
-chmod +x AnimeShin-linux-vX.Y.Z.AppImage
-./AnimeShin-linux-vX.Y.Z.AppImage
-```
-
-Or:
-
-* Right-click → **Properties**
-* Enable **Allow executing file as program**
-* Double-click to run
-
-✅ Works on most Linux distributions  
-✅ No installation needed
-
----
-
-### Option 2: Portable tar.gz
-
-#### Download
-
-* File: `AnimeShin-linux-vX.Y.Z.tar.gz`
-
-#### Install & Run
-
-```bash
-tar -xzf AnimeShin-linux-vX.Y.Z.tar.gz
-cd AnimeShin
-./AnimeShin
-```
-
-⚠️ May require system libraries:
-
-```bash
-sudo apt install libgtk-3-0 liblzma5
-```
-
----
-
 ## 🍎 macOS
 
 ### Download
@@ -236,27 +188,6 @@ sudo apt install libgtk-3-0 liblzma5
 * Confirm **Open**
 
 (Apple Gatekeeper limitation - normal for unsigned apps)
-
----
-
-## 🤖 Android
-
-### Download
-
-* File: `AnimeShin-android-vX.Y.Z.apk`
-
-### Important
-
-⚠️ This APK is **unsigned**  
-You must **sign it before installing**, or install using a custom installer.
-
-### Install (after signing)
-
-```bash
-adb install AnimeShin-android-vX.Y.Z.apk
-```
-
-Or install via file manager if your device allows unsigned APKs.
 
 ---
 
@@ -281,6 +212,27 @@ You must sign it manually before installation.
 
 ---
 
+## 🤖 Android
+
+### Download
+
+* File: `AnimeShin-android-vX.Y.Z.apk`
+
+### Important
+
+⚠️ This APK is **unsigned**  
+You must **sign it before installing**, or install using a custom installer.
+
+### Install (after signing)
+
+```bash
+adb install AnimeShin-android-vX.Y.Z.apk
+```
+
+Or install via file manager if your device allows unsigned APKs.
+
+---
+
 ## ❓ Troubleshooting
 
 **App does not open on macOS**
@@ -291,12 +243,6 @@ You must sign it manually before installation.
 
 * APK must be signed
 * Enable “Install unknown apps”
-
-**Linux AppImage doesn’t start**
-
-```bash
-chmod +x AnimeShin-linux-vX.Y.Z.AppImage
-```
 
 ---
 
