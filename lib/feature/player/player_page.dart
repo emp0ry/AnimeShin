@@ -414,6 +414,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final tgt = _clampSeekAbsolute(target);
     await _seekPlanned(tgt, reason: 'ios_dismiss_restore');
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (!_alive) return;
     if ((_player.state.position - tgt).abs() >
         PlayerTuning.openAtSeekConfirmTolerance) {
       await _seekPlanned(tgt, reason: 'ios_dismiss_restore_confirm');
@@ -1409,7 +1411,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // If user never watched (or only a tiny accidental start), treat as new episode.
     // This keeps new episodes starting from 0:00 while still resuming when user
     // intentionally stopped mid-episode.
-    if (saved <= 15) return Duration.zero;
+    if (saved <= 15) {
+      _log('restore: saved=${saved}s, starting fresh (≤15s)');
+      return Duration.zero;
+    }
 
     // If progress is very small and was last watched a long time ago, treat it as
     // a fresh start. This avoids "old" accidental progress forcing a resume.
@@ -1418,8 +1423,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (lastWatchedEpochMs != null && saved < 180) {
       final last = DateTime.fromMillisecondsSinceEpoch(lastWatchedEpochMs);
       final age = DateTime.now().difference(last);
-      if (age >= const Duration(days: 30)) return Duration.zero;
+      if (age >= const Duration(days: 30)) {
+        _log('restore: saved=${saved}s, age=${age.inDays}d, starting fresh (stale)');
+        return Duration.zero;
+      }
     }
+    _log('restore: resuming at ${saved}s');
     return Duration(seconds: saved);
   }
 
@@ -1438,6 +1447,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final isCompleted = pos.inMilliseconds >= (dur.inMilliseconds * 0.98);
     if (clearIfCompleted || isCompleted) {
+      if (isCompleted) _log('save: episode completed, clearing position');
       await _playback.clearEpisode(
           widget.animeVoice, widget.args.id, widget.args.ordinal);
     } else {
@@ -1608,8 +1618,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final tgt = _clampSeekAbsolute(position);
     if (tgt > Duration.zero) {
       await _seekPlanned(tgt, reason: 'openAt_restore');
-      if ((_player.state.position - tgt).abs() >
-          PlayerTuning.openAtSeekConfirmTolerance) {
+      // Wait for position state to update after seek
+      await Future.delayed(const Duration(milliseconds: 150));
+      if (!_alive) return;
+      final actualPos = _player.state.position;
+      final diff = (actualPos - tgt).abs();
+      if (diff > PlayerTuning.openAtSeekConfirmTolerance) {
+        _log('restore: first seek missed by ${diff.inMilliseconds}ms, confirming');
         await _seekPlanned(tgt, reason: 'openAt_restore_confirm');
       }
     } else {
