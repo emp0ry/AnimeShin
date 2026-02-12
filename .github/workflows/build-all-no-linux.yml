@@ -1,4 +1,4 @@
-name: Build All (bundle)
+name: Build All without Linux (bundle)
 
 on:
   workflow_dispatch:
