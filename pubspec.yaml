@@ -1,6 +1,6 @@
 name: animeshin
 
-version: 1.2.3
+version: 1.2.4
 
 description: Unofficial multi-platform AniList application integrated with Sora modules.
 
@@ -92,6 +92,7 @@ dependencies:
   intl: ^0.20.2
   xml: ^6.6.1
   path: ^1.9.1
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:

@@ -17,6 +17,7 @@ import 'package:animeshin/util/theming.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:package_info_plus/package_info_plus.dart';
 
 final _notificationCtrl = StreamController<String>.broadcast();
 
@@ -43,6 +44,9 @@ Future<void> main() async {
   }
 
   tz.initializeTimeZones();
+
+  final info = await PackageInfo.fromPlatform();
+  appVersion = info.version;
 
   // Initialize Hive (required for Hive.openBox).
   // On macOS, prefer Application Support to avoid prompting for protected folder access.
