@@ -359,17 +359,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _openingSkipped = false;
     _endingSkipped = false;
 
-    // Wait until the player reports either a valid duration or stable positions.
+    // Wait until the player reports a valid duration (no position fallback).
     final settle = Completer<void>();
     late final StreamSubscription subDur;
-    late final StreamSubscription subPos;
-
-    bool hasDuration = false;
-    int posTicksOver500ms = 0;
 
     // Safety timeout — don't hang forever.
     final timeout =
-        Future<void>.delayed(PlayerTuning.iosRestoreSettleTimeout, () {});
+        Future<void>.delayed(const Duration(seconds: 10), () {});
 
     subDur = _player.stream.duration.listen((d) {
       if (!_alive) {
@@ -377,22 +373,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         subDur.cancel();
         return;
       }
-      if (d > Duration.zero) {
-        hasDuration = true;
-        if (!settle.isCompleted) settle.complete();
-      }
-    });
-
-    subPos = _player.stream.position.listen((p) {
-      if (!_alive) {
-        if (!settle.isCompleted) settle.complete();
-        subPos.cancel();
-        return;
-      }
-      // If duration is still zero, use position ticks heuristic as a fallback.
-      if (p > PlayerTuning.iosRestorePosTickThreshold) {
-        posTicksOver500ms++;
-        if (!hasDuration && posTicksOver500ms >= 2 && !settle.isCompleted) {
+      if (d > const Duration(seconds: 3)) {
+        if (!settle.isCompleted) {
+          _log('iOS restore settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
           settle.complete();
         }
       }
@@ -400,7 +383,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     await Future.any([settle.future, timeout]);
     await subDur.cancel();
-    await subPos.cancel();
 
     if (!_alive) return;
 
@@ -863,6 +845,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   void initState() {
     super.initState();
+
+    // Suppress quality reaction during initial load to prevent race with saved position
+    _suppressPrefQualityReopen = true;
 
     _hotkeysFocusNode = FocusNode(debugLabel: 'player_hotkeys');
 
@@ -1390,6 +1375,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (widget.startupBannerText?.isNotEmpty == true) {
       _showBanner(widget.startupBannerText!, affectCursor: false);
     }
+
+    // Re-enable quality reaction after initial playback stabilizes (HLS settle + seek)
+    Timer(const Duration(seconds: 8), () {
+      if (_alive) {
+        _suppressPrefQualityReopen = false;
+      }
+    });
   }
 
   // ---------- Persistence ----------
@@ -1475,7 +1467,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // Avoid crashing if seek races with dispose
       _log('seek skipped (not alive): $e');
     } finally {
-      await Future.delayed(const Duration(milliseconds: 50));
+      // Keep _plannedSeek=true longer to prevent wrap healing from triggering
+      // on legitimate seeks while position is updating.
+      await Future.delayed(const Duration(milliseconds: 300));
       _plannedSeek = false;
     }
   }
@@ -1555,15 +1549,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _endingSkipped = false;
     _autoSkipBlockedUntil = null;
 
-    // Robust HLS settle: wait for either a valid duration OR first stable positions.
+    // Wait for HLS to report a valid duration (no fallback on position ticks).
     final settle = Completer<void>();
     late final StreamSubscription subDur;
-    late final StreamSubscription subPos;
 
     final timeout =
-        Future<void>.delayed(PlayerTuning.openAtSettleTimeout, () {});
-    bool hasDuration = false;
-    int posTicksOver500ms = 0;
+        Future<void>.delayed(const Duration(seconds: 15), () {});
 
     subDur = _player.stream.duration.listen((d) {
       if (!_alive) {
@@ -1571,23 +1562,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         subDur.cancel();
         return;
       }
-      if (d > Duration.zero) {
-        hasDuration = true;
+      if (d > const Duration(seconds: 3)) {
         if (!settle.isCompleted) {
-          settle.complete();
-        }
-      }
-    });
-
-    subPos = _player.stream.position.listen((p) {
-      if (!_alive) {
-        if (!settle.isCompleted) settle.complete();
-        subPos.cancel();
-        return;
-      }
-      if (p > const Duration(milliseconds: 500)) {
-        posTicksOver500ms++;
-        if (!hasDuration && posTicksOver500ms >= 2 && !settle.isCompleted) {
+          _log('HLS settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
           settle.complete();
         }
       }
@@ -1595,7 +1572,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     await Future.any([settle.future, timeout]);
     await subDur.cancel();
-    await subPos.cancel();
 
     if (!_alive) return;
 
@@ -1730,7 +1706,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           ? _proxy.playlistUrl(Uri.parse(baseUrl)).toString()
           : baseUrl;
 
-      final resume = pos + PlayerTuning.openAtResumeFudge;
+      // Only add fudge for mid-video resumes; keep small positions as-is
+      final resume = pos.inSeconds > 5
+          ? pos + PlayerTuning.openAtResumeFudge
+          : pos;
       await _openAt(toOpen, position: resume, play: wasPlaying);
 
       if (_isDesktop) {
@@ -1808,7 +1787,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         ? _proxy.playlistUrl(Uri.parse(url)).toString()
         : url;
 
-    final resume = pos + PlayerTuning.openAtResumeFudge;
+    // Only add fudge for mid-video resumes; keep small positions as-is
+    final resume = pos.inSeconds > 5
+        ? pos + PlayerTuning.openAtResumeFudge
+        : pos;
     await _openAt(toOpen, position: resume, play: wasPlaying);
 
     // Re-apply persisted desktop volume after reopen.
