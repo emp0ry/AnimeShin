@@ -127,12 +127,28 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
               .toList(growable: false);
 
           if (modules.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('No matching modules found in assets/sources/'),
-              ),
-            );
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        'No modules available.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'Add Sora modules in Settings > Modules.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              );
           }
 
           return ListView.separated(

@@ -29,6 +29,7 @@ class BackgroundHandler {
         android: AndroidInitializationSettings('notification_icon'),
         iOS: darwin,
         macOS: darwin,
+        linux: LinuxInitializationSettings(defaultActionName: 'Open'),
         windows: WindowsInitializationSettings(
           appName: 'AnimeShin',
           appUserModelId: 'com.animeshin',

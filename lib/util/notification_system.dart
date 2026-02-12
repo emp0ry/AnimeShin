@@ -15,6 +15,34 @@ class NotificationSystem {
   static bool _channelsCreated = false;
   static bool _askedIosPerms = false;
   static bool _tzReady = false;
+  static bool _initialized = false;
+
+  static Future<void> _ensureInitialized() async {
+    if (_initialized) return;
+
+    const darwin = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    await _plugin.initialize(
+      settings: const InitializationSettings(
+        android: AndroidInitializationSettings('notification_icon'),
+        iOS: darwin,
+        macOS: darwin,
+        linux: LinuxInitializationSettings(defaultActionName: 'Open'),
+        windows: WindowsInitializationSettings(
+          appName: 'AnimeShin',
+          appUserModelId: 'com.animeshin',
+          guid: 'b9726c14-67c1-4b3d-bf27-d28a33ae824e',
+          iconPath: 'notification_icon',
+        ),
+      ),
+    );
+
+    _initialized = true;
+  }
 
   /// Ensure time zone database is ready.
   static Future<void> _ensureTz() async {
@@ -110,6 +138,12 @@ class NotificationSystem {
     int mediaId,
     String imageUrl,
   ) async {
+    if (Platform.isLinux) {
+      debugPrint('Skipping scheduled notifications on Linux (unsupported).');
+      return;
+    }
+
+    await _ensureInitialized();
     await _ensureTz();
     await _ensurePermissions();
     await _ensureAndroidChannels();
@@ -158,6 +192,7 @@ class NotificationSystem {
 
   /// Cancels scheduled notification for episode (if any).
   static Future<void> cancelEpisodeNotification(String animeTitle, int episodeNumber) async {
+    await _ensureInitialized();
     await _plugin.cancel(
       id: (animeTitle + episodeNumber.toString()).hashCode,
     );
@@ -193,6 +228,7 @@ class NotificationSystem {
 
   /// Cancels all scheduled notifications (episodes or others)
   static Future<void> cancelAllScheduledNotifications() async {
+    await _ensureInitialized();
     await _plugin.cancelAll();
   }
 }

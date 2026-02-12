@@ -113,8 +113,26 @@ class RemoteModulesStore {
 			final d = await getApplicationSupportDirectory();
 			return d;
 		} catch (_) {
-			return null;
+			// Continue to fallback paths.
 		}
+
+		try {
+			final d = await getApplicationDocumentsDirectory();
+			return d;
+		} catch (_) {
+			// Continue to fallback paths.
+		}
+
+		final home = Platform.environment['HOME'];
+		if (home != null && home.trim().isNotEmpty) {
+			final d = Directory(p.join(home, '.local', 'share', 'animeshin'));
+			if (!await d.exists()) {
+				await d.create(recursive: true);
+			}
+			return d;
+		}
+
+		return null;
 	}
 
 	Future<File?> _registryFile() async {
