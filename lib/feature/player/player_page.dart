@@ -133,6 +133,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Timer? _autosaveTimer;
   Timer? _volumePersistDebounce; // <- debounce saves to prefs
   Timer? _uiHideTimer;
+  Timer? _qualityReopenTimer; // <- re-enable quality reaction after initial load
 
   // Quality
   String? _chosenUrl; // stores the ORIGINAL remote HLS URL (master or media)
@@ -550,6 +551,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _volumePersistDebounce = null;
     _uiHideTimer?.cancel();
     _uiHideTimer = null;
+    _qualityReopenTimer?.cancel();
+    _qualityReopenTimer = null;
   }
 
   Future<void> _enterNativeFullscreen() async {
@@ -815,14 +818,18 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // unawaited(_setMpv('interpolation', 'yes'));
     // unawaited(_setMpv('tscale', 'oversample'));
 
-    // --- Hardware decoding: safer choice across devices ---
-    unawaited(_setMpv('hwdec', 'auto-safe')); // avoid brittle decoders
+    // --- Hardware decoding: prefer software on Windows to avoid driver aborts ---
+    if (_isWindows) {
+      unawaited(_setMpv('hwdec', 'no')); // stability over performance
+    } else {
+      unawaited(_setMpv('hwdec', 'auto-safe')); // avoid brittle decoders
+    }
 
     // --- Stabilize timestamp probing for HLS/TS (helps missing PTS) ---
     unawaited(_setMpv('demuxer-lavf-analyzeduration', '10')); // seconds
     unawaited(_setMpv('demuxer-lavf-probesize', '${50 * 1024 * 1024}'));
-    // Generate missing PTS if upstream is wobbly.
-    unawaited(_setMpv('demuxer-lavf-o', 'fflags=+genpts'));
+    // Generate missing PTS and drop corrupt frames if upstream is wobbly.
+    unawaited(_setMpv('demuxer-lavf-o', 'fflags=+genpts+discardcorrupt'));
 
     // --- HTTP/HLS transport safety (you already set some; keep them consolidated) ---
     unawaited(_setMpv(
@@ -1377,7 +1384,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     // Re-enable quality reaction after initial playback stabilizes (HLS settle + seek)
-    Timer(const Duration(seconds: 8), () {
+    _qualityReopenTimer?.cancel();
+    _qualityReopenTimer = Timer(const Duration(seconds: 8), () {
       if (_alive) {
         _suppressPrefQualityReopen = false;
       }
