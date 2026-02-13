@@ -2077,44 +2077,46 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
 
       // Wait for old player to fully dispose and clean up textures before creating new one
+      _log('auto-next: waiting for cleanup delay...');
       await Future.delayed(const Duration(milliseconds: 500));
+      _log('auto-next: cleanup delay done; pushing next episode');
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!navigator.mounted) return;
-        navigator.push(
-          NoSwipeBackMaterialPageRoute(
-            settings: const RouteSettings(name: 'player'),
-            builder: (_) => PlayerPage(
-              args: PlayerArgs(
-                id: widget.args.id,
-                url: widget.args.url,
-                ordinal: nextEp.number,
-                title: widget.args.title,
-                moduleId: moduleId,
-                preferredStreamTitle: widget.args.preferredStreamTitle,
-                subtitleUrl: subtitleUrl,
-                url480: url480,
-                url720: url720,
-                url1080: url1080,
-                duration: nextEp.durationSeconds,
-                openingStart: nextEp.openingStart,
-                openingEnd: nextEp.openingEnd,
-                endingStart: nextEp.endingStart,
-                endingEnd: nextEp.endingEnd,
-                httpHeaders: headers,
-              ),
-              item: widget.item,
-              sync: widget.sync,
-              animeVoice: widget.animeVoice,
-              startupBannerText: (picked.title.trim().isNotEmpty)
-                  ? 'Now playing: Episode ${nextEp.number} • ${picked.title}'
-                  : 'Now playing: Episode ${nextEp.number}',
-              startFullscreen: wasFs,
-              startWithProxy: widget.startWithProxy,
+      if (!navigator.mounted) return;
+      _log('auto-next: navigator mounted, pushing route');
+      navigator.push(
+        NoSwipeBackMaterialPageRoute(
+          settings: const RouteSettings(name: 'player'),
+          builder: (_) => PlayerPage(
+            args: PlayerArgs(
+              id: widget.args.id,
+              url: widget.args.url,
+              ordinal: nextEp.number,
+              title: widget.args.title,
+              moduleId: moduleId,
+              preferredStreamTitle: widget.args.preferredStreamTitle,
+              subtitleUrl: subtitleUrl,
+              url480: url480,
+              url720: url720,
+              url1080: url1080,
+              duration: nextEp.durationSeconds,
+              openingStart: nextEp.openingStart,
+              openingEnd: nextEp.openingEnd,
+              endingStart: nextEp.endingStart,
+              endingEnd: nextEp.endingEnd,
+              httpHeaders: headers,
             ),
+            item: widget.item,
+            sync: widget.sync,
+            animeVoice: widget.animeVoice,
+            startupBannerText: (picked.title.trim().isNotEmpty)
+                ? 'Now playing: Episode ${nextEp.number} • ${picked.title}'
+                : 'Now playing: Episode ${nextEp.number}',
+            startFullscreen: wasFs,
+            startWithProxy: widget.startWithProxy,
           ),
-        );
-      });
+        ),
+      );
+      _log('auto-next: push completed');
       _log('pushReplacement issued');
     } catch (e, st) {
       _log('failed to open next episode: $e\n$st');
