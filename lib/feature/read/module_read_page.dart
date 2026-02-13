@@ -1,11 +1,14 @@
 import 'package:animeshin/feature/collection/collection_models.dart';
+import 'package:animeshin/feature/collection/collection_entries_provider.dart';
 import 'package:animeshin/feature/read/manga_reader_page.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
 import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class ModuleReadPage extends StatefulWidget {
+class ModuleReadPage extends ConsumerStatefulWidget {
   const ModuleReadPage({
     super.key,
     required this.module,
@@ -20,13 +23,25 @@ class ModuleReadPage extends StatefulWidget {
   final Entry? item;
 
   @override
-  State<ModuleReadPage> createState() => _ModuleReadPageState();
+  ConsumerState<ModuleReadPage> createState() => _ModuleReadPageState();
 }
 
-class _ModuleReadPageState extends State<ModuleReadPage> {
+class _ModuleReadPageState extends ConsumerState<ModuleReadPage> {
   final JsModuleExecutor _exec = JsModuleExecutor();
   late Future<List<JsModuleEpisode>> _chaptersFuture;
   List<JsModuleEpisode>? _chaptersCache;
+
+  Entry? _watchEntry() {
+    final base = widget.item;
+    if (base == null) return null;
+    final viewerId = ref.watch(viewerIdProvider);
+    if (viewerId == null || viewerId == 0) return base;
+    final tag = (userId: viewerId, ofAnime: false);
+    return ref.watch(
+          collectionEntryProvider((tag: tag, mediaId: base.mediaId)),
+        ) ??
+        base;
+  }
 
   static String _normalizeChapterTitle(String raw, int number) {
     final t = raw.trim();
@@ -152,7 +167,8 @@ class _ModuleReadPageState extends State<ModuleReadPage> {
             return const Center(child: Text('No chapters found'));
           }
 
-          final progress = widget.item?.progress ?? 0;
+            final entry = _watchEntry();
+            final progress = entry?.progress ?? 0;
           final continueIndex = _findContinueIndex(chapters, progress);
           final continueChapter = continueIndex != null
               ? chapters[continueIndex]
@@ -183,7 +199,7 @@ class _ModuleReadPageState extends State<ModuleReadPage> {
                             chapterTitle: subtitle,
                             chapterHref: ch.href,
                             chapterOrdinal: ch.number,
-                            entry: widget.item,
+                            entry: entry,
                             chapterList: chapters,
                             chapterIndex: i,
                           ),
@@ -210,7 +226,7 @@ class _ModuleReadPageState extends State<ModuleReadPage> {
                             ),
                             chapterHref: continueChapter.href,
                             chapterOrdinal: continueChapter.number,
-                            entry: widget.item,
+                            entry: entry,
                             chapterList: chapters,
                             chapterIndex: continueIndex,
                           ),

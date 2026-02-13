@@ -4,8 +4,7 @@ import 'package:ionicons/ionicons.dart';
 
 import 'package:animeshin/extension/date_time_extension.dart';
 import 'package:animeshin/extension/snack_bar_extension.dart';
-import 'package:animeshin/feature/collection/collection_models.dart';
-import 'package:animeshin/feature/collection/collection_provider.dart';
+import 'package:animeshin/feature/collection/collection_entries_provider.dart';
 import 'package:animeshin/feature/collection/module_search_page.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -44,6 +43,14 @@ class MediaHeader extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final textRailItems = <String, bool>{};
     final menuAnchorKey = GlobalKey();
+    final viewerId = ref.watch(viewerIdProvider);
+    final liveEntry = (media != null && viewerId != null && viewerId != 0)
+        ? ref.watch(
+            collectionEntryProvider(
+              (tag: (userId: viewerId, ofAnime: media!.info.isAnime), mediaId: id),
+            ),
+          )
+        : null;
 
     if (media != null) {
       final info = media!.info;
@@ -68,7 +75,7 @@ class MediaHeader extends ConsumerWidget {
       }
 
       if (media!.entryEdit.listStatus != null) {
-        final progress = media!.entryEdit.progress;
+        final progress = liveEntry?.progress ?? media!.entryEdit.progress;
         if (info.nextEpisode != null && info.nextEpisode! - 1 > progress) {
           textRailItems['${info.nextEpisode! - 1 - progress} ep behind'] = true;
         }
@@ -136,23 +143,7 @@ class MediaHeader extends ConsumerWidget {
                     if (s.trim().isNotEmpty) qv('SY', s.trim()),
                 ];
 
-                Entry? entry;
-                final viewerId = ref.read(viewerIdProvider);
-                if (viewerId != null && viewerId != 0) {
-                  final tag = (userId: viewerId, ofAnime: info.isAnime);
-                    final collection =
-                      ref.read(collectionProvider(tag)).asData?.value;
-                  if (collection != null) {
-                    final all = switch (collection) {
-                      FullCollection c => c.lists.expand((l) => l.entries),
-                      _ => collection.list.entries,
-                    };
-                    entry = all.cast<Entry?>().firstWhere(
-                          (e) => e?.mediaId == info.id,
-                          orElse: () => null,
-                        );
-                  }
-                }
+                final entry = liveEntry;
 
                 if (!context.mounted) return;
                 Navigator.of(context).push(

@@ -257,7 +257,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   /// Persist progress to AniList via collection provider.
-  /// Do NOT permanently mutate widget.item; provider will publish fresh Entry.
+  /// Optimistically updates the current entry and rolls back on error.
   Future<String?> _persistAniListProgress(int newProgress,
       {bool setAsCurrent = false}) async {
     if (widget.item == null || !widget.sync) return null;
@@ -274,10 +274,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     tmp.progress = next;
 
     final err = await notifier.saveEntryProgress(tmp, setAsCurrent);
+    if (err != null) {
+      tmp.progress = prev;
+      return err;
+    }
 
-    tmp.progress = prev;
-    if (err == null) _knownProgress = next;
-    return err;
+    _knownProgress = next;
+    return null;
   }
 
   Future<void> _maybeAutoIncrementProgress(Duration pos) async {

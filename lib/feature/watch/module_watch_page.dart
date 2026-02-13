@@ -8,6 +8,8 @@ import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/feature/settings/settings_provider.dart';
 import 'package:animeshin/feature/settings/settings_model.dart';
 import 'package:animeshin/widget/cached_image.dart';
+import 'package:animeshin/feature/collection/collection_entries_provider.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,6 +49,30 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   String? _lastFetchOrigin;
   String? _fallbackSearchTitle;
   int? _anilistMediaId;
+
+  Entry? _watchEntry() {
+    final base = widget.item;
+    if (base == null) return null;
+    final viewerId = ref.watch(viewerIdProvider);
+    if (viewerId == null || viewerId == 0) return base;
+    final tag = (userId: viewerId, ofAnime: true);
+    return ref.watch(
+          collectionEntryProvider((tag: tag, mediaId: base.mediaId)),
+        ) ??
+        base;
+  }
+
+  Entry? _readEntry() {
+    final base = widget.item;
+    if (base == null) return null;
+    final viewerId = ref.read(viewerIdProvider);
+    if (viewerId == null || viewerId == 0) return base;
+    final tag = (userId: viewerId, ofAnime: true);
+    return ref.read(
+          collectionEntryProvider((tag: tag, mediaId: base.mediaId)),
+        ) ??
+        base;
+  }
 
   static int? _parseEpisodeNumberFromTitle(String title) {
     final t = title.trim();
@@ -855,6 +881,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   }
 
   Future<void> _openEpisode(JsModuleEpisode ep) async {
+    final entry = _readEntry();
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1059,8 +1086,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
             endingEnd: ep.endingEnd,
             httpHeaders: headers,
           ),
-          item: widget.item,
-          sync: widget.item != null,
+          item: entry,
+          sync: entry != null,
           animeVoice: AnimeVoice.modules,
           startupBannerText: bannerTitle,
           startWithProxy: false,
@@ -1075,7 +1102,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final continued = widget.item?.progress ?? 0;
+    final entry = _watchEntry();
+    final continued = entry?.progress ?? 0;
     final eps = _episodesCache;
     final moduleReferer = _moduleImageReferer(widget.module);
     final lastFetchOrigin = _lastFetchOrigin;

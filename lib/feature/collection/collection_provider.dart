@@ -327,6 +327,10 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
     Entry oldEntry,
     bool setAsCurrent,
   ) async {
+    final previousProgress = _optimisticUpdateProgress(
+      oldEntry.mediaId,
+      oldEntry.progress,
+    );
     try {
       await ref.read(repositoryProvider).request(
         GqlMutation.updateProgress,
@@ -345,8 +349,67 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
 
       return null;
     } catch (e) {
+      _revertOptimisticProgress(oldEntry.mediaId, previousProgress);
       return e.toString();
     }
+  }
+
+  int? _optimisticUpdateProgress(int mediaId, int newProgress) {
+    int? previous;
+    _updateState((collection) {
+      if (collection is FullCollection) {
+        for (final list in collection.lists) {
+          final entry = list.entries.firstWhereOrNull(
+            (e) => e.mediaId == mediaId,
+          );
+          if (entry != null) {
+            previous = entry.progress;
+            entry.progress = newProgress;
+            return collection;
+          }
+        }
+      } else if (collection is PreviewCollection) {
+        final entry = collection.list.entries.firstWhereOrNull(
+          (e) => e.mediaId == mediaId,
+        );
+        if (entry != null) {
+          previous = entry.progress;
+          entry.progress = newProgress;
+          return collection;
+        }
+      }
+
+      return collection;
+    });
+
+    return previous;
+  }
+
+  void _revertOptimisticProgress(int mediaId, int? previousProgress) {
+    if (previousProgress == null) return;
+    _updateState((collection) {
+      if (collection is FullCollection) {
+        for (final list in collection.lists) {
+          final entry = list.entries.firstWhereOrNull(
+            (e) => e.mediaId == mediaId,
+          );
+          if (entry != null) {
+            entry.progress = previousProgress!;
+            return collection;
+          }
+        }
+      } else if (collection is PreviewCollection) {
+        final entry = collection.list.entries.firstWhereOrNull(
+          (e) => e.mediaId == mediaId,
+        );
+        if (entry != null) {
+          entry.progress = previousProgress!;
+          return collection;
+        }
+      }
+
+      return collection;
+    });
   }
 
   FullCollection _saveEntryInFullCollection(

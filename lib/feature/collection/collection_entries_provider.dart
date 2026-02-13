@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:animeshin/extension/iterable_extension.dart';
 import 'package:animeshin/feature/collection/collection_filter_model.dart';
 import 'package:animeshin/feature/collection/collection_filter_provider.dart';
 import 'package:animeshin/feature/collection/collection_models.dart';
@@ -30,6 +31,35 @@ final collectionEntriesProvider =
     return _filter(entries, mediaFilter, search, tags);
   },
 );
+
+final collectionEntryProvider =
+    Provider.autoDispose.family<Entry?, ({CollectionTag tag, int mediaId})>(
+  (ref, args) {
+    final collection = ref
+        .watch(collectionProvider(args.tag))
+        .unwrapPrevious()
+        .asData
+        ?.value;
+    if (collection == null) return null;
+    return _findEntryInCollection(collection, args.mediaId);
+  },
+);
+
+Entry? _findEntryInCollection(Collection collection, int mediaId) {
+  if (collection is FullCollection) {
+    for (final list in collection.lists) {
+      final entry = list.entries.firstWhereOrNull(
+        (e) => e.mediaId == mediaId,
+      );
+      if (entry != null) return entry;
+    }
+    return null;
+  }
+
+  return collection.list.entries.firstWhereOrNull(
+    (e) => e.mediaId == mediaId,
+  );
+}
 
 List<Entry> _filter(
   List<Entry> allEntries,
