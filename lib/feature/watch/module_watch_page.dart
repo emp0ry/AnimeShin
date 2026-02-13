@@ -1201,6 +1201,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       floatingActionButton: continueEp == null
           ? null
           : FloatingActionButton.extended(
+              heroTag: null,
               onPressed: () {
                 final list = _episodesCache;
                 if (list == null) return;

@@ -71,6 +71,7 @@ class _ThreadViewState extends ConsumerState<ThreadView> {
         key: const Key('Reply'),
         scrollCtrl: _scrollCtrl,
         child: FloatingActionButton(
+          heroTag: null,
           tooltip: 'New Reply',
           child: const Icon(Icons.edit_outlined),
           onPressed: () => showSheet(

@@ -107,6 +107,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   bool _fsToggleInFlight = false;
   DateTime? _lastFsToggleAt;
   static const Duration _fsToggleCooldown = Duration(milliseconds: 400);
+  bool _nativeFsInFlight = false;
+  bool _nativeFsActive = false;
 
   // Navigation / lifecycle guards
   bool _navigatingAway = false;
@@ -450,8 +452,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   void _removeCursorOverlayIfAny() {
-    _cursorOverlayEntry?.remove();
+    final entry = _cursorOverlayEntry;
     _cursorOverlayEntry = null;
+    if (entry == null) return;
+    try {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    } catch (e) {
+      _log('cursor overlay remove failed: $e');
+    }
   }
 
   void _bumpUiVisibility() {
@@ -493,8 +503,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         if (isFullscreen(c)) {
           await exitFullscreen(c);
           _wasFullscreen = false;
-          await _exitNativeFullscreen();
-          _removeCursorOverlayIfAny();
           _log('hotkey: escape fullscreen');
         }
         return;
@@ -503,15 +511,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       if (!isFullscreen(c)) {
         await enterFullscreen(c);
         _wasFullscreen = true;
-        await _enterNativeFullscreen();
-        _insertCursorOverlayIfNeeded();
-        _cursorHideController.kick();
         _log('hotkey: enter fullscreen');
       } else {
         await exitFullscreen(c);
         _wasFullscreen = false;
-        await _exitNativeFullscreen();
-        _removeCursorOverlayIfAny();
         _log('hotkey: exit fullscreen');
       }
     } catch (_) {
@@ -560,30 +563,44 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Future<void> _enterNativeFullscreen() async {
     try {
+      if (_nativeFsInFlight) return;
+      _nativeFsInFlight = true;
       if (_isDesktop) {
         final isFs = await windowManager.isFullScreen();
         if (!isFs) {
           await windowManager.setFullScreen(true);
         }
+        _nativeFsActive = true;
       } else if (!_isIOS) {
         // Do not touch SystemChrome on iOS; native VC handles overlays there.
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        _nativeFsActive = true;
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _nativeFsInFlight = false;
+    }
   }
 
   Future<void> _exitNativeFullscreen() async {
     try {
+      if (_nativeFsInFlight) return;
+      _nativeFsInFlight = true;
       if (_isDesktop) {
         final isFs = await windowManager.isFullScreen();
         if (isFs) {
           await windowManager.setFullScreen(false);
         }
+        _nativeFsActive = false;
       } else if (!_isIOS) {
         // Do not touch SystemChrome on iOS; native VC handles overlays there.
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        _nativeFsActive = false;
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _nativeFsInFlight = false;
+    }
   }
 
   // --- mpv property helper (NativePlayer only) --------------------------------
@@ -821,11 +838,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // unawaited(_setMpv('interpolation', 'yes'));
     // unawaited(_setMpv('tscale', 'oversample'));
 
-    // --- Hardware decoding: prefer software on Windows to avoid driver aborts ---
+    // --- Hardware decoding: use a stable Windows path while keeping HW accel enabled ---
     if (_isWindows) {
-      unawaited(_setMpv('hwdec', 'no')); // stability over performance
+      unawaited(_setMpv('hwdec', 'd3d11va-copy'));
+      unawaited(_setMpv('hwdec-extra-frames', '8'));
     } else {
-      unawaited(_setMpv('hwdec', 'auto-safe')); // avoid brittle decoders
+      unawaited(_setMpv('hwdec', 'auto-safe'));
     }
 
     // --- Stabilize timestamp probing for HLS/TS (helps missing PTS) ---
@@ -835,18 +853,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     unawaited(_setMpv('demuxer-lavf-o', 'fflags=+genpts+discardcorrupt'));
 
     // --- HTTP/HLS transport safety (you already set some; keep them consolidated) ---
-    unawaited(_setMpv(
-      'stream-lavf-o',
-      [
-        // Keep persistent connections to reduce mid-segment stalls
-        'http_persistent=1',
-        'reconnect=1',
-        'reconnect_streamed=1',
-        'reconnect_on_http_error=4xx,5xx',
-        // Some CDNs play nicer when we avoid multi-range; mpv handles ranges anyway
-        // 'multiple_requests=0', // optional; only if you see glide-skips
-      ].join(':'),
-    ));
+    final streamLavfOptions = <String>[
+      // Keep persistent connections to reduce mid-segment stalls.
+      'http_persistent=1',
+      'reconnect=1',
+      'reconnect_streamed=1',
+      'reconnect_on_http_error=4xx,5xx',
+    ];
+    unawaited(_setMpv('stream-lavf-o', streamLavfOptions.join(':')));
 
     // --- Optional: tame decoder threading if you see sporadic drops on low cores ---
     // unawaited(_setMpv('vd-lavc-threads', '2'));
@@ -1171,7 +1185,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
 
     _detachListeners();
-    unawaited(_saveProgress());
+    // Avoid clearing progress on dispose; crashes can look like completion.
+    unawaited(_saveProgress(allowClear: false));
 
     // Stop proxy (safe to call even if not running).
     unawaited(_proxy.stop());
@@ -1431,7 +1446,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     return Duration(seconds: saved);
   }
 
-  Future<void> _saveProgress({bool clearIfCompleted = false}) async {
+  Future<void> _saveProgress({
+    bool clearIfCompleted = false,
+    bool allowClear = true,
+  }) async {
     if (_navigatingAway) return;
 
     // Do not persist while a temporary "heal" block is active.
@@ -1446,6 +1464,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     final isCompleted = pos.inMilliseconds >= (dur.inMilliseconds * 0.98);
     if (clearIfCompleted || isCompleted) {
+      if (!allowClear) return;
       if (isCompleted) _log('save: episode completed, clearing position for ordinal=${widget.args.ordinal}');
       await _playback.clearEpisode(
           widget.animeVoice, widget.args.id, widget.args.ordinal);
@@ -1945,6 +1964,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Future<void> _openNextEpisode() async {
     if (_navigatingAway) return;
+    _navigatingAway = true;
+    var navigated = false;
     _hideCursorInstant();
     _autoSkipBlockedUntil = null;
     _log('_openNextEpisode() called');
@@ -1980,7 +2001,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
 
       // Resolve next episode through the JS module.
-      final episodes = await _jsExec.extractEpisodes(moduleId, widget.args.url);
+        final episodes = await _jsExec
+          .extractEpisodes(moduleId, widget.args.url)
+          .timeout(PlayerTuning.autoNextResolveTimeout);
       if (episodes.isEmpty) {
         _log('modules: extractEpisodes returned empty');
         _showBanner('Next episode not available');
@@ -2007,7 +2030,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       final JsModuleEpisode nextEp = next;
 
-      final selection = await _jsExec.extractStreams(moduleId, nextEp.href);
+        final selection = await _jsExec
+          .extractStreams(moduleId, nextEp.href)
+          .timeout(PlayerTuning.autoNextResolveTimeout);
       if (selection.streams.isEmpty) {
         _log('modules: extractStreams returned empty');
         _showBanner('Next episode stream not available');
@@ -2061,7 +2086,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       if (!mounted) return;
 
-      _navigatingAway = true;
+      navigated = true;
       _detachListeners();
 
       _autoIncDoneForThisEp = false;
@@ -2120,8 +2145,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _log('pushReplacement issued');
     } catch (e, st) {
       _log('failed to open next episode: $e\n$st');
-      _navigatingAway = false;
-      _showBanner('Failed to open next episode');
+      final timedOut = e is TimeoutException;
+      _showBanner(timedOut
+          ? 'Next episode timed out'
+          : 'Failed to open next episode');
+    } finally {
+      if (!navigated) {
+        _navigatingAway = false;
+      }
     }
   }
 
@@ -2407,10 +2438,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                       try {
                         await enterFullscreen(c); // lib fullscreen
                         _wasFullscreen = true;
-                        // Wait for previous page's texture cleanup before native fullscreen
-                        await Future.delayed(const Duration(milliseconds: 1000));
+                        // Wait briefly for texture cleanup before native fullscreen
+                        await Future.delayed(PlayerTuning.nativeFullscreenDelay);
                         if (!mounted || _navigatingAway) return;
-                        await _enterNativeFullscreen();
+                        if (!_nativeFsActive) {
+                          await _enterNativeFullscreen();
+                        }
                         _insertCursorOverlayIfNeeded();
                         _cursorHideController.kick();
                         // await _enterNativeFullscreen(); // request native overlays (non-iOS)
@@ -2427,11 +2460,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               _wasFullscreen = true;
               if (!mounted || _navigatingAway) return;
               
-              // Delay native fullscreen to prevent race with previous page's texture cleanup
-              await Future.delayed(const Duration(milliseconds: 1000));
+              // Delay native fullscreen to prevent race with texture cleanup
+              await Future.delayed(PlayerTuning.nativeFullscreenDelay);
               if (!mounted || _navigatingAway) return;
-              
-              await _enterNativeFullscreen();
+              if (!_nativeFsActive) {
+                await _enterNativeFullscreen();
+              }
 
               // Insert cursor overlay on desktop while fullscreen is active.
               _insertCursorOverlayIfNeeded();
@@ -2444,7 +2478,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               _log('onExitFullscreen() fired (lib)');
               _wasFullscreen = false;
               if (!mounted || _navigatingAway) return;
-              await _exitNativeFullscreen();
+              if (_nativeFsActive) {
+                await _exitNativeFullscreen();
+              }
 
               // Remove cursor overlay when leaving fullscreen.
               _removeCursorOverlayIfAny();

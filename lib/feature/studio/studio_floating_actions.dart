@@ -17,7 +17,7 @@ class StudioFilterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton(
       tooltip: 'Filter',
-      heroTag: 'filter',
+      heroTag: null,
       child: const Icon(Ionicons.funnel_outline),
       onPressed: () {
         var filter = ref.read(studioFilterProvider(id));

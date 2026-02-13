@@ -394,7 +394,7 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
             (e) => e.mediaId == mediaId,
           );
           if (entry != null) {
-            entry.progress = previousProgress!;
+            entry.progress = previousProgress;
             return collection;
           }
         }
@@ -403,7 +403,7 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
           (e) => e.mediaId == mediaId,
         );
         if (entry != null) {
-          entry.progress = previousProgress!;
+          entry.progress = previousProgress;
           return collection;
         }
       }

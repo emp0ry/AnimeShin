@@ -64,6 +64,12 @@ class PlayerTuning {
   static const Duration autoSkipBlockAfterSkip = Duration(seconds: 2);
   static const Duration autoSkipBlockAfterUndo = Duration(seconds: 10);
 
+  // Fullscreen/native timing
+  static const Duration nativeFullscreenDelay = Duration(milliseconds: 150);
+
+  // Auto-next module resolution timeout
+  static const Duration autoNextResolveTimeout = Duration(seconds: 15);
+
   // Wrap-to-end heal tuning
   static const Duration wrapNearStart = Duration(seconds: 4);
   static const Duration wrapNearEnd = Duration(seconds: 7);
