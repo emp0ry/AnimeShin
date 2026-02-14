@@ -1,4 +1,5 @@
 import 'package:animeshin/feature/player/player_page.dart';
+import 'package:animeshin/feature/player/local_hls_proxy.dart';
 import 'package:animeshin/feature/watch/watch_types.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
 import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
@@ -13,6 +14,7 @@ import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import 'dart:ui';
 import 'dart:convert';
 
@@ -880,6 +882,18 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     setState(() => _preferredServerTitle = picked);
   }
 
+  /// Warm up the local HLS proxy to avoid coldstart delays on first play.
+  /// This is a best-effort operation; any errors are silently ignored.
+  Future<void> _maybeWarmupProxy() async {
+    try {
+      final proxy = LocalHlsProxy();
+      await proxy.start();
+    } catch (e) {
+      // Silently ignore - proxy will start normally in player if needed
+      debugPrint('[ModuleWatch] Proxy warmup failed: $e');
+    }
+  }
+
   Future<void> _openEpisode(JsModuleEpisode ep) async {
     final entry = _readEntry();
     if (!mounted) return;
@@ -1063,6 +1077,10 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     }
 
     if (!mounted) return;
+
+    // Pre-warm the proxy to avoid coldstart delays on first play.
+    // This is best-effort; any errors are silently ignored.
+    unawaited(_maybeWarmupProxy());
 
     await Navigator.of(context).push(
       NoSwipeBackMaterialPageRoute(

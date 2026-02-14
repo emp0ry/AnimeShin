@@ -394,27 +394,49 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Wait until the player reports a valid duration (no position fallback).
     final settle = Completer<void>();
     late final StreamSubscription subDur;
+    bool iosSettleTimeoutFired = false;
 
     // Safety timeout — don't hang forever.
     final timeout =
-        Future<void>.delayed(const Duration(seconds: 10), () {});
+        Future<void>.delayed(const Duration(seconds: 10), () {
+          if (!settle.isCompleted) {
+            iosSettleTimeoutFired = true;
+            settle.complete();
+          }
+        });
 
-    subDur = _player.stream.duration.listen((d) {
-      if (!_alive) {
-        if (!settle.isCompleted) settle.complete();
-        subDur.cancel();
-        return;
-      }
-      if (d > const Duration(seconds: 3)) {
-        if (!settle.isCompleted) {
-          _log('iOS restore settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
-          settle.complete();
+    _log('iOS restore: waiting for duration settle...');
+    subDur = _player.stream.duration.listen(
+      (d) {
+        if (!_alive) {
+          if (!settle.isCompleted) settle.complete();
+          subDur.cancel();
+          return;
         }
-      }
-    });
+        _log('iOS restore: duration update ${d.inSeconds}s');
+        if (d > const Duration(seconds: 3)) {
+          if (!settle.isCompleted) {
+            _log('iOS restore settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
+            settle.complete();
+          }
+        }
+      },
+      onError: (error) {
+        _log('ERROR in iOS duration stream: $error');
+        if (!settle.isCompleted) settle.complete();
+      },
+      onDone: () {
+        _log('iOS duration stream closed prematurely');
+        if (!settle.isCompleted) settle.complete();
+      },
+    );
 
     await Future.any([settle.future, timeout]);
     await subDur.cancel();
+    
+    if (iosSettleTimeoutFired) {
+      _log('iOS settle TIMEOUT (10s) - no valid duration reported');
+    }
 
     if (!_alive) return;
 
@@ -1444,6 +1466,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // ---------- Persistence ----------
 
   Future<Duration> _restoreSavedPosition() async {
+    if (widget.args.startFromZero) {
+      _log('restore: startFromZero=true, starting fresh');
+      return Duration.zero;
+    }
     final entry = await _playback.readEntry(
       widget.animeVoice,
       widget.args.id,
@@ -1525,8 +1551,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     _plannedSeek = true;
     try {
+      _log('seek: starting seek to ${tgt.inSeconds}s reason=${reason ?? "n/a"}');
+      final stopwatch = Stopwatch()..start();
       await _player.seek(tgt);
-      _log('seek(planned) to=$tgt reason=${reason ?? "n/a"}');
+      _log('seek: completed in ${stopwatch.elapsedMilliseconds}ms');
     } catch (e) {
       // Avoid crashing if seek races with dispose
       _log('seek skipped (not alive): $e');
@@ -1564,13 +1592,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 '(KHTML, like Gecko) Chrome/126.0 Safari/537.36',
         ...?widget.args.httpHeaders,
       };
+      _log('Opening URL: $url');
+      final openStopwatch = Stopwatch()..start();
+      
+      // Add a timeout to the open call itself (normally quick, but detect hanging)
       await _player.open(
         Media(
           url,
           httpHeaders: headers,
         ),
         play: play,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          _log('WARNING: player.open() timed out after 10 seconds for URL: $url');
+          throw TimeoutException('player.open() took too long');
+        },
       );
+      _log('Opened URL in ${openStopwatch.elapsedMilliseconds}ms');
     } catch (e) {
       _log('open failed (not alive?): $e');
       return;
@@ -1620,26 +1659,48 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Wait for HLS to report a valid duration (no fallback on position ticks).
     final settle = Completer<void>();
     late final StreamSubscription subDur;
+    bool settleTimeoutFired = false;
 
     final timeout =
-        Future<void>.delayed(const Duration(seconds: 15), () {});
+        Future<void>.delayed(const Duration(seconds: 15), () {
+          if (!settle.isCompleted) {
+            settleTimeoutFired = true;
+            settle.complete();
+          }
+        });
 
-    subDur = _player.stream.duration.listen((d) {
-      if (!_alive) {
-        if (!settle.isCompleted) settle.complete();
-        subDur.cancel();
-        return;
-      }
-      if (d > const Duration(seconds: 3)) {
-        if (!settle.isCompleted) {
-          _log('HLS settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
-          settle.complete();
+    _log('Waiting for HLS to settle (max 15s)...');
+    subDur = _player.stream.duration.listen(
+      (d) {
+        if (!_alive) {
+          if (!settle.isCompleted) settle.complete();
+          subDur.cancel();
+          return;
         }
-      }
-    });
+        _log('HLS duration update: ${d.inSeconds}s');
+        if (d > const Duration(seconds: 3)) {
+          if (!settle.isCompleted) {
+            _log('HLS settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
+            settle.complete();
+          }
+        }
+      },
+      onError: (error) {
+        _log('ERROR in HLS duration stream: $error');
+        if (!settle.isCompleted) settle.complete();
+      },
+      onDone: () {
+        _log('HLS duration stream closed prematurely');
+        if (!settle.isCompleted) settle.complete();
+      },
+    );
 
     await Future.any([settle.future, timeout]);
     await subDur.cancel();
+    
+    if (settleTimeoutFired) {
+      _log('HLS settle TIMEOUT (15s) - no valid duration reported, continuing anyway');
+    }
 
     if (!_alive) return;
 
@@ -2216,6 +2277,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               endingStart: nextEp.endingStart,
               endingEnd: nextEp.endingEnd,
               httpHeaders: headers,
+              startFromZero: true,
             ),
             item: widget.item,
             sync: widget.sync,

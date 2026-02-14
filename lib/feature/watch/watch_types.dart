@@ -74,6 +74,7 @@ class PlayerArgs {
     this.endingStart,
     this.endingEnd,
     this.httpHeaders,
+    this.startFromZero = false,
   });
 
   final int id;
@@ -105,6 +106,9 @@ class PlayerArgs {
 
   /// Optional per-stream headers (e.g., Referer) required by some modules.
   final Map<String, String>? httpHeaders;
+
+  /// Force start at 0:00 (ignore saved resume position).
+  final bool startFromZero;
 }
 
 // Only Sora/JS modules are supported now.
