@@ -13,6 +13,7 @@ import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/util/background_handler.dart';
+import 'package:animeshin/util/module_loader/remote_modules_store.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
@@ -20,6 +21,16 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:package_info_plus/package_info_plus.dart';
 
 final _notificationCtrl = StreamController<String>.broadcast();
+
+Future<void> _updateRemoteModulesOnStartup() async {
+  try {
+    await RemoteModulesStore().downloadAllEnabledRemote();
+  } catch (e) {
+    if (kDebugMode) {
+      debugPrint('module auto-update failed: $e');
+    }
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +85,7 @@ Future<void> main() async {
   final container = ProviderContainer();
   await container.read(persistenceProvider.notifier).init();
   BackgroundHandler.init(_notificationCtrl);
+  unawaited(_updateRemoteModulesOnStartup());
 
   runApp(UncontrolledProviderScope(container: container, child: const _App()));
 

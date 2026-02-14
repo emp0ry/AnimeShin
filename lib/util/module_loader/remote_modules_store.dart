@@ -580,7 +580,11 @@ class RemoteModulesStore {
 		final entries = await list();
 		for (final e in entries) {
 			if (!e.enabled) continue;
-			await addOrUpdateFromUrl(e.jsonUrl, enabled: true);
+			try {
+				await addOrUpdateFromUrl(e.jsonUrl, enabled: true);
+			} catch (_) {
+				// Best-effort: continue updating other modules.
+			}
 		}
 	}
 }

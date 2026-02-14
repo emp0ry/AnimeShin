@@ -225,6 +225,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   bool _autoIncDoneForThisEp = false;
   int? _autoIncGuardForOrdinal;
 
+  // Proxy fallback for truncated HLS manifests (e.g., only first segment loads).
+  bool _proxyFallbackAttempted = false;
+  bool _openedViaProxy = false;
+
   final Duration _tailGuardMinutes = Duration(minutes: 3);
 
   // Clamp any absolute seek target to [0, duration] safely.
@@ -239,6 +243,28 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (target.isNegative) return Duration.zero;
     if (target > d) return d;
     return target;
+  }
+
+  bool _looksLikeHlsUrl(String url) {
+    final v = url.trim().toLowerCase();
+    return v.contains('m3u8');
+  }
+
+  int? _durationHintSeconds() {
+    final hints = <int?>[
+      widget.args.duration,
+      widget.args.endingEnd,
+      widget.args.endingStart,
+    ].whereType<int>();
+    if (hints.isEmpty) return null;
+    return hints.reduce((a, b) => a > b ? a : b);
+  }
+
+  bool _shouldFallbackToProxy(Duration duration) {
+    if (duration.inSeconds <= 0) return false;
+    final hint = _durationHintSeconds();
+    if (hint == null || hint < 60) return false;
+    return duration.inSeconds <= 15;
   }
 
   int _progressBaselineForOrdinal(int ordinal, int? raw) {
@@ -1265,11 +1291,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         ? _proxy.playlistUrl(Uri.parse(_chosenUrl!)).toString()
         : _chosenUrl!;
 
+    _proxyFallbackAttempted = false;
+    _openedViaProxy = _proxyReady && widget.startWithProxy;
+
     await _openAt(
       toOpen,
       // We still perform a normal seek — progress bar remains absolute.
       position: await _restoreSavedPosition(),
       play: true,
+      fallbackProxyUrl: _chosenUrl,
+      openedViaProxy: _openedViaProxy,
     );
 
     // Ensure subtitle visibility matches prefs after the first open.
@@ -1512,8 +1543,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     String url, {
     required Duration position,
     required bool play,
+    String? fallbackProxyUrl,
+    bool openedViaProxy = false,
   }) async {
     if (!_alive) return;
+
+    _openedViaProxy = openedViaProxy;
 
     // Reset auto-skip flags for a fresh media open (quality change / next episode).
     _openingSkipped = false;
@@ -1607,6 +1642,40 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await subDur.cancel();
 
     if (!_alive) return;
+
+    final settledDuration = _player.state.duration;
+    if (!_openedViaProxy &&
+        !_proxyFallbackAttempted &&
+        fallbackProxyUrl != null &&
+        _looksLikeHlsUrl(fallbackProxyUrl) &&
+        _shouldFallbackToProxy(settledDuration)) {
+      _proxyFallbackAttempted = true;
+      _log(
+          'openAt: duration=${settledDuration.inSeconds}s seems truncated; reopening via proxy');
+
+      // Ensure proxy is running before retry.
+      if (!_proxyReady) {
+        try {
+          await _proxy.start();
+          _proxyReady = true;
+        } catch (e) {
+          _log('proxy start failed in openAt fallback: $e');
+        }
+      }
+
+      if (_proxyReady) {
+        final proxied =
+            _proxy.playlistUrl(Uri.parse(fallbackProxyUrl)).toString();
+        await _openAt(
+          proxied,
+          position: position,
+          play: play,
+          fallbackProxyUrl: null,
+          openedViaProxy: true,
+        );
+        return;
+      }
+    }
 
     // Reset auto-skip flags for a fresh media open (quality change / next episode).
     _openingSkipped = false;
@@ -1739,11 +1808,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           ? _proxy.playlistUrl(Uri.parse(baseUrl)).toString()
           : baseUrl;
 
+        _proxyFallbackAttempted = false;
+        _openedViaProxy = _proxyReady && widget.startWithProxy;
+
       // Only add fudge for mid-video resumes; keep small positions as-is
       final resume = pos.inSeconds > 5
           ? pos + PlayerTuning.openAtResumeFudge
           : pos;
-      await _openAt(toOpen, position: resume, play: wasPlaying);
+      await _openAt(
+        toOpen,
+        position: resume,
+        play: wasPlaying,
+        fallbackProxyUrl: baseUrl,
+        openedViaProxy: _openedViaProxy,
+      );
 
       if (_isDesktop) {
         await _setVolumeSafe(_desktopVolume);
@@ -1820,11 +1898,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         ? _proxy.playlistUrl(Uri.parse(url)).toString()
         : url;
 
+    _proxyFallbackAttempted = false;
+    _openedViaProxy = _proxyReady && widget.startWithProxy;
+
     // Only add fudge for mid-video resumes; keep small positions as-is
     final resume = pos.inSeconds > 5
         ? pos + PlayerTuning.openAtResumeFudge
         : pos;
-    await _openAt(toOpen, position: resume, play: wasPlaying);
+    await _openAt(
+      toOpen,
+      position: resume,
+      play: wasPlaying,
+      fallbackProxyUrl: url,
+      openedViaProxy: _openedViaProxy,
+    );
 
     // Re-apply persisted desktop volume after reopen.
     if (_isDesktop) {

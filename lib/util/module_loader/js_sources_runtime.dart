@@ -16,6 +16,28 @@ class JsSourcesRuntime {
 
   final HttpClient _httpClient = HttpClient()..autoUncompress = true;
 
+  static String _normalizeId(String raw) {
+    final t = raw.trim().toLowerCase();
+    final buf = StringBuffer();
+    var prevDash = false;
+    for (final code in t.codeUnits) {
+      final isAz = code >= 97 && code <= 122;
+      final is09 = code >= 48 && code <= 57;
+      if (isAz || is09) {
+        buf.writeCharCode(code);
+        prevDash = false;
+      } else if (!prevDash) {
+        buf.write('-');
+        prevDash = true;
+      }
+    }
+    var out = buf.toString();
+    out = out.replaceAll(RegExp(r'-+'), '-');
+    out = out.replaceAll(RegExp(r'^-+'), '');
+    out = out.replaceAll(RegExp(r'-+$'), '');
+    return out.isEmpty ? 'remote' : out;
+  }
+
   JavascriptRuntime get _rt {
     final rt = _runtime;
     if (rt == null) {
@@ -185,6 +207,29 @@ class JsSourcesRuntime {
     _rt.evaluate(wrapped, sourceUrl: 'assets://${loaded.descriptor.jsAsset}');
 
     _loadedModules.add(moduleId);
+  }
+
+  Future<void> invalidateModule(String moduleId) async {
+    await ensureInitialized();
+    final norm = _normalizeId(moduleId);
+    _loadedModules.remove(moduleId);
+    _loadedModules.remove(norm);
+    _loader.invalidateModule(moduleId);
+
+    final ids = <String>{moduleId, norm}..removeWhere((e) => e.trim().isEmpty);
+    for (final id in ids) {
+      final escaped = id.replaceAll("'", "\\'");
+      _rt.evaluate("""
+(() => {
+  try {
+    if (globalThis.__modules) delete globalThis.__modules['$escaped'];
+    if (globalThis.__moduleMeta) delete globalThis.__moduleMeta['$escaped'];
+    if (globalThis.__moduleLogs) delete globalThis.__moduleLogs['$escaped'];
+    if (globalThis.__lastFetchByModule) delete globalThis.__lastFetchByModule['$escaped'];
+  } catch (_) {}
+})()
+""");
+    }
   }
 
   Future<String?> callStringArgs(

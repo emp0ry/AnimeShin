@@ -6,6 +6,7 @@ import 'package:animeshin/feature/export/save_and_share.dart';
 import 'package:animeshin/util/module_loader/remote_modules_store.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:animeshin/util/module_loader/sources_module.dart';
+import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/layout/navigation_tool.dart';
@@ -60,7 +61,8 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
 
     setState(() => _busy = true);
     try {
-      await _remote.addOrUpdateFromUrl(url, enabled: true);
+      final desc = await _remote.addOrUpdateFromUrl(url, enabled: true);
+      await JsSourcesRuntime.instance.invalidateModule(desc.id);
       _urlCtrl.clear();
       if (!mounted) return;
       SnackBarExtension.show(context, 'Module added');
@@ -91,6 +93,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
     setState(() => _busy = true);
     try {
       await _remote.remove(id);
+      await JsSourcesRuntime.instance.invalidateModule(id);
       if (!mounted) return;
       SnackBarExtension.show(context, 'Removed');
       await _refresh();
@@ -105,7 +108,8 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   Future<void> _updateRemote(String url) async {
     setState(() => _busy = true);
     try {
-      await _remote.addOrUpdateFromUrl(url, enabled: true);
+      final desc = await _remote.addOrUpdateFromUrl(url, enabled: true);
+      await JsSourcesRuntime.instance.invalidateModule(desc.id);
       if (!mounted) return;
       SnackBarExtension.show(context, 'Updated');
       await _refresh();

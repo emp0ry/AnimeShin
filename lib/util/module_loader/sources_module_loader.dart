@@ -307,4 +307,10 @@ class SourcesModuleLoader {
   void clearCache() => _cache.clear();
 
   void invalidateIndex() => _index = null;
+
+  void invalidateModule(String id) {
+    _cache.remove(id);
+    _cache.remove(_normalizeId(id));
+    invalidateIndex();
+  }
 }
