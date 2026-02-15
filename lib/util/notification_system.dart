@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:animeshin/platform/platform_flags.dart';
 
 class NotificationSystem {
   NotificationSystem._();
@@ -18,6 +19,7 @@ class NotificationSystem {
   static bool _initialized = false;
 
   static Future<void> _ensureInitialized() async {
+    if (!notificationsSupported) return;
     if (_initialized) return;
 
     const darwin = DarwinInitializationSettings(
@@ -46,6 +48,7 @@ class NotificationSystem {
 
   /// Ensure time zone database is ready.
   static Future<void> _ensureTz() async {
+    if (!notificationsSupported) return;
     if (_tzReady) return;
     // Expect that `timezone` package is initialized at app start,
     // but if not, tz.local still works with system local time zone.
@@ -55,6 +58,7 @@ class NotificationSystem {
 
   /// Create Android channel(s) once.
   static Future<void> _ensureAndroidChannels() async {
+    if (!notificationsSupported) return;
     if (_channelsCreated) return;
     if (Platform.isAndroid) {
       final android = _plugin.resolvePlatformSpecificImplementation<
@@ -73,6 +77,7 @@ class NotificationSystem {
 
   /// Ask permissions if needed (iOS/macOS and Android 13+ post-notifications).
   static Future<void> _ensurePermissions() async {
+    if (!notificationsSupported) return;
     if (Platform.isIOS || Platform.isMacOS) {
       if (_askedIosPerms) return;
       final ios = _plugin
@@ -138,6 +143,7 @@ class NotificationSystem {
     int mediaId,
     String imageUrl,
   ) async {
+    if (!notificationsSupported) return;
     if (Platform.isLinux) {
       debugPrint('Skipping scheduled notifications on Linux (unsupported).');
       return;
@@ -192,6 +198,7 @@ class NotificationSystem {
 
   /// Cancels scheduled notification for episode (if any).
   static Future<void> cancelEpisodeNotification(String animeTitle, int episodeNumber) async {
+    if (!notificationsSupported) return;
     await _ensureInitialized();
     await _plugin.cancel(
       id: (animeTitle + episodeNumber.toString()).hashCode,
@@ -200,6 +207,7 @@ class NotificationSystem {
 
   /// Schedules or cancels a notification for a single anime entry.
   static Future<void> scheduleNotificationForEntry(Entry entry) async {
+    if (!notificationsSupported) return;
     try {
       if ((entry.listStatus == ListStatus.current || entry.listStatus == ListStatus.planning) &&
           entry.airingAt != null &&
@@ -221,6 +229,7 @@ class NotificationSystem {
 
   /// Batch schedules notifications for all entries (uses per-entry function).
   static Future<void> scheduleNotificationsForAll(List<Entry> entries) async {
+    if (!notificationsSupported) return;
     for (final entry in entries) {
       await scheduleNotificationForEntry(entry);
     }
@@ -228,6 +237,7 @@ class NotificationSystem {
 
   /// Cancels all scheduled notifications (episodes or others)
   static Future<void> cancelAllScheduledNotifications() async {
+    if (!notificationsSupported) return;
     await _ensureInitialized();
     await _plugin.cancelAll();
   }

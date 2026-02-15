@@ -10,6 +10,7 @@ import 'package:animeshin/util/routes.dart';
 import 'package:animeshin/feature/notification/notifications_model.dart';
 import 'package:animeshin/util/graphql.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:animeshin/platform/platform_flags.dart';
 
 final _notificationPlugin = FlutterLocalNotificationsPlugin();
 
@@ -17,6 +18,7 @@ class BackgroundHandler {
   BackgroundHandler._();
 
   static Future<void> init(StreamController<String> notificationCtrl) async {
+    if (!notificationsSupported) return;
     // Darwin (iOS & macOS) init settings — request alert/badge/sound on first run.
     const darwin = DarwinInitializationSettings(
       requestAlertPermission: true,
@@ -66,6 +68,7 @@ class BackgroundHandler {
 
   /// Requests a notifications permission, if not already granted.
   static Future<void> requestPermissionForNotifications() async {
+    if (!notificationsSupported) return;
     if (Platform.isAndroid) {
       final android = _notificationPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -91,7 +94,10 @@ class BackgroundHandler {
   }
 
   /// Clears device notifications.
-  static void clearNotifications() => _notificationPlugin.cancelAll();
+  static void clearNotifications() {
+    if (!notificationsSupported) return;
+    _notificationPlugin.cancelAll();
+  }
 }
 
 @pragma('vm:entry-point')
@@ -269,6 +275,7 @@ void _fetch() => Workmanager().executeTask((_, __) async {
     });
 
 () _show(SiteNotification notification, String title, String payload) {
+  if (!notificationsSupported) return ();
   _notificationPlugin.show(
     id: notification.id,
     title: title,
