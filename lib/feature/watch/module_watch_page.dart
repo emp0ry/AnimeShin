@@ -1286,11 +1286,16 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       continueEp = next.clamp(1, max);
     }
 
+    final lastSelection = _lastOpenedSelection;
+    final canPickServer = lastSelection != null &&
+        !_modulePrefersVoiceoverPicker &&
+        _serverTitlesFromSelection(lastSelection).length >= 2;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.module.name}: ${widget.title}'),
         actions: [
-          if (_lastOpenedSelection != null && !_modulePrefersVoiceoverPicker)
+          if (canPickServer)
             IconButton(
               tooltip: 'Server',
               onPressed: _openServerPicker,
