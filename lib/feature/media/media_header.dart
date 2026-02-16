@@ -110,8 +110,8 @@ class MediaHeader extends ConsumerWidget {
               message: 'Search',
               child: TextButton.icon(
                 style: TextButton.styleFrom(
-                  backgroundColor: Colors.black.withValues(alpha: 0.25),
-                  foregroundColor: Colors.white,
+                  minimumSize: const Size(100, 42),
+                  backgroundColor: Colors.black.withValues(alpha: 0.15),
                 ),
                 icon: Icon(
                   media!.info.isAnime
