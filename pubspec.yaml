@@ -2,7 +2,7 @@ name: animeshin
 
 version: 1.3.3
 
-description: Unofficial multi-platform AniList application integrated with Sora modules.
+description: Modern unofficial AniList client with tracking, notifications and optional community sources.
 
 repository: https://github.com/emp0ry/animeshin
 

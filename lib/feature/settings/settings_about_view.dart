@@ -49,7 +49,7 @@ class SettingsAboutSubview extends StatelessWidget {
                 ),
               ),
               const Text(
-                'Unofficial multi-platform AniList application integrated with Sora modules engine.',
+                'Modern unofficial AniList client with tracking, notifications and optional community sources.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
