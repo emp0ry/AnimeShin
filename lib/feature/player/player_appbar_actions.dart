@@ -26,7 +26,6 @@ List<Widget> buildPlayerAppBarActions({
   required VoidCallback onToggleSubtitles,
   required VoidCallback onOpenSubtitleStyle,
   required AnimeVoice animeVoice,
-  required Future<void> Function() onSupportVoice,
 }) {
   return <Widget>[
     if (isIOS)

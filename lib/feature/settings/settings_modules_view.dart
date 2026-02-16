@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'package:hive/hive.dart';
 
 import 'package:animeshin/extension/snack_bar_extension.dart';
 import 'package:animeshin/feature/export/save_and_share.dart';
@@ -30,7 +32,10 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   final _loader = SourcesModuleLoader();
 
   bool _busy = false;
-  static const String _exportFileName = 'animeshin_modules.json';
+  static const String _exportFileName = 'animeshin_extensions.json';
+
+  static const String _legalBoxName = 'legal_flags';
+  static const String _extensionsDisclaimerKey = 'extensions_disclaimer_shown_v1';
 
   XTypeGroup _jsonTypeGroup() {
     return const XTypeGroup(
@@ -39,6 +44,52 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
       uniformTypeIdentifiers: ['public.json'],
       mimeTypes: ['application/json'],
     );
+  }
+
+  Future<void> _maybeShowExtensionsDisclaimer() async {
+    try {
+      final box = await Hive.openBox(_legalBoxName);
+      final shown = box.get(_extensionsDisclaimerKey, defaultValue: false) as bool;
+      if (shown) return;
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Extensions & External Services',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+
+        content: const Text(
+          'AnimeShin does not include any built-in content sources.\n\n'
+          'Extensions are optional and user-configured. They may connect to third-party services directly from your device.\n\n'
+          'You are responsible for the sources you add and for complying with local laws.',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+        ),
+      );
+
+      await box.put(_extensionsDisclaimerKey, true);
+    } catch (_) {
+      // Don't block the UI if persistence fails.
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowExtensionsDisclaimer();
+    });
   }
 
   @override
@@ -53,20 +104,37 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   }
 
   Future<void> _addFromUrl() async {
+    if (_busy) return;
+
     final url = _urlCtrl.text.trim();
     if (url.isEmpty) {
-      SnackBarExtension.show(context, 'Paste a module JSON URL');
+      SnackBarExtension.show(context, 'Paste an extension JSON URL');
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    final isHttp = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    if (!isHttp) {
+      SnackBarExtension.show(context, 'Invalid URL. Use http(s)://');
       return;
     }
 
     setState(() => _busy = true);
     try {
-      final desc = await _remote.addOrUpdateFromUrl(url, enabled: true);
+      // Prevent indefinite hangs on bad hosts / stalled connections
+      final desc = await _remote
+          .addOrUpdateFromUrl(url, enabled: true)
+          .timeout(const Duration(seconds: 12));
+
       await JsSourcesRuntime.instance.invalidateModule(desc.id);
       _urlCtrl.clear();
+
       if (!mounted) return;
-      SnackBarExtension.show(context, 'Module added');
+      SnackBarExtension.show(context, 'Extension added');
       await _refresh();
+    } on TimeoutException {
+      if (!mounted) return;
+      SnackBarExtension.show(context, 'Request timed out. Check the URL and try again.');
     } catch (e) {
       if (!mounted) return;
       SnackBarExtension.show(context, e.toString());
@@ -95,7 +163,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
       await _remote.remove(id);
       await JsSourcesRuntime.instance.invalidateModule(id);
       if (!mounted) return;
-      SnackBarExtension.show(context, 'Removed');
+      SnackBarExtension.show(context, 'Extension removed');
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -111,7 +179,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
       final desc = await _remote.addOrUpdateFromUrl(url, enabled: true);
       await JsSourcesRuntime.instance.invalidateModule(desc.id);
       if (!mounted) return;
-      SnackBarExtension.show(context, 'Updated');
+      SnackBarExtension.show(context, 'Extension updated');
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -141,7 +209,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
         bytes: bytes,
         mimeType: 'application/json',
         fileExtension: 'json',
-        shareText: 'AnimeShin modules export',
+        shareText: 'AnimeShin extensions export',
       );
       if (!mounted) return;
       final didShare = !kIsWeb && Platform.isIOS;
@@ -170,11 +238,11 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
       final raw = await open.readAsString();
       await _remote.importJson(raw);
 
-      // Sora-style: after importing, download enabled remotes so they work.
+      // After importing, download enabled remote entries so they are available offline.
       await _remote.downloadAllEnabledRemote();
 
       if (!mounted) return;
-      SnackBarExtension.show(context, 'Imported');
+      SnackBarExtension.show(context, 'Imported extensions');
       await _refresh();
     } catch (e) {
       if (!mounted) return;
@@ -300,36 +368,40 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '  Add Sora-style modules by JSON URL',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Text(
+                        'Paste an extension JSON URL',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ),
                     const SizedBox(height: 7),
                     TextField(
                       controller: _urlCtrl,
                       enabled: !_busy,
                       decoration: const InputDecoration(
-                        labelText: 'Module JSON URL',
+                        labelText: 'Extension JSON URL',
                         border: OutlineInputBorder(),
                       ),
                       onChanged: (_) {
                         if (mounted) setState(() {});
                       },
-                      onSubmitted: (_) => _addFromUrl(),
+                      onSubmitted: (_) => canAdd ? _addFromUrl() : null,
                     ),
                     const SizedBox(height: 10),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.start,
                       children: [
                         FilledButton(
                           onPressed: canAdd ? _addFromUrl : null,
                           child: const Text('Add'),
                         ),
-                        const Spacer(),
                         OutlinedButton(
                           onPressed: _busy ? null : _exportAll,
                           child: const Text('Export'),
                         ),
-                        const SizedBox(width: 8),
                         OutlinedButton(
                           onPressed: _busy ? null : _importAll,
                           child: const Text('Import'),
@@ -341,7 +413,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
               ),
             ),
             const SizedBox(height: 8),
-            if (sortedRemote.isEmpty) const Text('No remote modules added.'),
+            if (sortedRemote.isEmpty) const Text('No extensions added yet.'),
             for (final e in sortedRemote)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
@@ -358,12 +430,25 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
                           child: Text(
                               e.id.isNotEmpty ? e.id[0].toUpperCase() : '?'));
                     }(),
-                    title: Text(descriptorById[e.id]?.name ?? e.id),
+                    isThreeLine: true,
+                    title: Text(
+                      descriptorById[e.id]?.name ?? e.id,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
                     subtitle: () {
                       final d = descriptorById[e.id];
                       if (d == null) return null;
                       final s = _subtitleLine(d);
-                      return s.isEmpty ? null : Text(s);
+
+                      return s.isEmpty
+                          ? null
+                          : Text(
+                              s,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            );
                     }(),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,

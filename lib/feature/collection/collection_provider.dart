@@ -71,7 +71,7 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
       ofAnime: arg.ofAnime,
     );
 
-    // Light AniLiberty enrichment: fill alias/id/last episode for dub indicator.
+    // Light RU DUB enrichment: fill alias/id/last episode for dub indicator.
     // Only run when the indicator is enabled to avoid unnecessary requests.
     if (options.anilibriaEpDub) {
       await _enrichAniLibertyMeta(data);
@@ -507,7 +507,7 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
     if (result != null) state = AsyncValue.data(result);
   }
 
-  /// Optional AniLiberty enrichment to restore dub indicator data.
+  /// Optional RU DUB enrichment to restore dub indicator data.
   Future<void> _enrichAniLibertyMeta(Map<String, dynamic> data) async {
     String? canonicalAlias(dynamic raw, Map<String, dynamic> media) {
       final s = raw?.toString().trim();
@@ -529,7 +529,7 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
       return null;
     }
 
-    // Collect entries that declare an AniLiberty alias (or derived fallback).
+    // Collect entries that declare an RU DUB alias (or derived fallback).
     final aliasToEntry = <String, Map<String, dynamic>>{};
     for (final l in data['MediaListCollection']['lists']) {
       for (final e in l['entries']) {
@@ -595,7 +595,7 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
         final entry = aliasToEntry[alias];
         if (entry == null) continue;
 
-        // Extract AniLiberty id and last episode with forgiving key set.
+        // Extract RU DUB id and last episode with forgiving key set.
         final int? alId = parseInt(
           pickFirstMapValue(item, const ['id', 'anilibria_id', 'aniliberty_id'])?.values.first,
         );

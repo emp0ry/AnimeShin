@@ -152,9 +152,9 @@ class SettingsAppSubview extends ConsumerWidget {
               ),
             ),
             StatefulSwitchListTile(
-              title: const Text('AniLiberty Dub Indicator'),
+              title: const Text('RU Dub Availability'),
               subtitle: const Text(
-                'Show whether each episode is dubbed in AniLiberty when viewing anime details.',
+                'Indicates if a Russian dubbed version is available.',
               ),
               value: options.anilibriaEpDub,
               onChanged: (v) => update(

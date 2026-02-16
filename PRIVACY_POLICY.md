@@ -1,57 +1,85 @@
-# 📜 Privacy Policy for AnimeShin
+# Privacy Policy – AnimeShin
 
-*Last updated: **August 21, 2025***
+Last updated: 2026
 
-## 1. Introduction
+## Overview
+AnimeShin is an unofficial AniList companion application designed to manage anime and manga lists.
 
-AnimeShin (“the App”) is an **unofficial AniList client** developed by **emp0ry**.
-This Privacy Policy explains what information is (and isn’t) collected when you use the App.
+The developer does not operate backend servers and does not collect personal user data.
 
-## 2. Data We Collect
+---
 
-* **No Personal Data Collected by the App**: AnimeShin does not collect, store, or sell your personal information.
-* **App Preferences**: Settings such as language, dub options, and UI preferences are stored **locally on your device** only.
-* **Playback Caching (local only)**: The App may cache artwork or media metadata locally to improve performance. This cache never leaves your device.
+## Data Collection
 
-## 3. Third-Party Services
+AnimeShin does NOT collect or transmit personal information to the developer.
 
-AnimeShin integrates with the following services to provide content and features.
-**Requests to these services are made directly from your device** and may expose your **IP address, user agent, and other standard HTTP headers** to the respective service.
+All preferences, settings, and cached data remain locally on the user’s device.
 
-* **AniList API** — Used for authentication and syncing your anime/manga list (OAuth2). Your AniList account data is handled by AniList.  
-  Policy: [AniList Privacy Policy](https://anilist.co/terms)
-* **Shikimori** — Used to fetch Russian titles and additional metadata.  
-  Policy: [Shikimori Privacy Policy](https://shikimori.one/terms)
-* **Sora sources (scripts)** — AnimeShin can load community “source” scripts (Sora-compatible) to search and play content.
-  These scripts run locally in the app and typically make network requests directly to the configured third-party sites.
-  Credit: https://github.com/cranci1
+---
 
-> **Note:** When you play video from any third-party source, media segments are streamed **directly from that source’s servers**. The App does **not** proxy, log, or re-route your traffic through its own servers. (In some builds the App may use a **local, on-device** HLS helper strictly to fix headers/compatibility; it does not transmit data to any server controlled by the App.)
+## AniList Authentication
+When logging in, the app uses AniList OAuth authentication.
 
-## 4. Analytics
+AnimeShin never receives or stores your AniList password.  
+Only an access token provided by AniList is stored locally on your device.
 
-The **GitHub Pages** site for AnimeShin may use **Google Analytics** to understand visits and improve the project’s visibility.
-**The App itself contains no analytics and does not collect personally identifiable information.**
+AniList processes account data according to their own policy:
+https://anilist.co/terms
 
-## 5. Security
+---
 
-* Authentication with AniList uses **OAuth2**.
-* The App does not store your AniList credentials; only the issued **access token** is kept **locally on your device** to enable syncing.
+## External Services
 
-## 6. Children’s Privacy
+The application can optionally interact with third-party services configured by the user.
 
-AnimeShin does not knowingly collect personal data from children under 13.
+Connections are made directly from the user’s device to those services.  
+The developer does not proxy, monitor, log, or modify this traffic.
 
-## 7. Your Choices
+These services may receive standard technical information such as:
+- IP address
+- user agent
+- request headers
 
-* You may clear local caches and preferences in the App or via your OS settings.
-* You may revoke AnimeShin’s access to your AniList account from your AniList security settings at any time.
+Examples include:
+- AniList
+- Shikimori
+- User-configured extensions
 
-## 8. Changes to This Policy
+---
 
-This Privacy Policy may be updated from time to time. Updates will be published on the GitHub repository and project website.
+## Media Access Disclaimer
 
-## 9. Contact
+AnimeShin does not provide or distribute media content.
 
-For questions, issues, or concerns about privacy, please contact:  
-**GitHub:** [emp0ry](https://github.com/emp0ry)
+The built-in player only opens media supplied by external services chosen by the user.
+
+Extensions and external services are not created, maintained, or controlled by the developer.  
+The developer is not responsible for third-party content accessed through the application.
+
+---
+
+## Analytics
+The application itself contains no analytics or tracking systems.
+
+---
+
+## Children’s Privacy
+The app does not knowingly collect data from children.
+
+---
+
+## User Control
+Users can:
+- log out at any time
+- clear local data
+- revoke AniList access via AniList account settings
+
+---
+
+## Changes
+This policy may be updated when necessary.
+
+---
+
+## Contact
+GitHub: https://github.com/emp0ry

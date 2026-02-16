@@ -4,9 +4,9 @@
 
 <h1 align="center">AnimeShin</h1>
 <p align="center">
-  A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).
+  A modern, unofficial AniList companion application.
   <br>
-  Track anime & manga, update progress with gestures, watch episodes, and get notifications - all in one place.
+  Track anime & manga, manage your library, and optionally open media using user-configured extensions.
 </p>
 
 <p align="center">
@@ -35,36 +35,54 @@
   Full AniList integration for tracking anime and manga.
 
 - **🏠 Russian Titles & Search**  
-  Automatically displays Russian titles from Shikimori.  
-  Supports **search by Russian titles** in your library.
+  Displays Russian titles from Shikimori and supports searching your library using them.
 
-- **▶️ Watch (Sora sources)**  
-  Watch episodes using community sources (Sora-compatible).
+- **📚 Library Management**  
+  Update progress with gestures, rate entries, and attach personal notes.
 
-- **📁 Export Anime/Manga list**
+- **📁 Export Lists**
   Export your anime or manga list in MyAnimeList or Shikimori format.
-  Export button in the top-right corner of your profile page.
 
 - **🔗 Extra Links**  
-  Direct links to Shikimori pages.
+  Quickly open related pages in external services.
 
 - **👆 Swipe-Based Progress**  
   Swipe left/right on covers to update episode or chapter progress instantly.
 
 - **🔔 Notifications**  
-  - New episode aired  
+  Optional notifications about airing schedule changes.
+
+- **🔒 Secure Authentication**  
+  OAuth-based login with AniList. Credentials are never stored.
+
+- **▶️ Media Player**
+  Built-in generic player capable of opening media provided by user-configured external extensions.
+
+- **🧩 Optional Extensions**
+  Users may configure third-party extensions that connect directly to external services.
+
+- **💻 Multi-Platform**  
+  Android, iOS, macOS, Windows.
 
 - **📝 Personal Notes & Scores**  
   Rate entries and attach personal notes right in your list.
 
-- **🔒 Secure Authentication**  
-  OAuth-based login with AniList.
-
-- **💻 Multi-Platform**  
-  Android, iOS, Windows - macOS & Linux.
-
 - **⚙️ Settings**  
   Toggle options for Russian title visibility and scheduled new episode air notifications.
+
+---
+
+## ⚠️ Legal Notice
+
+AnimeShin does **not** provide, host, distribute, or store any media content.
+
+The application is primarily an AniList client and media library manager.  
+It includes a generic player that can open media supplied by external services configured by the user.
+
+No content sources are included with the application.
+
+The developer does not operate, control, maintain, or endorse third-party services or extensions.  
+Users are solely responsible for the sources they configure and access.
 
 ---
 
@@ -93,9 +111,9 @@
 
 ## 📈 Roadmap
 
-- Full stable anime player  
-- Apple widgets  
-- Full Russian UI localization  
+- Improved UI performance
+- Widgets
+- Additional localization
 
 ---
 
@@ -109,7 +127,7 @@ If you love AnimeShin - fuel development with a coffee!
 
 ## 📦 Release Builds
 
-Use these commands to produce release locally.
+Use these commands to produce a release locally.
 
 **Android (split by ABI):**
 
@@ -242,7 +260,7 @@ Or install via file manager if your device allows unsigned APKs.
 **Android APK won’t install**
 
 * APK must be signed
-* Enable “Install unknown apps”
+* Enable "Install unknown apps"
 
 ---
 
@@ -252,11 +270,12 @@ Special thanks to [@lotusprey](https://github.com/lotusprey) for [Otraku](https:
 Thanks to [Sora](https://github.com/cranci1) for the source ecosystem and compatibility inspiration.  
 Thanks to [Shikimori](https://shikimori.one/) for Russian titles & metadata.
 
-## 🔒 Privacy & Policy
+## 🔒 Privacy & Legal
 
-AnimeShin respects your privacy. The app **does not collect personal data**, and all settings are stored locally on your device.  
+AnimeShin does not collect personal data.
 
-For details on data usage, third-party services (AniList, Shikimori, Sora sources), and security measures, please read the full [Privacy Policy](PRIVACY_POLICY.md).
+- Privacy Policy: [PRIVACY_POLICY.md](PRIVACY_POLICY.md)
+- Legal Notice: [LEGAL_NOTICE.md](LEGAL_NOTICE.md)
 
 ---
 

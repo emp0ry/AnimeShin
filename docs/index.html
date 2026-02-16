@@ -14,13 +14,14 @@
 
     <meta name="language" content="en">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="AnimeShin — Unofficial AniList client with Russian titles and Sora-compatible sources. Track anime & manga, update progress with gestures, and get notifications.">
-    <meta name="keywords" content="AnimeShin, AniList, anime, manga, Russian titles, Sora, sources, shikimori, emp0ry, Flutter, ios, android, windows, watch, player, hls">
+
+    <meta name="description" content="AnimeShin — unofficial AniList companion client. Track anime & manga, manage your library, and integrate optional external extensions.">
+    <meta name="keywords" content="AnimeShin, AniList client, anime tracker, manga tracker, library manager, shikimori, flutter, ios, android, windows">
     <meta name="author" content="emp0ry">
     <meta name="robots" content="index, follow">
 
-    <!-- Security -->
     <meta name="referrer" content="strict-origin-when-cross-origin">
+
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'self';
         script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com;
@@ -31,46 +32,39 @@
         upgrade-insecure-requests;
     ">
 
-    <!-- Performance -->
     <meta name="theme-color" content="#4b0082">
 
-    <!-- Apple -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- Open Graph / Facebook -->
+    <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://emp0ry.github.io/AnimeShin/">
-    <meta property="og:title" content="AnimeShin — Unofficial AniList Client">
-    <meta property="og:description" content="Russian titles, Sora-compatible sources, swipe progress, and notifications — all in one modern AniList client.">
+    <meta property="og:title" content="AnimeShin — AniList Companion Client">
+    <meta property="og:description" content="Track anime & manga, manage your library and integrate optional extensions in a modern AniList companion app.">
     <meta property="og:site_name" content="AnimeShin">
     <meta property="og:locale" content="en_US">
-    <!-- <meta property="og:image" content="assets/preview.png"> -->
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="https://emp0ry.github.io/AnimeShin/">
-    <meta name="twitter:title" content="AnimeShin — Unofficial AniList Client">
-    <meta name="twitter:description" content="Russian titles, Sora-compatible sources, swipe progress, and notifications — all in one modern AniList client.">
+    <meta name="twitter:title" content="AnimeShin — AniList Companion Client">
+    <meta name="twitter:description" content="Track anime & manga and manage your library in a modern AniList companion app.">
 
-    <!-- Canonical URL -->
     <link rel="canonical" href="https://emp0ry.github.io/AnimeShin/">
 
-    <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="img/icon.ico">
     <link rel="shortcut icon" type="image/x-icon" href="img/icon.ico">
 
-    <!-- Google Fonts: Poppins -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 
-    <!-- External CSS -->
     <link rel="stylesheet" type="text/css" href="css/styles.css">
 
-    <title>AnimeShin — Unofficial AniList Client</title>
+    <title>AnimeShin — AniList Companion Client</title>
 
-    <!-- Structured Data (Schema.org) -->
+    <!-- Structured Data -->
     <script type="application/ld+json">
     {
     "@context": "https://schema.org",
@@ -78,7 +72,7 @@
     "name": "AnimeShin",
     "operatingSystem": "Android, iOS, Windows",
     "applicationCategory": "EntertainmentApplication",
-    "description": "A modern, unofficial AniList client with Russian titles and Sora-compatible sources. Track anime & manga, update progress with gestures, and get notifications.",
+    "description": "AniList companion application for tracking anime and manga and managing your media library.",
     "author": {
         "@type": "Person",
         "name": "emp0ry",
@@ -94,45 +88,53 @@
     }
     </script>
 </head>
+
 <body>
-    <header>
-        <div class="container">
-            <h1>AnimeShin</h1>
-        </div>
-    </header>
+<header>
+    <div class="container">
+        <h1>AnimeShin</h1>
+    </div>
+</header>
 
-    <main class="container">
-        <div class="about">
-            <p><strong>AnimeShin</strong> is a modern, unofficial <strong>AniList</strong> client with Russian title support and built-in watching via <strong>Sora-compatible sources</strong>. Update progress with gestures and get episode notifications.</p>
-            <a href="https://github.com/emp0ry/AnimeShin" class="btn" aria-label="Visit the AnimeShin repository on GitHub">Visit the Repository</a>
-            <a href="/" class="btn back-to-hub" aria-label="Back to emp0ry's Hub">Back to Hub</a>
-        </div>
+<main class="container">
+    <div class="about">
+        <p><strong>AnimeShin</strong> is a modern unofficial <strong>AniList companion client</strong>.  
+        Track your anime & manga, manage your library, and optionally open media using user-configured extensions.</p>
 
-        <section>
-            <h2>Featured Scripts</h2>
-            <div class="features">
-                <div class="feature-card">
-                    <h3>AniList Sync</h3>
-                    <p>Full AniList integration for anime & manga tracking.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>Russian Titles</h3>
-                    <p>Displays Russian titles (via Shikimori).</p>
-                </div>
-                <div class="feature-card">
-                    <h3>Sora Sources</h3>
-                    <p>Search and watch using Sora-compatible community sources.</p>
-                </div>
-                <div class="feature-card">
-                    <h3>Watch</h3>
-                    <p>Watch episodes directly from the app.</p>
-                </div>
+        <a href="https://github.com/emp0ry/AnimeShin" class="btn">Visit the Repository</a>
+        <a href="/" class="btn back-to-hub">Back to Hub</a>
+    </div>
+
+    <section>
+        <h2>Key Features</h2>
+        <div class="features">
+
+            <div class="feature-card">
+                <h3>AniList Sync</h3>
+                <p>Full AniList integration for anime & manga tracking.</p>
             </div>
-        </section>
-    </main>
 
-    <footer>
-        <p>© 2025 <a href="https://github.com/emp0ry/" aria-label="Visit emp0ry's GitHub profile">emp0ry</a></p>
-    </footer>
+            <div class="feature-card">
+                <h3>Russian Titles</h3>
+                <p>Displays localized titles via Shikimori metadata.</p>
+            </div>
+
+            <div class="feature-card">
+                <h3>Extensions</h3>
+                <p>Supports optional user-configured extensions connecting to external services.</p>
+            </div>
+
+            <div class="feature-card">
+                <h3>Media Player</h3>
+                <p>Built-in player capable of opening media provided by configured external services.</p>
+            </div>
+
+        </div>
+    </section>
+</main>
+
+<footer>
+    <p>© 2025 <a href="https://github.com/emp0ry/">emp0ry</a></p>
+</footer>
 </body>
 </html>

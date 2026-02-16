@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:animeshin/repository/get_valid_url.dart';
 import 'package:http/http.dart' as http;
 
-// Primary AniLiberty host plus legacy AniLibria domains still serving the API.
+// Primary RU DUB host plus legacy AniLibria domains still serving the API.
 const aniLibertyUrls = [
-  'https://aniliberty.top',
   'https://anilibria.top',
+  'https://aniliberty.top',
   'https://anilibria.wtf',
 ];
 
@@ -15,7 +15,7 @@ String toKebabCase(String input) => input
     .replaceAll(RegExp(r'^-+|-+$'), '');
 
 class AnilibertyRepository {
-  // Base endpoints for the AniLiberty API (served on AniLiberty/AniLibria hosts)
+  // Base endpoints for the RU DUB API
   static const _listBase = '/api/v1/anime/releases/list';
   static const _byAliasBase = '/api/v1/anime/releases';
 
@@ -61,7 +61,7 @@ class AnilibertyRepository {
       final uri = Uri.parse(chosenBase!+_listBase).replace(queryParameters: params);
       final response = await http.get(uri);
       if (response.statusCode != 200) {
-        throw Exception('Failed to load AniLiberty list');
+        throw Exception('Failed to load RU DUB list');
       }
 
       return json.decode(response.body) as Map<String, dynamic>;
@@ -99,7 +99,7 @@ class AnilibertyRepository {
     return allResult;
   }
 
-  /// Fetch single release by alias from AniLiberty (AniLiberty/AniLibria host)
+  /// Fetch single release by alias from RU DUB
   ///
   /// Endpoint shape:
   ///   GET https://aniliberty.top/api/v1/anime/releases/{alias}?include=..&exclude=..
@@ -120,7 +120,7 @@ class AnilibertyRepository {
     final response = await http.get(uri);
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
-      throw Exception('Failed to load AniLiberty release for alias: $alias');
+      throw Exception('Failed to load RU DUB release for alias: $alias');
     }
 
     final body = json.decode(response.body);

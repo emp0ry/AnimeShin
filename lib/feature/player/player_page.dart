@@ -24,7 +24,6 @@ import 'package:animeshin/feature/player/player_controls_ctx_bridge.dart';
 
 // watch types / data
 import 'package:animeshin/feature/watch/watch_types.dart';
-import 'package:animeshin/feature/player/player_support.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
 
 // desktop fullscreen
@@ -2485,7 +2484,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         });
       },
       animeVoice: widget.animeVoice,
-      onSupportVoice: () => openSupport(widget.animeVoice, context),
     );
 
     final banner = _bannerVisible

@@ -107,7 +107,7 @@ class MediaHeader extends ConsumerWidget {
           Container(
             key: menuAnchorKey,
             child: Tooltip(
-              message: 'Search modules',
+              message: 'Search',
               child: TextButton.icon(
                 style: TextButton.styleFrom(
                   backgroundColor: Colors.black.withValues(alpha: 0.25),
@@ -118,7 +118,7 @@ class MediaHeader extends ConsumerWidget {
                       ? Ionicons.play
                       : Ionicons.book,
                 ),
-                label: Text(media!.info.isAnime ? 'Watch' : 'Read'),
+                label: Text('Search'),
                 onPressed: () async {
                 final m = media;
                 if (m == null) return;

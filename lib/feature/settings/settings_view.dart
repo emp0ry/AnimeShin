@@ -145,7 +145,7 @@ class _SettingsViewState extends ConsumerState<SettingsView>
                 switch (_tabCtrl.index) {
                   0 => const TopBar(key: Key('0'), title: ' App'),
                   1 => const TopBar(key: Key('1'), title: ' Content'),
-                  2 => const TopBar(key: Key('2'), title: ' Modules'),
+                  2 => const TopBar(key: Key('2'), title: ' Extensions'),
                   3 => const TopBar(key: Key('3'), title: ' Notifications'),
                   _ => const TopBar(key: Key('4'), title: ' About'),
                 },
@@ -162,7 +162,7 @@ class _SettingsViewState extends ConsumerState<SettingsView>
         items: const {
           'App': Ionicons.color_palette_outline,
           'Content': Ionicons.tv_outline,
-          'Modules': Ionicons.extension_puzzle_outline,
+          'Extensions': Ionicons.extension_puzzle_outline,
           'Notifications': Ionicons.notifications_outline,
           'About': Ionicons.information_outline,
         },

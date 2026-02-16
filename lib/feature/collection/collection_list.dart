@@ -13,7 +13,7 @@ import 'package:animeshin/widget/input/score_label.dart';
 import 'package:animeshin/widget/text_rail.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 
-const _tileHeight = 150.0;
+const _tileHeight = 156.0;
 
 class CollectionList extends StatelessWidget {
   const CollectionList({
@@ -305,9 +305,9 @@ class __TileContentState extends State<_TileContent> {
         final id = widget.item.anilibriaId;
         if (last > 0 && id != null && id != 0) {
           if (last > widget.item.progress) {
-            key = '$diff ep behind (✔️AniLiberty)';
+            key = '$diff ep behind (✔️RU)';
           } else {
-            key = '$diff ep behind (✖️AniLiberty)';
+            key = '$diff ep behind (✖️RU)';
           }
         } else {
           key = '$diff ep behind';
@@ -332,9 +332,8 @@ class __TileContentState extends State<_TileContent> {
     }
 
     Widget buildWatchButton() {
-      // Modules-only: always open module search.
       final icon = isManga ? Ionicons.book : Ionicons.play;
-      final label = isManga ? 'Read' : 'Watch';
+      final label = 'Search';
       return FilledButton(
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -384,7 +383,12 @@ class __TileContentState extends State<_TileContent> {
               overflow: TextOverflow.ellipsis,
               maxLines: 2,
               style: TextTheme.of(context).labelSmall),
-        TextRail(textRailItems),
+        Expanded(
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: TextRail(textRailItems),
+          ),
+        ),
 
         // Progress bar
         Container(

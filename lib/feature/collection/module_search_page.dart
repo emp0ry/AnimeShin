@@ -112,7 +112,7 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Search modules'),
+        title: const Text('Search extensions'),
       ),
       body: FutureBuilder<List<SourcesModuleDescriptor>>(
         future: _modulesFuture,
@@ -135,13 +135,13 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        'No modules available.',
+                        'No extensions added.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 12),
                       Text(
-                        'Add Sora modules in Settings > Modules.',
+                        'You can add optional extensions in Settings > Extensions to enable additional features.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 16, color: Colors.grey),
                       ),
