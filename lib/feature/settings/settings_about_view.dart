@@ -49,7 +49,7 @@ class SettingsAboutSubview extends StatelessWidget {
                 ),
               ),
               const Text(
-                'Modern unofficial AniList client with tracking, notifications and optional community sources.',
+                'A modern unofficial AniList client for tracking, notifications and optional community streaming extensions.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 30),
