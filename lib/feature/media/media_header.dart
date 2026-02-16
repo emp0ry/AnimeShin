@@ -107,7 +107,7 @@ class MediaHeader extends ConsumerWidget {
           Container(
             key: menuAnchorKey,
             child: Tooltip(
-              message: 'Search',
+              message: 'Search extensions',
               child: TextButton.icon(
                 style: TextButton.styleFrom(
                   minimumSize: const Size(100, 42),

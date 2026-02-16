@@ -2148,9 +2148,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
 
       // Resolve next episode through the JS module.
-        final episodes = await _jsExec
+      Stopwatch? episodesSw;
+      String? episodesLabel;
+      if (kDebugMode) {
+        episodesLabel = 'autoNext extractEpisodes module=$moduleId';
+        debugPrint('[Perf] $episodesLabel start');
+        episodesSw = Stopwatch()..start();
+      }
+      final episodes = await _jsExec
           .extractEpisodes(moduleId, widget.args.url)
           .timeout(PlayerTuning.autoNextResolveTimeout);
+      if (kDebugMode && episodesSw != null) {
+        episodesSw.stop();
+        debugPrint('[Perf] $episodesLabel ${episodesSw.elapsedMilliseconds}ms');
+      }
       if (episodes.isEmpty) {
         _log('modules: extractEpisodes returned empty');
         _showBanner('Next episode not available');
@@ -2177,9 +2188,20 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       final JsModuleEpisode nextEp = next;
 
-        final selection = await _jsExec
+      Stopwatch? streamsSw;
+      String? streamsLabel;
+      if (kDebugMode) {
+        streamsLabel = 'autoNext extractStreams module=$moduleId';
+        debugPrint('[Perf] $streamsLabel start');
+        streamsSw = Stopwatch()..start();
+      }
+      final selection = await _jsExec
           .extractStreams(moduleId, nextEp.href)
           .timeout(PlayerTuning.autoNextResolveTimeout);
+      if (kDebugMode && streamsSw != null) {
+        streamsSw.stop();
+        debugPrint('[Perf] $streamsLabel ${streamsSw.elapsedMilliseconds}ms');
+      }
       if (selection.streams.isEmpty) {
         _log('modules: extractStreams returned empty');
         _showBanner('Next episode stream not available');

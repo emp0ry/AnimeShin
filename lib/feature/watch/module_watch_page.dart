@@ -12,6 +12,7 @@ import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/feature/collection/collection_entries_provider.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
@@ -43,6 +44,13 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   final JsModuleExecutor _exec = JsModuleExecutor();
   late Future<List<JsModuleEpisode>> _episodesFuture;
   List<JsModuleEpisode>? _episodesCache;
+  JsStreamSelection? _firstEpisodeSelection;
+  Future<JsStreamSelection>? _firstEpisodeSelectionFuture;
+  String? _firstEpisodeHref;
+  String? _firstEpisodeVoiceover;
+  String? _firstEpisodeFutureHref;
+  String? _firstEpisodeFutureVoiceover;
+  JsStreamSelection? _lastOpenedSelection;
 
   Map<int, String>? _anilistThumbs;
   Map<int, String>? _anilistEpisodeTitles;
@@ -74,6 +82,132 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
           collectionEntryProvider((tag: tag, mediaId: base.mediaId)),
         ) ??
         base;
+  }
+
+  JsStreamSelection? _tryCachedSelection(
+    JsModuleEpisode ep, {
+    String? voiceover,
+  }) {
+    final cached = _firstEpisodeSelection;
+    if (cached == null) return null;
+    if (_firstEpisodeHref != ep.href) return null;
+    final want = (voiceover ?? '').trim();
+    final have = (_firstEpisodeVoiceover ?? '').trim();
+    if (want != have) return null;
+    return cached;
+  }
+
+  void _cacheSelection(
+    JsModuleEpisode ep,
+    JsStreamSelection selection, {
+    String? voiceover,
+  }) {
+    _firstEpisodeSelection = selection;
+    _firstEpisodeHref = ep.href;
+    _firstEpisodeVoiceover = voiceover?.trim();
+  }
+
+  List<String> _serverTitlesFromSelection(JsStreamSelection selection) {
+    final titles = selection.streams
+        .map((s) => s.title.trim())
+        .where((t) => t.isNotEmpty)
+        .where((t) => !_isQualityLabel(t))
+        .toList(growable: false);
+
+    final unique = <String>[];
+    final seen = <String>{};
+    for (final t in titles) {
+      final k = t.toLowerCase();
+      if (seen.add(k)) unique.add(t);
+    }
+
+    final nonQuality = selection.streams.where((s) => !_isQualityLabel(s.title));
+    final uniqueHosts = _uniqueHostsCount(nonQuality);
+    if (uniqueHosts <= 1) {
+      unique.clear();
+    }
+
+    return unique;
+  }
+
+  Future<void> _openServerPicker() async {
+    if (_serverDialogOpen) return;
+    if (_serverTitles.length >= 2) {
+      await _pickServer(_serverTitles);
+      return;
+    }
+    final selection = _lastOpenedSelection;
+    if (selection == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Open an episode to load servers')),
+      );
+      return;
+    }
+    final titles = _serverTitlesFromSelection(selection);
+    if (!mounted) return;
+    setState(() => _serverTitles = titles);
+    if (titles.length >= 2) {
+      await _pickServer(titles);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Servers not available')),
+    );
+  }
+
+  Future<JsStreamSelection>? _tryCachedSelectionFuture(
+    JsModuleEpisode ep, {
+    String? voiceover,
+  }) {
+    final cached = _firstEpisodeSelectionFuture;
+    if (cached == null) return null;
+    if (_firstEpisodeFutureHref != ep.href) return null;
+    final want = (voiceover ?? '').trim();
+    final have = (_firstEpisodeFutureVoiceover ?? '').trim();
+    if (want != have) return null;
+    return cached;
+  }
+
+  void _cacheSelectionFuture(
+    JsModuleEpisode ep,
+    Future<JsStreamSelection> future, {
+    String? voiceover,
+  }) {
+    _firstEpisodeSelectionFuture = future;
+    _firstEpisodeFutureHref = ep.href;
+    _firstEpisodeFutureVoiceover = voiceover?.trim();
+  }
+
+  void _clearSelectionFuture() {
+    _firstEpisodeSelectionFuture = null;
+    _firstEpisodeFutureHref = null;
+    _firstEpisodeFutureVoiceover = null;
+  }
+
+  Future<JsStreamSelection> _loadSelection(
+    JsModuleEpisode ep, {
+    String? voiceover,
+  }) async {
+    final cached = _tryCachedSelection(ep, voiceover: voiceover);
+    if (cached != null) return cached;
+
+    final inFlight = _tryCachedSelectionFuture(ep, voiceover: voiceover);
+    if (inFlight != null) return inFlight;
+
+    final future = _exec.extractStreams(
+      widget.module.id,
+      ep.href,
+      voiceover: voiceover,
+    );
+    _cacheSelectionFuture(ep, future, voiceover: voiceover);
+    try {
+      final selection = await future;
+      _cacheSelection(ep, selection, voiceover: voiceover);
+      return selection;
+    } finally {
+      _clearSelectionFuture();
+    }
   }
 
   static int? _parseEpisodeNumberFromTitle(String title) {
@@ -575,7 +709,20 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   @override
   void initState() {
     super.initState();
+    Stopwatch? episodesSw;
+    String? episodesLabel;
+    if (kDebugMode) {
+      episodesLabel = 'extractEpisodes module=${widget.module.id}';
+      debugPrint('[Perf] $episodesLabel start');
+      episodesSw = Stopwatch()..start();
+    }
     _episodesFuture = _exec.extractEpisodes(widget.module.id, widget.href);
+    if (kDebugMode && episodesSw != null) {
+      _episodesFuture.whenComplete(() {
+        episodesSw!.stop();
+        debugPrint('[Perf] $episodesLabel ${episodesSw.elapsedMilliseconds}ms');
+      });
+    }
     _loadLastFetchOrigin();
 
     final mediaId = widget.item?.mediaId;
@@ -641,7 +788,6 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       if (!mounted) return;
       _episodesCache = eps;
       await _maybeInitVoiceovers(eps);
-      await _maybeInitServers(eps);
       setState(() {});
     });
   }
@@ -663,47 +809,6 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     }
   }
 
-  Future<void> _maybeInitServers(List<JsModuleEpisode> eps) async {
-    if (!mounted) return;
-    if (eps.isEmpty) return;
-
-    // If this source is voiceover-first, don't pre-fill server list from stream titles.
-    if (_modulePrefersVoiceoverPicker) return;
-
-    try {
-      final selection = await _exec.extractStreams(
-        widget.module.id,
-        eps.first.href,
-        voiceover: _preferredVoiceoverTitle,
-      );
-      final titles = selection.streams
-          .map((s) => s.title.trim())
-          .where((t) => t.isNotEmpty)
-          .where((t) => !_isQualityLabel(t))
-          .toList(growable: false);
-
-      final unique = <String>[];
-      final seen = <String>{};
-      for (final t in titles) {
-        final k = t.toLowerCase();
-        if (seen.add(k)) unique.add(t);
-      }
-
-      // Generic heuristic: if all URLs are from the same host, treat it as voiceovers/options,
-      // not servers.
-      final nonQuality = selection.streams.where((s) => !_isQualityLabel(s.title));
-      final uniqueHosts = _uniqueHostsCount(nonQuality);
-      if (uniqueHosts <= 1) {
-        unique.clear();
-      }
-
-      if (!mounted) return;
-      setState(() => _serverTitles = unique);
-    } catch (_) {
-      // Ignore; server picker is optional.
-    }
-  }
-
   Future<void> _maybeInitVoiceovers(List<JsModuleEpisode> eps) async {
     if (_voiceoverInitDone) return;
     if (_voiceoverInitAttempts >= 2) {
@@ -719,8 +824,18 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     );
 
     try {
-      // 1) Prefer explicit hook.
+      Stopwatch? voiceoverSw;
+      String? voiceoverLabel;
+      if (kDebugMode) {
+        voiceoverLabel = 'getVoiceovers module=${widget.module.id}';
+        debugPrint('[Perf] $voiceoverLabel start');
+        voiceoverSw = Stopwatch()..start();
+      }
       var list = await _exec.getVoiceovers(widget.module.id, eps.first.href);
+      if (kDebugMode && voiceoverSw != null) {
+        voiceoverSw.stop();
+        debugPrint('[Perf] $voiceoverLabel ${voiceoverSw.elapsedMilliseconds}ms');
+      }
       debugPrint(
         '[VoiceoverDebug] getVoiceovers raw module=${widget.module.id}: ${list.join(" | ")}',
       );
@@ -775,7 +890,19 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     // - for voiceover-first modules, treat stream titles as voiceovers directly.
     // - otherwise, infer based on host + provider/quality patterns.
     try {
-      final selection = await _exec.extractStreams(widget.module.id, ep.href);
+      Stopwatch? inferSw;
+      String? inferLabel;
+      if (kDebugMode) {
+        inferLabel =
+            'extractStreams module=${widget.module.id} stage=infer_voiceovers';
+        debugPrint('[Perf] $inferLabel start');
+        inferSw = Stopwatch()..start();
+      }
+      final selection = await _loadSelection(ep, voiceover: null);
+      if (kDebugMode && inferSw != null) {
+        inferSw.stop();
+        debugPrint('[Perf] $inferLabel ${inferSw.elapsedMilliseconds}ms');
+      }
       debugPrint(
         '[VoiceoverDebug] infer selection.count module=${widget.module.id}: ${selection.streams.length}',
       );
@@ -844,11 +971,6 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       _preferredServerTitle = null;
       _serverTitles = const <String>[];
     });
-
-    final eps = _episodesCache;
-    if (eps != null && eps.isNotEmpty) {
-      await _maybeInitServers(eps);
-    }
   }
 
   Future<void> _pickServer(List<String> serverTitles) async {
@@ -904,11 +1026,22 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
     JsStreamSelection selection;
     try {
-      selection = await _exec.extractStreams(
-        widget.module.id,
-        ep.href,
+      Stopwatch? streamsSw;
+      String? streamsLabel;
+      if (kDebugMode) {
+        streamsLabel =
+            'extractStreams module=${widget.module.id} stage=open_episode';
+        debugPrint('[Perf] $streamsLabel start');
+        streamsSw = Stopwatch()..start();
+      }
+      selection = await _loadSelection(
+        ep,
         voiceover: _preferredVoiceoverTitle,
       );
+      if (kDebugMode && streamsSw != null) {
+        streamsSw.stop();
+        debugPrint('[Perf] $streamsLabel ${streamsSw.elapsedMilliseconds}ms');
+      }
     } catch (_) {
       selection = const JsStreamSelection(streams: <JsStreamCandidate>[]);
     }
@@ -921,6 +1054,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       );
       return;
     }
+
+    _lastOpenedSelection = selection;
 
     debugPrint(
       '[VoiceoverDebug] openEpisode selection.count module=${widget.module.id}: ${selection.streams.length}',
@@ -1011,25 +1146,30 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
         if (!mounted) return;
         if (_preferredVoiceoverTitle != null) {
           try {
-            selection = await _exec.extractStreams(
-              widget.module.id,
-              ep.href,
+            Stopwatch? refetchSw;
+            String? refetchLabel;
+            if (kDebugMode) {
+              refetchLabel =
+                  'extractStreams module=${widget.module.id} stage=open_episode_refetch';
+              debugPrint('[Perf] $refetchLabel start');
+              refetchSw = Stopwatch()..start();
+            }
+            selection = await _loadSelection(
+              ep,
               voiceover: _preferredVoiceoverTitle,
             );
+            if (kDebugMode && refetchSw != null) {
+              refetchSw.stop();
+              debugPrint('[Perf] $refetchLabel ${refetchSw.elapsedMilliseconds}ms');
+            }
           } catch (_) {
             // Keep existing selection.
           }
         }
       } else {
-        final serverTitles = selection.streams
-            .map((s) => s.title.trim())
-            .where((t) => t.isNotEmpty)
-            .toList(growable: false);
-        final uniqueServerTitles = <String>[];
-        final seenServers = <String>{};
-        for (final t in serverTitles) {
-          final k = t.toLowerCase();
-          if (seenServers.add(k)) uniqueServerTitles.add(t);
+        final uniqueServerTitles = _serverTitlesFromSelection(selection);
+        if (mounted) {
+          setState(() => _serverTitles = uniqueServerTitles);
         }
         if (uniqueServerTitles.length >= 2 && _preferredServerTitle == null) {
           debugPrint(
@@ -1042,6 +1182,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       if (!mounted) return;
 
       // Pick a single stream by preferred title.
+      _lastOpenedSelection = selection;
       JsStreamCandidate picked = selection.streams.first;
       final want = looksLikeVoiceovers
           ? _preferredVoiceoverTitle?.trim()
@@ -1137,10 +1278,10 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       appBar: AppBar(
         title: Text('${widget.module.name}: ${widget.title}'),
         actions: [
-          if (_serverTitles.length >= 2)
+          if (_lastOpenedSelection != null && !_modulePrefersVoiceoverPicker)
             IconButton(
               tooltip: 'Server',
-              onPressed: () => _pickServer(_serverTitles),
+              onPressed: _openServerPicker,
               icon: const Icon(Icons.cloud_outlined),
             ),
           if (_voiceoverTitles.length >= 2)
