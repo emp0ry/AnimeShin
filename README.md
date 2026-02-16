@@ -161,24 +161,14 @@ flutter build linux --release
 
 ---
 
-# Installation Guide
-
-This guide explains how to install **AnimeShin** on different operating systems.
-
----
-
 ## 🪟 Windows
 
-### Download
-
+Download the Windows build from Assets below.
 * File: `AnimeShin-win-vX.Y.Z.zip`
 
 ### Install
 
-1. Download the `.zip` file
-2. Right-click → **Extract All**
-3. Open the extracted folder
-4. Run **AnimeShin.exe**
+Download → Extract → Run AnimeShin.exe
 
 ✅ No installation required  
 ✅ Portable (can be moved anywhere)
@@ -189,39 +179,25 @@ This guide explains how to install **AnimeShin** on different operating systems.
 
 ## 🍎 macOS
 
-### Download
-
+Download the macOS build from Assets below.
 * File: `AnimeShin-macos-vX.Y.Z.dmg`
 
 ### Install
 
-1. Open the `.dmg` file
-2. Drag **AnimeShin** into **Applications**
-3. Open **Applications → AnimeShin**
+Open dmg → Drag to Applications
 
-⚠️ First launch warning:
-
-* Right-click **AnimeShin**
-* Click **Open**
-* Confirm **Open**
-
-(Apple Gatekeeper limitation - normal for unsigned apps)
+First launch: Right click → Open
 
 ---
 
 ## 🍏 iOS
 
-### Download
-
+Download the iOS build from Assets below.
 * File: `AnimeShin-ios-vX.Y.Z.ipa`
-
-### Important
-
-⚠️ This IPA is **NOT signed**  
-You must sign it manually before installation.
 
 ### Install options
 
+iOS requires sideloading (AltStore / SideStore / Sideloadly). No jailbreak required.
 * [SideStore](https://sidestore.io/) + [LiveContainer](https://github.com/LiveContainer/LiveContainer) (recommended)
 * Xcode
 * AltStore
@@ -232,22 +208,10 @@ You must sign it manually before installation.
 
 ## 🤖 Android
 
-### Download
-
+Download the Android build from Assets below.
 * File: `AnimeShin-android-vX.Y.Z.apk`
 
-### Important
-
-⚠️ This APK is **unsigned**  
-You must **sign it before installing**, or install using a custom installer.
-
-### Install (after signing)
-
-```bash
-adb install AnimeShin-android-vX.Y.Z.apk
-```
-
-Or install via file manager if your device allows unsigned APKs.
+You can install the APK normally.
 
 ---
 
@@ -259,8 +223,7 @@ Or install via file manager if your device allows unsigned APKs.
 
 **Android APK won’t install**
 
-* APK must be signed
-* Enable "Install unknown apps"
+* If installation fails: enable “Install unknown apps” in system settings.
 
 ---
 
