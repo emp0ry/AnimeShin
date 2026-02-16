@@ -73,24 +73,6 @@ enum _AutoSkipKind { opening, ending }
 class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Disable unexpected jump detector logging.
   static const bool _enableJumpDetector = false;
-  // ---- Fake wrap-to-end heal tuning ----
-  // Consider "near start" if previous position <= this value.
-  final Duration _wrapNearStart = PlayerTuning.wrapNearStart;
-  // Consider "near end" if current position >= (duration - this value).
-  final Duration _wrapNearEnd = PlayerTuning.wrapNearEnd;
-  // Consider it a big forward jump if delta >= this value.
-  final Duration _wrapBigJump = PlayerTuning.wrapBigJump;
-  // Retry cadence & count to firmly snap back to zero if backend keeps wrapping.
-  final Duration _wrapHealRetryDelay = PlayerTuning.wrapHealRetryDelay;
-  final int _wrapHealMaxRetries = PlayerTuning.wrapHealMaxRetries;
-
-  // Internal guard for healing loop.
-  bool _wrapHealing = false;
-  int _wrapHealAttempts = 0;
-
-  // Blocks local & remote progress updates during healing.
-  DateTime? _progressSaveBlockedUntil;
-
   // --- Platform / channels -----------------------------------------------------
 
   static const MethodChannel _iosNativePlayer =
@@ -102,12 +84,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   late final VideoController _video;
 
   // Fullscreen helpers (media_kit's internal fullscreen needs a controls subtree context).
-  BuildContext? _controlsCtx;
+  BuildContext? _controlsCtxNormal;
+  BuildContext? _controlsCtxFullscreen;
   bool _startFsHandled = false;
   bool _wasFullscreen = false;
-  bool _fsToggleInFlight = false;
-  DateTime? _lastFsToggleAt;
-  static const Duration _fsToggleCooldown = Duration(milliseconds: 400);
   bool _nativeFsInFlight = false;
   bool _nativeFsActive = false;
 
@@ -163,9 +143,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   String? _subtitleAppliedUrl;
 
   late ProviderSubscription<PlayerPrefs> _prefsSub;
-
-  // Ensure our hotkeys are handled by Flutter (and not the underlying Video widget).
-  late final FocusNode _hotkeysFocusNode;
 
   // --- Jump detection / logging-only ------------------------------------------
 
@@ -315,12 +292,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   Future<void> _maybeAutoIncrementProgress(Duration pos) async {
     if (!_autoProgress) return;
-    // Skip auto-increment while a temporary save block is active.
-    if (_progressSaveBlockedUntil != null &&
-        DateTime.now().isBefore(_progressSaveBlockedUntil!)) {
-      return;
-    }
-
     final item = widget.item;
     final ordinal = widget.args.ordinal;
     if (item == null || ordinal <= 0) return;
@@ -468,7 +439,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   void _insertCursorOverlayIfNeeded() {
     if (!_isDesktop || _cursorOverlayEntry != null) return;
-    final ctx = _controlsCtx;
+    final ctx = _activeControlsCtx(preferFullscreen: true);
     if (ctx == null || !ctx.mounted) return;
 
     final overlay = Overlay.of(ctx);
@@ -530,52 +501,88 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     });
   }
 
-  bool _canToggleFullscreen() {
-    if (_fsToggleInFlight) return false;
-    final now = DateTime.now();
-    final last = _lastFsToggleAt;
-    if (last != null && now.difference(last) < _fsToggleCooldown) {
-      return false;
-    }
-    _lastFsToggleAt = now;
-    return true;
-  }
-
-  Future<void> _toggleFullscreenHotkey({required bool forceExit}) async {
-    if (_isIOS) return;
-    final c = _controlsCtx;
-    if (c == null || !c.mounted) return;
-    if (!_canToggleFullscreen()) return;
-
-    _fsToggleInFlight = true;
-    try {
-      if (forceExit) {
-        if (isFullscreen(c)) {
-          await exitFullscreen(c);
-          _wasFullscreen = false;
-          _log('hotkey: escape fullscreen');
-        }
-        return;
-      }
-
-      if (!isFullscreen(c)) {
-        await enterFullscreen(c);
-        _wasFullscreen = true;
-        _log('hotkey: enter fullscreen');
-      } else {
-        await exitFullscreen(c);
-        _wasFullscreen = false;
-        _log('hotkey: exit fullscreen');
-      }
-    } catch (_) {
-      // Ignore; native/window manager may be mid-transition.
-    } finally {
-      _fsToggleInFlight = false;
-    }
-  }
-
   void _hideCursorInstant() {
     if (_isDesktop) _cursorHideController.hideNow();
+  }
+
+  BuildContext? _activeControlsCtx({required bool preferFullscreen}) {
+    final full = _controlsCtxFullscreen;
+    if (preferFullscreen && full != null && full.mounted) return full;
+    final normal = _controlsCtxNormal;
+    if (normal != null && normal.mounted) return normal;
+    if (!preferFullscreen && full != null && full.mounted) return full;
+    return null;
+  }
+
+  Map<ShortcutActivator, VoidCallback> _desktopKeyboardShortcuts() {
+    void seekBy(Duration delta, {required String reason}) {
+      if (!_alive) return;
+      final tgt = _player.state.position + delta;
+      unawaited(_seekPlanned(tgt, reason: reason));
+    }
+
+    void setVolumeDelta(double delta) {
+      if (!_alive) return;
+      final volume = _player.state.volume + delta;
+      unawaited(_player.setVolume(volume.clamp(0.0, 100.0)));
+    }
+
+    void toggleFullscreenShortcut() {
+      if (_isIOS) return;
+      final ctx = _activeControlsCtx(preferFullscreen: true);
+      if (ctx == null || !ctx.mounted) return;
+      unawaited(toggleFullscreen(ctx));
+    }
+
+    void exitFullscreenShortcut() {
+      if (_isIOS) return;
+      final ctx = _activeControlsCtx(preferFullscreen: true);
+      if (ctx == null || !ctx.mounted) return;
+      unawaited(exitFullscreen(ctx));
+    }
+
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.mediaPlay): () {
+        if (_alive) unawaited(_player.play());
+      },
+      const SingleActivator(LogicalKeyboardKey.mediaPause): () {
+        if (_alive) unawaited(_player.pause());
+      },
+      const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () {
+        if (_alive) unawaited(_player.playOrPause());
+      },
+      const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () {
+        if (_alive) unawaited(_player.next());
+      },
+      const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): () {
+        if (_alive) unawaited(_player.previous());
+      },
+      const SingleActivator(LogicalKeyboardKey.space): () {
+        if (_alive) unawaited(_player.playOrPause());
+      },
+      const SingleActivator(LogicalKeyboardKey.keyJ): () {
+        seekBy(const Duration(seconds: -10), reason: 'mk_key_j');
+      },
+      const SingleActivator(LogicalKeyboardKey.keyI): () {
+        seekBy(const Duration(seconds: 10), reason: 'mk_key_i');
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
+        if (_seekStepSeconds <= 0) return;
+        seekBy(Duration(seconds: -_seekStepSeconds), reason: 'mk_key_left');
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowRight): () {
+        if (_seekStepSeconds <= 0) return;
+        seekBy(Duration(seconds: _seekStepSeconds), reason: 'mk_key_right');
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowUp): () {
+        setVolumeDelta(5.0);
+      },
+      const SingleActivator(LogicalKeyboardKey.arrowDown): () {
+        setVolumeDelta(-5.0);
+      },
+      const SingleActivator(LogicalKeyboardKey.keyF): toggleFullscreenShortcut,
+      const SingleActivator(LogicalKeyboardKey.escape): exitFullscreenShortcut,
+    };
   }
 
   void _log(String msg) {
@@ -923,8 +930,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Suppress quality reaction during initial load to prevent race with saved position
     _suppressPrefQualityReopen = true;
 
-    _hotkeysFocusNode = FocusNode(debugLabel: 'player_hotkeys');
-
     _bumpUiVisibility();
 
     final raw = widget.item?.progress; // real stored progress
@@ -1034,69 +1039,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _maybeAttachIOSCallbacks();
 
     _init();
-  }
-
-  // Try to heal "underflow -> wrap-to-end" by snapping back to zero a few times.
-  // This is robust against rapid repeated key presses that cause multiple wraps.
-  void _maybeHealWrapToStart(Duration prev, Duration pos) {
-    if (_plannedSeek) return;
-    final d = _player.state.duration;
-    if (d == Duration.zero) return;
-
-    // Heuristic trigger: we were near the start, suddenly landed near the end,
-    // and the jump was large enough to be suspicious.
-    final nearStart = prev <= _wrapNearStart;
-    final jumpedToTail = pos >= (d - _wrapNearEnd);
-    final bigForward = (pos - prev) >= _wrapBigJump;
-
-    if (!(nearStart && jumpedToTail && bigForward)) return;
-
-    // Start a short "no-save" window while we heal.
-    _progressSaveBlockedUntil =
-        DateTime.now().add(PlayerTuning.wrapHealSaveBlockWindow);
-
-    if (_wrapHealing) {
-      // Already healing — just extend the block window and let the loop continue.
-      return;
-    }
-
-    _wrapHealing = true;
-    _wrapHealAttempts = 0;
-
-    // Inner function to retry snap-to-zero until it sticks or attempts are exhausted.
-    void kick() {
-      if (!_alive) {
-        _wrapHealing = false;
-        return;
-      }
-      _wrapHealAttempts++;
-
-      // Planned seek so jump-detector won't flag it.
-      unawaited(_seekPlanned(Duration.zero, reason: 'heal_underflow_wrap'));
-
-      // Schedule a check after a short delay.
-      Timer(_wrapHealRetryDelay, () {
-        if (!_alive) {
-          _wrapHealing = false;
-          return;
-        }
-        final dNow = _player.state.duration;
-        final pNow = _player.state.position;
-        final stillAtTail =
-            dNow > Duration.zero && pNow >= (dNow - _wrapNearEnd);
-
-        if (stillAtTail && _wrapHealAttempts < _wrapHealMaxRetries) {
-          // Try again.
-          kick();
-        } else {
-          // Done (either healed or gave up); leave the no-save window to expire naturally.
-          _wrapHealing = false;
-        }
-      });
-    }
-
-    // Fire the first attempt immediately.
-    kick();
   }
 
   void _maybeAttachIOSCallbacks() {
@@ -1247,12 +1189,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     } catch (_) {}
 
     // Break reference to now-deactivated controls subtree.
-    _controlsCtx = null;
+    _controlsCtxNormal = null;
+    _controlsCtxFullscreen = null;
 
     _removeCursorOverlayIfAny();
     _cursorForceVisible.dispose();
-
-    _hotkeysFocusNode.dispose();
 
     super.dispose();
   }
@@ -1414,8 +1355,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // DO NOT force setVolume here. It causes fighting with user changes.
       _maybeAutoSkip(pos);
 
-      _maybeHealWrapToStart(prev, pos);
-
       // Try to bump AniList progress when near the ending / tail of the episode
       if (_autoProgress) {
         unawaited(_maybeAutoIncrementProgress(pos));
@@ -1511,12 +1450,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }) async {
     if (_navigatingAway) return;
 
-    // Do not persist while a temporary "heal" block is active.
-    if (_progressSaveBlockedUntil != null &&
-        DateTime.now().isBefore(_progressSaveBlockedUntil!)) {
-      return;
-    }
-
     final pos = _player.state.position;
     final dur = _player.state.duration;
     if (dur.inSeconds <= 0) return;
@@ -1561,8 +1494,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // Avoid crashing if seek races with dispose
       _log('seek skipped (not alive): $e');
     } finally {
-      // Keep _plannedSeek=true longer to prevent wrap healing from triggering
-      // on legitimate seeks while position is updating.
+      // Keep _plannedSeek=true longer to avoid false jump detection
+      // while the position is still settling.
       await Future.delayed(const Duration(milliseconds: 300));
       _plannedSeek = false;
     }
@@ -2028,9 +1961,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     } on PlatformException catch (e) {
       _iosNativeActive = false;
       _log('iOS native player failed: ${e.code}: ${e.message}');
-      if (_controlsCtx != null && !_wasFullscreen) {
+      final ctx = _controlsCtxNormal;
+      if (ctx != null && ctx.mounted && !_wasFullscreen) {
         try {
-          await enterFullscreen(_controlsCtx!);
+          await enterFullscreen(ctx);
           _wasFullscreen = true;
         } catch (_) {}
       }
@@ -2141,15 +2075,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final wasFs = _wasFullscreen;
     _log('_openNextEpisode(); wasFs=$wasFs');
 
-    if (wasFs) {
-      _log('exiting fullscreen (lib + native) before auto-next');
-      bool exitedViaControls = false;
-      if (_controlsCtx != null) {
-        try {
-          await exitFullscreen(_controlsCtx!);
-          exitedViaControls = true;
-        } catch (_) {}
-      }
+      if (wasFs) {
+        _log('exiting fullscreen (lib + native) before auto-next');
+        bool exitedViaControls = false;
+        final ctx = _controlsCtxFullscreen;
+        if (ctx != null && ctx.mounted) {
+          try {
+            await exitFullscreen(ctx);
+            exitedViaControls = true;
+          } catch (_) {}
+        }
       _wasFullscreen = false;
       // Avoid double native fullscreen toggles; onExitFullscreen already calls it.
       if (!exitedViaControls) {
@@ -2608,87 +2543,107 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         ),
       );
 
+      Widget videoWidget = Video(
+        controller: _video,
+        // media_kit_video can render subtitles as a Flutter overlay.
+        // On desktop (mpv backend), mpv renders subtitles itself, so the overlay can duplicate.
+        subtitleViewConfiguration: SubtitleViewConfiguration(
+          visible: !_isDesktop && _subtitlesEnabled,
+        ),
+        controls: (state) => ControlsCtxBridge(
+          state: state,
+          onReady: (ctx) {
+            if (_navigatingAway) return;
+            if (isFullscreen(ctx)) {
+              _controlsCtxFullscreen = ctx;
+            } else {
+              _controlsCtxNormal = ctx;
+            }
+            _log(
+                'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
+
+            // Start in fullscreen (lib) only for non-iOS platforms.
+            if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
+              _startFsHandled = true;
+              WidgetsBinding.instance.endOfFrame.then((_) async {
+                if (!mounted || _navigatingAway) return;
+                final c = _controlsCtxNormal ?? ctx;
+                if (!c.mounted) return;
+
+                if (!isFullscreen(c)) {
+                  try {
+                    await enterFullscreen(c); // lib fullscreen
+                    _wasFullscreen = true;
+                    // Wait briefly for texture cleanup before native fullscreen
+                    await Future.delayed(PlayerTuning.nativeFullscreenDelay);
+                    if (!mounted || _navigatingAway) return;
+                    if (!_nativeFsActive) {
+                      await _enterNativeFullscreen();
+                    }
+                    _insertCursorOverlayIfNeeded();
+                    _cursorHideController.kick();
+                    // await _enterNativeFullscreen(); // request native overlays (non-iOS)
+                    _log('entered fullscreen on new page');
+                  } catch (_) {}
+                }
+              });
+            }
+          },
+        ),
+        onEnterFullscreen: () async {
+          if (_isIOS) return;
+          _log('onEnterFullscreen() fired (lib)');
+          _wasFullscreen = true;
+          if (!mounted || _navigatingAway) return;
+
+          // Delay native fullscreen to prevent race with texture cleanup
+          await Future.delayed(PlayerTuning.nativeFullscreenDelay);
+          if (!mounted || _navigatingAway) return;
+          if (!_nativeFsActive) {
+            await _enterNativeFullscreen();
+          }
+
+          // Insert cursor overlay on desktop while fullscreen is active.
+          _insertCursorOverlayIfNeeded();
+          _cursorHideController.kick();
+
+          _log('native fullscreen requested from onEnterFullscreen()');
+        },
+        onExitFullscreen: () async {
+          if (_isIOS) return;
+          _log('onExitFullscreen() fired (lib)');
+          _wasFullscreen = false;
+          _controlsCtxFullscreen = null;
+          if (!mounted || _navigatingAway) return;
+          if (_nativeFsActive) {
+            await _exitNativeFullscreen();
+          }
+
+          // Remove cursor overlay when leaving fullscreen.
+          _removeCursorOverlayIfAny();
+
+          _log('native fullscreen exit requested from onExitFullscreen()');
+        },
+      );
+
+      if (_isDesktop) {
+        final shortcuts = _desktopKeyboardShortcuts();
+        videoWidget = MaterialDesktopVideoControlsTheme(
+          normal: MaterialDesktopVideoControlsThemeData(
+            keyboardShortcuts: shortcuts,
+          ),
+          fullscreen: MaterialDesktopVideoControlsThemeData(
+            keyboardShortcuts: shortcuts,
+          ),
+          child: videoWidget,
+        );
+      }
+
       return Stack(
         fit: StackFit.expand,
         children: [
           // Use a tiny bridge to get a context INSIDE the controls subtree.
-          Video(
-            controller: _video,
-            // media_kit_video can render subtitles as a Flutter overlay.
-            // On desktop (mpv backend), mpv renders subtitles itself, so the overlay can duplicate.
-            subtitleViewConfiguration: SubtitleViewConfiguration(
-              visible: !_isDesktop && _subtitlesEnabled,
-            ),
-            controls: (state) => ControlsCtxBridge(
-              state: state,
-              onReady: (ctx) {
-                if (_navigatingAway) return;
-                _controlsCtx ??= ctx;
-                _log(
-                    'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
-
-                // Start in fullscreen (lib) only for non-iOS platforms.
-                if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
-                  _startFsHandled = true;
-                  WidgetsBinding.instance.endOfFrame.then((_) async {
-                    if (!mounted || _navigatingAway) return;
-                    final c = _controlsCtx;
-                    if (c == null || !c.mounted) return;
-
-                    if (!isFullscreen(c)) {
-                      try {
-                        await enterFullscreen(c); // lib fullscreen
-                        _wasFullscreen = true;
-                        // Wait briefly for texture cleanup before native fullscreen
-                        await Future.delayed(PlayerTuning.nativeFullscreenDelay);
-                        if (!mounted || _navigatingAway) return;
-                        if (!_nativeFsActive) {
-                          await _enterNativeFullscreen();
-                        }
-                        _insertCursorOverlayIfNeeded();
-                        _cursorHideController.kick();
-                        // await _enterNativeFullscreen(); // request native overlays (non-iOS)
-                        _log('entered fullscreen on new page');
-                      } catch (_) {}
-                    }
-                  });
-                }
-              },
-            ),
-            onEnterFullscreen: () async {
-              if (_isIOS) return;
-              _log('onEnterFullscreen() fired (lib)');
-              _wasFullscreen = true;
-              if (!mounted || _navigatingAway) return;
-              
-              // Delay native fullscreen to prevent race with texture cleanup
-              await Future.delayed(PlayerTuning.nativeFullscreenDelay);
-              if (!mounted || _navigatingAway) return;
-              if (!_nativeFsActive) {
-                await _enterNativeFullscreen();
-              }
-
-              // Insert cursor overlay on desktop while fullscreen is active.
-              _insertCursorOverlayIfNeeded();
-              _cursorHideController.kick();
-
-              _log('native fullscreen requested from onEnterFullscreen()');
-            },
-            onExitFullscreen: () async {
-              if (_isIOS) return;
-              _log('onExitFullscreen() fired (lib)');
-              _wasFullscreen = false;
-              if (!mounted || _navigatingAway) return;
-              if (_nativeFsActive) {
-                await _exitNativeFullscreen();
-              }
-
-              // Remove cursor overlay when leaving fullscreen.
-              _removeCursorOverlayIfAny();
-
-              _log('native fullscreen exit requested from onExitFullscreen()');
-            },
-          ),
+          videoWidget,
           banner,
           overlayAppBar,
         ],
@@ -2726,76 +2681,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             behavior: HitTestBehavior.translucent,
             onPointerDown: (_) {
               _bumpUiVisibility();
-              if (!_hotkeysFocusNode.hasFocus) {
-                _hotkeysFocusNode.requestFocus();
-              }
             },
             onPointerMove: (_) => _bumpUiVisibility(),
             onPointerHover: (_) => _bumpUiVisibility(),
-            child: Focus(
-              autofocus: true,
-              focusNode: _hotkeysFocusNode,
-              onKeyEvent: (_, event) {
-                if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-                  return KeyEventResult.ignored;
-                }
-
-                final key = event.logicalKey;
-
-                if (key == LogicalKeyboardKey.space) {
-                  unawaited(() async {
-                    try {
-                      if (_player.state.playing) {
-                        await _player.pause();
-                        _log('hotkey: pause');
-                      } else {
-                        await _player.play();
-                        _log('hotkey: play');
-                      }
-                    } catch (_) {}
-                  }());
-                  return KeyEventResult.handled;
-                }
-
-                if (key == LogicalKeyboardKey.keyF) {
-                  unawaited(_toggleFullscreenHotkey(forceExit: false));
-                  return KeyEventResult.handled;
-                }
-
-                if (key == LogicalKeyboardKey.escape) {
-                  unawaited(_toggleFullscreenHotkey(forceExit: true));
-                  return KeyEventResult.handled;
-                }
-
-                if (key == LogicalKeyboardKey.arrowLeft) {
-                  final step = _seekStepSeconds;
-                  if (step <= 0) return KeyEventResult.handled;
-                  unawaited(
-                    _seekPlanned(
-                      _player.state.position - Duration(seconds: step),
-                      reason: 'key_seek_left',
-                    ),
-                  );
-                  return KeyEventResult.handled;
-                }
-
-                if (key == LogicalKeyboardKey.arrowRight) {
-                  final step = _seekStepSeconds;
-                  if (step <= 0) return KeyEventResult.handled;
-                  unawaited(
-                    _seekPlanned(
-                      _player.state.position + Duration(seconds: step),
-                      reason: 'key_seek_right',
-                    ),
-                  );
-                  return KeyEventResult.handled;
-                }
-
-                return KeyEventResult.ignored;
-              },
-              child: wrapDesktopCursorHider(
-                buildPlayerStack(),
-              ),
+            child: wrapDesktopCursorHider(
+              buildPlayerStack(),
             ),
           ),
         ),

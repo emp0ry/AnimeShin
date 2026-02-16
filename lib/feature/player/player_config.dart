@@ -70,14 +70,6 @@ class PlayerTuning {
   // Auto-next module resolution timeout
   static const Duration autoNextResolveTimeout = Duration(seconds: 15);
 
-  // Wrap-to-end heal tuning
-  static const Duration wrapNearStart = Duration(seconds: 4);
-  static const Duration wrapNearEnd = Duration(seconds: 7);
-  static const Duration wrapBigJump = Duration(seconds: 8);
-  static const Duration wrapHealSaveBlockWindow = Duration(seconds: 2);
-  static const Duration wrapHealRetryDelay = Duration(milliseconds: 120);
-  static const int wrapHealMaxRetries = 4;
-
   // Desktop mpv buffering (bytes)
   static const int windowsBufferBytes = 128 * 1024 * 1024;
   static const int otherBufferBytes = 64 * 1024 * 1024;
