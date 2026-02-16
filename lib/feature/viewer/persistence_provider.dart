@@ -53,7 +53,7 @@ class PersistenceNotifier extends Notifier<Persistence> {
 
     // Configure home directory, if not in the browser.
     if (!kIsWeb) {
-      final dir = defaultTargetPlatform == TargetPlatform.macOS
+      final dir = (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
           ? await getApplicationSupportDirectory()
           : await getApplicationDocumentsDirectory();
       Hive.init(dir.path);

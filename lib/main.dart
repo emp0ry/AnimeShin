@@ -60,11 +60,13 @@ Future<void> main() async {
   appVersion = info.version;
 
   // Initialize Hive (required for Hive.openBox).
-  // On macOS, prefer Application Support to avoid prompting for protected folder access.
+  // On desktop, prefer Application Support to avoid protected folder access
+  // and avoid saving app data to user-facing Documents folders.
   if (!kIsWeb) {
-    final Directory dir = Platform.isMacOS
-        ? await getApplicationSupportDirectory()
-        : await getApplicationDocumentsDirectory();
+    final Directory dir =
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)
+            ? await getApplicationSupportDirectory()
+            : await getApplicationDocumentsDirectory();
     Hive.init(dir.path);
   }
 
