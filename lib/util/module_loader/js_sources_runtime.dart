@@ -1,6 +1,19 @@
+// js_sources_runtime.dart
+//
+// A lightweight JS runtime host for Sora style source modules.
+// Provides:
+// - Module loading, wrapping, and export normalization
+// - Sora compatible fetchv2 and fetch helpers via a native Dart HTTP bridge
+// - Per module logs and last fetch debug data
+//
+// Notes:
+// - Comments are intentionally in English (user preference)
+// - The wrapper aims to keep Sora style behavior intact
+
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show consolidateHttpClientResponseBytes;
 import 'package:flutter_js/flutter_js.dart';
 
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
@@ -14,7 +27,12 @@ class JsSourcesRuntime {
   JavascriptRuntime? _runtime;
   final SourcesModuleLoader _loader = SourcesModuleLoader();
 
-  final HttpClient _httpClient = HttpClient()..autoUncompress = true;
+  // Shared HttpClient for connection reuse and performance.
+  // These limits help avoid stalls when modules do many requests.
+  final HttpClient _httpClient = HttpClient()
+    ..autoUncompress = true
+    ..maxConnectionsPerHost = 6
+    ..idleTimeout = const Duration(seconds: 15);
 
   static String _normalizeId(String raw) {
     final t = raw.trim().toLowerCase();
@@ -38,6 +56,10 @@ class JsSourcesRuntime {
     return out.isEmpty ? 'remote' : out;
   }
 
+  // JSON string literal for safe embedding into JS code.
+  // Example: _jsLit("a'b") -> "\"a'b\"" with proper escaping
+  static String _jsLit(String s) => jsonEncode(s);
+
   JavascriptRuntime get _rt {
     final rt = _runtime;
     if (rt == null) {
@@ -52,8 +74,9 @@ class JsSourcesRuntime {
     final rt = getJavascriptRuntime();
     rt.enableHandlePromises();
 
-    // Native HTTP bridge (Sora-style): JS calls sendMessage('HttpFetch', JSON.stringify({...}))
-    // and Dart performs the request, returning { status, headers, body }.
+    // Native HTTP bridge.
+    // JS calls: sendMessage('HttpFetch', JSON.stringify({ url, options }))
+    // Dart returns a JSON string: { status, headers, body, finalUrl, redirects?, error? }
     rt.onMessage('HttpFetch', (dynamic args) async {
       try {
         Map map;
@@ -69,21 +92,24 @@ class JsSourcesRuntime {
         } else {
           map = <String, Object?>{};
         }
+
         final url = (map['url'] ?? '').toString();
         final options = map['options'];
 
         if (url.trim().isEmpty) {
-          return <String, Object?>{
+          return jsonEncode(<String, Object?>{
             'status': 0,
             'headers': <String, String>{},
             'body': '',
+            'finalUrl': '',
             'error': 'missing_url',
-          };
+          });
         }
 
         String method = 'GET';
         Object? body;
         final headers = <String, String>{};
+
         final timeoutMsRaw = (options is Map) ? options['timeoutMs'] : null;
         final timeoutMs = timeoutMsRaw is num ? timeoutMsRaw.toInt() : 25000;
         final timeout = Duration(milliseconds: timeoutMs.clamp(1000, 120000));
@@ -105,8 +131,7 @@ class JsSourcesRuntime {
           if (b != null) body = b;
         }
 
-        // If body came through JSON decoding, it may be a Map/List (desired).
-        // If it's a String, keep as-is.
+        // Normalize body into text.
         String? bodyText;
         var inferredJsonBody = false;
         if (body != null) {
@@ -121,7 +146,11 @@ class JsSourcesRuntime {
         }
 
         final uri = Uri.parse(url);
+
+        // openUrl can hang during DNS/TLS in some cases, keep timeout.
         final req = await _httpClient.openUrl(method, uri).timeout(timeout);
+
+        // Apply headers.
         headers.forEach(req.headers.set);
 
         // Default UA if absent.
@@ -129,7 +158,8 @@ class JsSourcesRuntime {
         if (existingUa == null || existingUa.isEmpty) {
           req.headers.set(
             'User-Agent',
-            headers['User-Agent'] ?? headers['user-agent'] ??
+            headers['User-Agent'] ??
+                headers['user-agent'] ??
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
           );
         }
@@ -155,9 +185,9 @@ class JsSourcesRuntime {
         }
 
         final resp = await req.close().timeout(timeout);
-        final bytes = await resp
-          .fold<List<int>>(<int>[], (a, b) => a..addAll(b))
-          .timeout(timeout);
+
+        // Faster and more memory friendly than fold for large responses.
+        final bytes = await consolidateHttpClientResponseBytes(resp).timeout(timeout);
 
         String text;
         try {
@@ -172,23 +202,35 @@ class JsSourcesRuntime {
           outHeaders[k] = v.join(', ');
         });
 
+        // Track redirects if any.
+        final redirects = <String>[];
+        try {
+          for (final r in resp.redirects) {
+            redirects.add(r.location.toString());
+          }
+        } catch (_) {}
+
+        final finalUrl = redirects.isNotEmpty ? redirects.last : uri.toString();
+
         return jsonEncode(<String, Object?>{
           'status': resp.statusCode,
           'headers': outHeaders,
           'body': text,
-          'finalUrl': uri.toString(),
+          'finalUrl': finalUrl,
+          if (redirects.isNotEmpty) 'redirects': redirects,
         });
       } catch (e) {
         return jsonEncode(<String, Object?>{
           'status': 0,
           'headers': <String, String>{},
           'body': '',
+          'finalUrl': '',
           'error': e.toString(),
         });
       }
     });
 
-    // Global bootstrap: module registry + a compatible fetchv2 helper.
+    // Global bootstrap: module registry + Sora compatible fetchv2 helper.
     rt.evaluate(_bootstrapScript, sourceUrl: 'assets://js_bootstrap.js');
 
     _runtime = rt;
@@ -196,7 +238,10 @@ class JsSourcesRuntime {
 
   Future<void> ensureModuleLoaded(String moduleId) async {
     await ensureInitialized();
-    if (_loadedModules.contains(moduleId)) return;
+
+    // Load both raw and normalized ids into the loaded set to avoid duplicates.
+    final norm = _normalizeId(moduleId);
+    if (_loadedModules.contains(moduleId) || _loadedModules.contains(norm)) return;
 
     final loaded = await _loader.loadModule(moduleId);
     final wrapped = _wrapModule(
@@ -207,25 +252,28 @@ class JsSourcesRuntime {
     _rt.evaluate(wrapped, sourceUrl: 'assets://${loaded.descriptor.jsAsset}');
 
     _loadedModules.add(moduleId);
+    _loadedModules.add(norm);
   }
 
   Future<void> invalidateModule(String moduleId) async {
     await ensureInitialized();
     final norm = _normalizeId(moduleId);
+
     _loadedModules.remove(moduleId);
     _loadedModules.remove(norm);
     _loader.invalidateModule(moduleId);
 
     final ids = <String>{moduleId, norm}..removeWhere((e) => e.trim().isEmpty);
     for (final id in ids) {
-      final escaped = id.replaceAll("'", "\\'");
+      final idLit = _jsLit(id);
       _rt.evaluate("""
 (() => {
   try {
-    if (globalThis.__modules) delete globalThis.__modules['$escaped'];
-    if (globalThis.__moduleMeta) delete globalThis.__moduleMeta['$escaped'];
-    if (globalThis.__moduleLogs) delete globalThis.__moduleLogs['$escaped'];
-    if (globalThis.__lastFetchByModule) delete globalThis.__lastFetchByModule['$escaped'];
+    if (globalThis.__modules) delete globalThis.__modules[$idLit];
+    if (globalThis.__moduleMeta) delete globalThis.__moduleMeta[$idLit];
+    if (globalThis.__moduleLogs) delete globalThis.__moduleLogs[$idLit];
+    if (globalThis.__lastFetchByModule) delete globalThis.__lastFetchByModule[$idLit];
+    if (globalThis.__fetchLogByModule) delete globalThis.__fetchLogByModule[$idLit];
   } catch (_) {}
 })()
 """);
@@ -240,22 +288,26 @@ class JsSourcesRuntime {
   }) async {
     await ensureModuleLoaded(moduleId);
 
+    // Use JSON string literals to avoid JS injection and quoting issues.
+    final moduleIdLit = _jsLit(moduleId);
+    final fnNameLit = _jsLit(functionName);
     final argsJs = jsonEncode(args);
+
     final expr = """
 (async () => {
   const prevModuleId = globalThis.__currentModuleId;
-  globalThis.__currentModuleId = '$moduleId';
+  globalThis.__currentModuleId = $moduleIdLit;
   try {
-    const mod = globalThis.__modules && globalThis.__modules['$moduleId'];
-    const fn = mod && mod['$functionName'];
+    const mod = globalThis.__modules && globalThis.__modules[$moduleIdLit];
+    const fn = mod && mod[$fnNameLit];
     if (typeof fn !== 'function') {
-      return '__JS_ERROR__:missing_function:$functionName';
+      return '__JS_ERROR__:missing_function:' + String($fnNameLit);
     }
     if (typeof globalThis.__pushLog === 'function') {
       try {
-        globalThis.__pushLog('$moduleId', 'info', [
+        globalThis.__pushLog($moduleIdLit, 'info', [
           'call',
-          '$functionName',
+          $fnNameLit,
           'args',
           $argsJs,
           'fetch',
@@ -296,7 +348,7 @@ class JsSourcesRuntime {
       try {
         return jsonDecode(trimmed) as String;
       } catch (_) {
-        // QuickJS sometimes returns single-quoted strings which are not JSON.
+        // QuickJS sometimes returns single quoted strings which are not JSON.
         if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
           final inner = trimmed.substring(1, trimmed.length - 1);
           return inner
@@ -330,14 +382,16 @@ class JsSourcesRuntime {
     required String moduleCode,
     required String metaRaw,
   }) {
-    final escapedId = moduleId.replaceAll("'", "\\'");
+    // Use JSON literals for safe embedding.
+    final moduleIdLit = _jsLit(moduleId);
     final metaJsonString = jsonEncode(metaRaw);
+
     return """
 (function(){
   globalThis.__modules = globalThis.__modules || {};
   globalThis.__moduleMeta = globalThis.__moduleMeta || {};
 
-  const __id = '$escapedId';
+  const __id = $moduleIdLit;
   let __meta = {};
   try { __meta = JSON.parse($metaJsonString); } catch (_) { __meta = {}; }
   globalThis.__moduleMeta[__id] = __meta;
@@ -359,12 +413,12 @@ class JsSourcesRuntime {
     error: function(){ _push('error', arguments); }
   };
 
-  // Bind global fetch helpers into module scope for compatibility.
   // Ensure a global console exists for modules that use it directly.
   if (!globalThis.console) {
     globalThis.console = console;
   }
 
+  // Bind global fetch helpers into module scope for compatibility.
   const fetch = (typeof globalThis.fetch === 'function')
     ? globalThis.fetch
     : (typeof globalThis.fetchv2 === 'function'
@@ -378,7 +432,7 @@ class JsSourcesRuntime {
   globalThis.source = __meta;
   try {
     (function(exports, module, meta, console, fetch, fetchv2){
-      // --- Predeclare Sora-style aliases to avoid ReferenceError inside modules ---
+      // Predeclare Sora style aliases to avoid ReferenceError inside modules.
       const __callFirst = function(list, args){
         for (let i = 0; i < list.length; i++) {
           const fn = list[i];
@@ -423,11 +477,10 @@ class JsSourcesRuntime {
           ], arguments);
         };
       }
+
 $moduleCode
 
-      // --- Compatibility exports (Sora-style modules vary in naming) ---
-      // Prefer canonical names expected by the Dart host, but fall back to
-      // common alternatives seen across source ecosystems.
+      // Compatibility exports. Prefer canonical names expected by the Dart host.
       if (typeof searchResults === 'function') {
         exports.searchResults = searchResults;
       } else if (typeof searchContent === 'function') {
@@ -462,8 +515,8 @@ $moduleCode
   }
 
   let finalExports = (module && module.exports) ? module.exports : exports;
-  // If a module used CommonJS and replaced module.exports, preserve any
-  // function references that were attached to exports.
+
+  // If module.exports was replaced, preserve any function references attached to exports.
   try {
     [
       'searchResults',
@@ -479,20 +532,18 @@ $moduleCode
       'getPages',
       'getImages',
       'extractStreamUrl',
-      'getVoiceovers',
+      'getVoiceovers'
     ].forEach(function(k){
       if (!finalExports[k] && exports[k]) finalExports[k] = exports[k];
     });
   } catch (_) {}
 
-  // --- Normalize export shapes ---
+  // Normalize export shapes.
   // Some modules export:
-  // - `exports.search = fn` (no `searchResults`)
-  // - `exports.default = fn`
-  // - `module.exports = fn`
-  // Normalize these to the canonical function names expected by Dart.
+  // - exports.search = fn
+  // - exports.default = fn
+  // - module.exports = fn
   try {
-    // If the module exported a bare function, wrap it.
     if (typeof finalExports === 'function') {
       finalExports = { searchResults: finalExports };
     }
@@ -500,7 +551,12 @@ $moduleCode
     if (finalExports && typeof finalExports === 'object') {
       const sr = finalExports.searchResults;
       if (typeof sr !== 'function') {
-        const cand = finalExports.search || finalExports.searchAnime || finalExports.searchAnimes || finalExports.searchResult || finalExports.default;
+        const cand = finalExports.search ||
+          finalExports.searchAnime ||
+          finalExports.searchAnimes ||
+          finalExports.searchResult ||
+          finalExports.default;
+
         if (typeof cand === 'function') {
           finalExports.searchResults = cand;
         }
@@ -515,13 +571,17 @@ $moduleCode
 
   Future<String?> getModuleExportsJson(String moduleId) async {
     await ensureInitialized();
+    final moduleIdLit = _jsLit(moduleId);
+
     final expr = """
 (() => {
   try {
-    const mod = globalThis.__modules ? globalThis.__modules['$moduleId'] : null;
+    const mod = globalThis.__modules ? globalThis.__modules[$moduleIdLit] : null;
     if (!mod) return '';
     return JSON.stringify(Object.keys(mod));
-  } catch(e) { return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e)); }
+  } catch(e) {
+    return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e));
+  }
 })()
 """;
     final res = _rt.evaluate(expr).stringResult.trim();
@@ -531,12 +591,35 @@ $moduleCode
 
   Future<String?> getLastFetchDebugJson(String moduleId) async {
     await ensureInitialized();
+    final moduleIdLit = _jsLit(moduleId);
+
     final expr = """
 (() => {
   try {
-    const v = globalThis.__getLastFetch ? globalThis.__getLastFetch('$moduleId') : null;
+    const v = globalThis.__getLastFetch ? globalThis.__getLastFetch($moduleIdLit) : null;
     return v ? JSON.stringify(v) : '';
-  } catch(e) { return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e)); }
+  } catch(e) {
+    return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e));
+  }
+})()
+""";
+    final res = _rt.evaluate(expr).stringResult.trim();
+    if (res.isEmpty || res == 'undefined' || res == 'null') return null;
+    return res;
+  }
+
+  Future<String?> getFetchLogJson(String moduleId) async {
+    await ensureInitialized();
+    final moduleIdLit = _jsLit(moduleId);
+
+    final expr = """
+(() => {
+  try {
+    const v = globalThis.__getFetchLog ? globalThis.__getFetchLog($moduleIdLit) : [];
+    return JSON.stringify(v || []);
+  } catch(e) {
+    return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e));
+  }
 })()
 """;
     final res = _rt.evaluate(expr).stringResult.trim();
@@ -546,12 +629,16 @@ $moduleCode
 
   Future<String?> getLogsJson(String moduleId) async {
     await ensureInitialized();
+    final moduleIdLit = _jsLit(moduleId);
+
     final expr = """
 (() => {
   try {
-    const v = globalThis.__getLogs ? globalThis.__getLogs('$moduleId') : [];
+    const v = globalThis.__getLogs ? globalThis.__getLogs($moduleIdLit) : [];
     return JSON.stringify(v || []);
-  } catch(e) { return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e)); }
+  } catch(e) {
+    return '__JS_ERROR__:' + (e && (e.message||e.toString) ? (e.message||e.toString()) : String(e));
+  }
 })()
 """;
     final res = _rt.evaluate(expr).stringResult.trim();
@@ -565,10 +652,10 @@ const String _bootstrapScript = r'''
   globalThis.__modules = globalThis.__modules || {};
   globalThis.__moduleLogs = globalThis.__moduleLogs || {};
   globalThis.__lastFetchByModule = globalThis.__lastFetchByModule || {};
+  globalThis.__fetchLogByModule = globalThis.__fetchLogByModule || {};
   globalThis.__currentModuleId = globalThis.__currentModuleId || null;
 
   function __safeJsonParse(t) {
-    // With the native Dart HTTP bridge, we should get clean UTF-8 strings.
     return JSON.parse(String(t));
   }
 
@@ -595,6 +682,11 @@ const String _bootstrapScript = r'''
     return globalThis.__lastFetchByModule[id] || null;
   };
 
+  globalThis.__getFetchLog = function(moduleId) {
+    const id = moduleId || 'global';
+    return globalThis.__fetchLogByModule[id] || [];
+  };
+
   function __defaultRefererFor(url) {
     try {
       const u = String(url || '');
@@ -617,8 +709,17 @@ const String _bootstrapScript = r'''
     return null;
   }
 
+  function __pushFetchLog(moduleId, entry) {
+    try {
+      const id = moduleId || 'global';
+      const arr = (globalThis.__fetchLogByModule[id] = globalThis.__fetchLogByModule[id] || []);
+      arr.push(entry);
+      if (arr.length > 60) arr.shift();
+    } catch (_) {}
+  }
+
   // fetchv2(url, headersOrOptions?, method?, body?)
-  // Supports common Luna/Sora module call styles:
+  // Supports Sora module call styles:
   // - fetchv2(url)
   // - fetchv2(url, headers)
   // - fetchv2(url, headers, method, body)
@@ -650,7 +751,7 @@ const String _bootstrapScript = r'''
 
     const moduleId = globalThis.__currentModuleId || 'global';
 
-    // Some hosts are picky; provide a reasonable default UA if absent.
+    // Provide reasonable defaults if absent.
     if (!options.headers['User-Agent'] && !options.headers['user-agent']) {
       options.headers['User-Agent'] =
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -683,11 +784,12 @@ const String _bootstrapScript = r'''
       error: null,
       snippet: null,
       len: null,
-      tail: null
+      tail: null,
+      finalUrl: null
     };
 
-    // Native fetch via Dart bridge.
     const nativeRaw = await sendMessage('HttpFetch', JSON.stringify({ url: String(url), options: options }));
+
     let native = nativeRaw;
     try {
       if (typeof nativeRaw === 'string') native = __safeJsonParse(nativeRaw);
@@ -695,12 +797,13 @@ const String _bootstrapScript = r'''
       native = {};
     }
 
-    // Wrap to ensure a consistent API and capture debug info.
     let textPromise = null;
+
     const wrapped = {
       status: (native && typeof native.status === 'number') ? native.status : 0,
       ok: (native && typeof native.status === 'number') ? (native.status >= 200 && native.status < 300) : false,
       headers: (native && native.headers) ? native.headers : {},
+      finalUrl: (native && typeof native.finalUrl === 'string') ? native.finalUrl : null,
       text: function() {
         if (textPromise) return textPromise;
         if (native && typeof native.body === 'string') {
@@ -714,11 +817,22 @@ const String _bootstrapScript = r'''
             entry.status = wrapped.status;
             entry.ok = wrapped.ok;
             entry.ms = Date.now() - startTs;
+            entry.finalUrl = wrapped.finalUrl;
             entry.snippet = (t && t.length > 240) ? t.substring(0,240) : t;
             entry.len = (t && typeof t.length === 'number') ? t.length : null;
             entry.tail = (t && t.length > 120) ? t.substring(t.length - 120) : t;
             if (native && native.error) entry.error = String(native.error);
             globalThis.__lastFetchByModule[moduleId] = entry;
+
+            __pushFetchLog(moduleId, {
+              t: Date.now(),
+              ms: entry.ms,
+              status: wrapped.status,
+              ok: wrapped.ok,
+              url: String(url),
+              finalUrl: wrapped.finalUrl,
+              error: entry.error || null
+            });
           } catch(_) {}
           return t;
         }).catch(function(e){
@@ -727,8 +841,19 @@ const String _bootstrapScript = r'''
             entry.status = wrapped.status;
             entry.ok = wrapped.ok;
             entry.ms = Date.now() - startTs;
+            entry.finalUrl = wrapped.finalUrl;
             entry.error = String(e);
             globalThis.__lastFetchByModule[moduleId] = entry;
+
+            __pushFetchLog(moduleId, {
+              t: Date.now(),
+              ms: entry.ms,
+              status: wrapped.status,
+              ok: wrapped.ok,
+              url: String(url),
+              finalUrl: wrapped.finalUrl,
+              error: entry.error
+            });
           } catch(_) {}
           throw e;
         });
@@ -749,12 +874,13 @@ const String _bootstrapScript = r'''
       }
     };
 
-    // Populate lastFetch immediately (even if module only calls .json()).
+    // Populate lastFetch immediately.
     try {
       const entry0 = globalThis.__lastFetchByModule[moduleId] || {};
       entry0.status = wrapped.status;
       entry0.ok = wrapped.ok;
       entry0.ms = Date.now() - startTs;
+      entry0.finalUrl = wrapped.finalUrl;
       if (native && native.error) entry0.error = String(native.error);
       globalThis.__lastFetchByModule[moduleId] = entry0;
     } catch(_) {}
@@ -762,9 +888,8 @@ const String _bootstrapScript = r'''
     return wrapped;
   };
 
-  // Sora modules frequently use `fetch()` expecting a *string* response.
-  // Provide a compatible implementation that returns a String object (so it can
-  // be used both as a string and as a response-like object with .text()/.json()).
+  // Sora modules often use fetch() expecting it to yield a string.
+  // This implementation returns a String object enhanced with response like fields.
   globalThis.fetch = async function(url, options) {
     const r = await globalThis.fetchv2(url, options);
     const t = await r.text();
@@ -772,6 +897,7 @@ const String _bootstrapScript = r'''
     s.status = r.status;
     s.ok = r.ok;
     s.headers = r.headers;
+    s.finalUrl = r.finalUrl;
     s.text = async function(){ return String(s); };
     s.json = async function(){ return __safeJsonParse(String(s)); };
     return s;
