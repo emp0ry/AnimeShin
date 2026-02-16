@@ -3,19 +3,14 @@ import 'dart:typed_data';
 
 /// Build a search URL from a module template.
 ///
-/// - If [template] contains `%s`, it will be replaced with an URL-encoded [query].
-/// - Otherwise, `?q=` (or `&q=`) will be appended.
+/// If template contains %s, it is replaced with an URL-encoded query.
+/// Otherwise, ?q= or &q= is appended.
 String buildModuleSearchUrl(String template, String query) {
   final encoded = Uri.encodeComponent(query);
   if (template.contains('%s')) {
     return template.replaceAll('%s', encoded);
   }
 
-  // If the template already ends with a parameter assignment like
-  //   https://site/search?q=
-  // or
-  //   https://site/search?query=
-  // then just append the encoded query.
   if (RegExp(r'[?&][^=]+=$').hasMatch(template)) {
     return '$template$encoded';
   }
@@ -25,9 +20,7 @@ String buildModuleSearchUrl(String template, String query) {
 }
 
 /// Extracts a likely results list from various common API response shapes.
-///
-/// This intentionally uses heuristics because each module can return different
-/// JSON schemas.
+/// This is intentionally heuristic because modules can return different JSON schemas.
 List<Map<String, dynamic>> extractModuleResults(Object? decoded) {
   final rawList = _pickBestList(decoded) ?? const [];
   final out = <Map<String, dynamic>>[];
@@ -51,7 +44,8 @@ List<Map<String, dynamic>> extractModuleResults(Object? decoded) {
     out.add({
       'id': id,
       'name': name.trim(),
-      'url': url ?? '',
+      // If url is missing, keep id as fallback so the host can still navigate.
+      'url': (url == null || url.trim().isEmpty) ? (id?.toString() ?? '') : url,
       'raw': m,
     });
   }
@@ -59,7 +53,7 @@ List<Map<String, dynamic>> extractModuleResults(Object? decoded) {
   return out;
 }
 
-/// Attempts to JSON-decode [body]. Returns null on failure.
+/// Attempts to JSON-decode body. Returns null on failure.
 Object? tryJsonDecode(String body) {
   final cleaned = _cleanPossibleJson(body);
   if (cleaned.isEmpty) return null;
@@ -71,10 +65,8 @@ Object? tryJsonDecode(String body) {
   }
 }
 
-/// Decodes HTTP [bytes] into a string, attempting to respect `charset=` from the
-/// response `Content-Type` header.
-///
-/// Falls back to UTF-8 (allowMalformed) if the charset is missing/unknown.
+/// Decodes HTTP bytes into a string and respects charset from Content-Type.
+/// Falls back to UTF-8 (allowMalformed) if charset is missing or unknown.
 String decodeHttpBodyBytes(Uint8List bytes, {String? contentTypeHeader}) {
   final contentType = (contentTypeHeader ?? '').toLowerCase();
   final match = RegExp(r'charset\s*=\s*([^\s;]+)').firstMatch(contentType);
@@ -86,22 +78,18 @@ String decodeHttpBodyBytes(Uint8List bytes, {String? contentTypeHeader}) {
   if (encoding != null) {
     try {
       return _stripBom(encoding.decode(bytes));
-    } catch (_) {
-      // Ignore and fall back.
-    }
+    } catch (_) {}
   }
 
   return _stripBom(utf8.decode(bytes, allowMalformed: true));
 }
 
 List<Object?>? _pickBestList(Object? node) {
-  // Direct list.
   if (node is List) return node;
 
   if (node is Map) {
     final map = node.cast<String, dynamic>();
 
-    // Prefer common keys.
     const preferredKeys = [
       'results',
       'items',
@@ -120,7 +108,6 @@ List<Object?>? _pickBestList(Object? node) {
       if (list != null) return list;
     }
 
-    // Sometimes nested: { data: { items: [] } }
     for (final k in preferredKeys) {
       final v = map[k];
       if (v is Map) {
@@ -129,7 +116,6 @@ List<Object?>? _pickBestList(Object? node) {
       }
     }
 
-    // Fallback: first list anywhere.
     return _firstList(map);
   }
 
@@ -148,7 +134,6 @@ List<Object?>? _firstList(Object? node) {
 }
 
 String? _extractTitle(Map<String, dynamic> m) {
-  // Handle title/name fields that can be strings or objects.
   final candidates = <Object?>[
     m['name'],
     m['title'],
@@ -170,14 +155,12 @@ String? _extractTitle(Map<String, dynamic> m) {
     if (v != null && v.trim().isNotEmpty) return v;
   }
 
-  // Special: titles can be a list.
   final titles = m['titles'];
   if (titles is List && titles.isNotEmpty) {
     final v = _stringish(titles.first);
     if (v != null && v.trim().isNotEmpty) return v;
   }
 
-  // Special: { title: { main: ..., english: ..., alternative: ... } }
   final titleObj = m['title'];
   if (titleObj is Map) {
     const keys = ['main', 'ru', 'russian', 'english', 'en', 'romaji', 'alt'];
@@ -210,13 +193,11 @@ String? _stringish(Object? v) {
 }
 
 String _cleanPossibleJson(String s) {
-  // Trim leading whitespace to handle responses like "\n\n{...}".
   final trimmedLeft = s.replaceFirst(RegExp(r'^\s+'), '');
   return _stripBom(trimmedLeft);
 }
 
 String _stripBom(String s) {
   if (s.isEmpty) return s;
-  // U+FEFF BOM.
   return s.codeUnitAt(0) == 0xFEFF ? s.substring(1) : s;
 }
