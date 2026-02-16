@@ -68,6 +68,8 @@ class NoSwipeBackMaterialPageRoute<T> extends MaterialPageRoute<T> {
   bool get popGestureEnabled => false;
 }
 
+enum _AutoSkipKind { opening, ending }
+
 class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Disable unexpected jump detector logging.
   static const bool _enableJumpDetector = false;
@@ -172,6 +174,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // --- Auto-skip guard flags (Android-friendly) ---
   bool _openingSkipped = false;
   bool _endingSkipped = false;
+  _AutoSkipKind? _lastSkipKind;
 
   // Left for diagnostics (no corrective actions are taken).
   final bool _reopeningGuard = false;
@@ -2047,9 +2050,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (_reopeningGuard || _inQuarantine || _plannedSeek) return;
 
     // Respect temporary block (e.g., right after undo or iOS restore).
-    if (_autoSkipBlockedUntil != null &&
-        DateTime.now().isBefore(_autoSkipBlockedUntil!)) {
-      // Disable skip penalty by clearing the block.
+    if (_autoSkipBlockedUntil != null) {
+      if (DateTime.now().isBefore(_autoSkipBlockedUntil!)) {
+        return;
+      }
       _autoSkipBlockedUntil = null;
     }
 
@@ -2066,8 +2070,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // Trigger ANYTIME while we are inside [s, e)
       if (p >= s && p < e) {
         _openingSkipped = true;
-        _skipTo(Duration(seconds: s), Duration(seconds: e),
-            banner: 'Skipped Opening');
+        _skipTo(
+          Duration(seconds: s),
+          Duration(seconds: e),
+          banner: 'Skipped Opening',
+          skipKind: _AutoSkipKind.opening,
+        );
         return; // do not evaluate ED on the same tick
       }
     }
@@ -2082,16 +2090,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       // Trigger ANYTIME while we are inside [s, e)
       if (p >= s && p < e) {
         _endingSkipped = true;
-        _skipTo(Duration(seconds: s), Duration(seconds: e),
-            banner: 'Skipped Ending');
+        _skipTo(
+          Duration(seconds: s),
+          Duration(seconds: e),
+          banner: 'Skipped Ending',
+          skipKind: _AutoSkipKind.ending,
+        );
         return;
       }
     }
   }
 
-  Future<void> _skipTo(Duration from, Duration to,
-      {required String banner}) async {
+  Future<void> _skipTo(
+    Duration from,
+    Duration to, {
+    required String banner,
+    required _AutoSkipKind skipKind,
+  }) async {
     _undoSeekFrom = _clampSeekAbsolute(from);
+    _lastSkipKind = skipKind;
     _autoSkipBlockedUntil =
         DateTime.now().add(PlayerTuning.autoSkipBlockAfterSkip);
     await _seekPlanned(_clampSeekAbsolute(to), reason: 'auto_skip');
@@ -2105,8 +2122,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _undoSeekFrom = null;
     _autoSkipBlockedUntil =
         DateTime.now().add(PlayerTuning.autoSkipBlockAfterUndo);
-    _openingSkipped = false;
-    _endingSkipped = false;
+    if (_lastSkipKind == _AutoSkipKind.opening) {
+      _openingSkipped = true;
+    } else if (_lastSkipKind == _AutoSkipKind.ending) {
+      _endingSkipped = true;
+    }
+    _lastSkipKind = null;
   }
 
   Future<void> _openNextEpisode() async {
@@ -2147,20 +2168,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         return;
       }
 
-      // Resolve next episode through the JS module.
-      Stopwatch? episodesSw;
-      String? episodesLabel;
-      if (kDebugMode) {
-        episodesLabel = 'autoNext extractEpisodes module=$moduleId';
-        debugPrint('[Perf] $episodesLabel start');
-        episodesSw = Stopwatch()..start();
-      }
-      final episodes = await _jsExec
-          .extractEpisodes(moduleId, widget.args.url)
-          .timeout(PlayerTuning.autoNextResolveTimeout);
-      if (kDebugMode && episodesSw != null) {
-        episodesSw.stop();
-        debugPrint('[Perf] $episodesLabel ${episodesSw.elapsedMilliseconds}ms');
+      // Resolve next episode through cached list when available, otherwise via JS.
+      List<JsModuleEpisode> episodes;
+      final cachedEpisodes = widget.args.moduleEpisodes;
+      if (cachedEpisodes != null && cachedEpisodes.isNotEmpty) {
+        episodes = cachedEpisodes;
+      } else {
+        Stopwatch? episodesSw;
+        String? episodesLabel;
+        if (kDebugMode) {
+          episodesLabel = 'autoNext extractEpisodes module=$moduleId';
+          debugPrint('[Perf] $episodesLabel start');
+          episodesSw = Stopwatch()..start();
+        }
+        episodes = await _jsExec
+            .extractEpisodes(moduleId, widget.args.url)
+            .timeout(PlayerTuning.autoNextResolveTimeout);
+        if (kDebugMode && episodesSw != null) {
+          episodesSw.stop();
+          debugPrint('[Perf] $episodesLabel ${episodesSw.elapsedMilliseconds}ms');
+        }
       }
       if (episodes.isEmpty) {
         _log('modules: extractEpisodes returned empty');
@@ -2195,8 +2222,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         debugPrint('[Perf] $streamsLabel start');
         streamsSw = Stopwatch()..start();
       }
+      final voiceover = widget.args.preferredStreamIsVoiceover == true
+          ? widget.args.preferredStreamTitle
+          : null;
       final selection = await _jsExec
-          .extractStreams(moduleId, nextEp.href)
+          .extractStreams(moduleId, nextEp.href, voiceover: voiceover)
           .timeout(PlayerTuning.autoNextResolveTimeout);
       if (kDebugMode && streamsSw != null) {
         streamsSw.stop();
@@ -2287,7 +2317,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               ordinal: nextEp.number,
               title: widget.args.title,
               moduleId: moduleId,
+              moduleEpisodes: widget.args.moduleEpisodes,
               preferredStreamTitle: widget.args.preferredStreamTitle,
+              preferredStreamIsVoiceover: widget.args.preferredStreamIsVoiceover,
               subtitleUrl: subtitleUrl,
               url480: url480,
               url720: url720,

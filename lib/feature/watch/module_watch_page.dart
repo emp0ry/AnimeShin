@@ -1080,6 +1080,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     Map<String, String>? headers;
     String? subtitleUrl = selection.subtitleUrl;
     String? bannerTitle;
+    bool preferredIsVoiceover = false;
+    String? preferredStreamTitle;
 
     if (allQuality) {
       for (final s in selection.streams) {
@@ -1108,6 +1110,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       final looksLikeVoiceovers = _voiceoverTitles.length >= 2 ||
           candidates.length >= 2 ||
           (_modulePrefersVoiceoverPicker && candidates.isNotEmpty);
+      preferredIsVoiceover = looksLikeVoiceovers;
 
       debugPrint(
         '[VoiceoverDebug] openEpisode module=${widget.module.id} candidates: ${candidates.join(" | ")}',
@@ -1181,6 +1184,9 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
       if (!mounted) return;
 
+      preferredStreamTitle =
+          looksLikeVoiceovers ? _preferredVoiceoverTitle : _preferredServerTitle;
+
       // Pick a single stream by preferred title.
       _lastOpenedSelection = selection;
       JsStreamCandidate picked = selection.streams.first;
@@ -1223,6 +1229,10 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     // This is best-effort; any errors are silently ignored.
     unawaited(_maybeWarmupProxy());
 
+    final moduleEpisodes = _episodesCache == null
+        ? null
+        : List<JsModuleEpisode>.unmodifiable(_episodesCache!);
+
     await Navigator.of(context).push(
       NoSwipeBackMaterialPageRoute(
         settings: const RouteSettings(name: 'player'),
@@ -1233,7 +1243,9 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
             ordinal: ep.number,
             title: '${widget.title} • Ep ${ep.number}',
             moduleId: widget.module.id,
-            preferredStreamTitle: _preferredServerTitle,
+            moduleEpisodes: moduleEpisodes,
+            preferredStreamTitle: preferredStreamTitle,
+            preferredStreamIsVoiceover: preferredIsVoiceover,
             subtitleUrl: subtitleUrl,
             url480: url480,
             url720: url720,

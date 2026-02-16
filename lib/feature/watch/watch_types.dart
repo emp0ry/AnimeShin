@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:animeshin/util/module_loader/js_module_executor.dart';
+
 /// Immutable release model used by WatchPage/PlayerPage.
 @immutable
 class AniRelease {
@@ -63,7 +65,9 @@ class PlayerArgs {
     required this.ordinal,
     required this.title,
     this.moduleId,
+    this.moduleEpisodes,
     this.preferredStreamTitle,
+    this.preferredStreamIsVoiceover,
     this.subtitleUrl,
     this.url480,
     this.url720,
@@ -86,9 +90,15 @@ class PlayerArgs {
   /// be used for auto-next episode resolution.
   final String? moduleId;
 
+  /// Optional cached episode list to avoid re-fetching on auto-next.
+  final List<JsModuleEpisode>? moduleEpisodes;
+
   /// Optional preferred stream title used by modules that expose multiple
   /// streams (e.g. "SUB" / "DUB").
   final String? preferredStreamTitle;
+
+  /// Marks preferredStreamTitle as a voiceover label when true.
+  final bool? preferredStreamIsVoiceover;
 
   /// Optional external subtitle URL (e.g. .vtt) provided by a module.
   final String? subtitleUrl;

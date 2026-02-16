@@ -164,6 +164,11 @@ class JsSourcesRuntime {
           );
         }
 
+        final existingAe = req.headers.value(HttpHeaders.acceptEncodingHeader);
+        if (existingAe == null || existingAe.isEmpty) {
+          req.headers.set(HttpHeaders.acceptEncodingHeader, 'gzip, deflate');
+        }
+
         // Default Content-Type to JSON when appropriate unless explicitly set.
         {
           final ct = req.headers.value(HttpHeaders.contentTypeHeader);
