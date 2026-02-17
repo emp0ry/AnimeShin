@@ -102,6 +102,11 @@ class RemoteModulesStore {
     return out.isEmpty ? 'remote' : out;
   }
 
+  static bool _isLoopbackHost(String host) {
+    final h = host.trim().toLowerCase();
+    return h == 'localhost' || h == '127.0.0.1' || h == '::1';
+  }
+
   Future<Directory?> _supportDir() async {
     try {
       final d = await getApplicationSupportDirectory();
@@ -552,12 +557,26 @@ class RemoteModulesStore {
     );
   }
 
-  Future<void> downloadAllEnabledRemote() async {
+  Future<void> downloadAllEnabledRemote({
+    Duration perModuleTimeout = _downloadTimeout,
+    bool skipLoopbackHosts = false,
+  }) async {
+    final timeout =
+        perModuleTimeout < const Duration(seconds: 1)
+            ? const Duration(seconds: 1)
+            : perModuleTimeout;
     final entries = await list();
     for (final e in entries) {
       if (!e.enabled) continue;
+      if (skipLoopbackHosts) {
+        final uri = Uri.tryParse(e.jsonUrl);
+        final host = uri?.host ?? '';
+        if (host.isNotEmpty && _isLoopbackHost(host)) {
+          continue;
+        }
+      }
       try {
-        await addOrUpdateFromUrl(e.jsonUrl, enabled: true);
+        await addOrUpdateFromUrl(e.jsonUrl, enabled: true).timeout(timeout);
       } catch (_) {}
     }
   }

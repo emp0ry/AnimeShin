@@ -9,6 +9,9 @@ import 'remote_modules_store.dart';
 
 typedef AssetStringReader = Future<String> Function(String assetPath);
 
+// Shared loader instance reused across runtime, executors, and UI screens.
+final SourcesModuleLoader sharedSourcesModuleLoader = SourcesModuleLoader();
+
 class SourcesLoadedModule {
   const SourcesLoadedModule({
     required this.descriptor,
@@ -39,7 +42,6 @@ class SourcesModuleLoader {
   final RemoteModulesStore _remoteStore;
 
   SourcesIndex? _index;
-  bool _autoUpdateTriggered = false;
 
   // LRU cache: key is module id.
   final LinkedHashMap<String, SourcesLoadedModule> _cache = LinkedHashMap();
@@ -81,17 +83,6 @@ class SourcesModuleLoader {
   Future<SourcesIndex> loadIndex() async {
     final existing = _index;
     if (existing != null) return existing;
-
-    // One-shot auto-update: refresh all enabled remote modules on first index
-    // load so cached copies stay current when connectivity is available.
-    if (!_autoUpdateTriggered) {
-      _autoUpdateTriggered = true;
-      try {
-        await _remoteStore.downloadAllEnabledRemote();
-      } catch (_) {
-        // Best-effort; continue with whatever is cached locally.
-      }
-    }
 
     // Prefer remote modules (Sora-style), but fall back to bundled asset modules
     // when remote storage is unavailable/empty (e.g., first run or unit tests).

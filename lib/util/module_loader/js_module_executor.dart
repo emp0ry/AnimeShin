@@ -77,12 +77,25 @@ class JsStreamSelection {
   final String? subtitleUrl;
 }
 
+class JsVoiceoverProbe {
+  const JsVoiceoverProbe({
+    required this.voiceoverTitles,
+    this.prefetchedSelection,
+  });
+
+  final List<String> voiceoverTitles;
+  final JsStreamSelection? prefetchedSelection;
+}
+
 class JsModuleExecutor {
-  JsModuleExecutor({JsSourcesRuntime? runtime})
-      : _runtime = runtime ?? JsSourcesRuntime.instance;
+  JsModuleExecutor({
+    JsSourcesRuntime? runtime,
+    SourcesModuleLoader? modules,
+  })  : _runtime = runtime ?? JsSourcesRuntime.instance,
+        _modules = modules ?? sharedSourcesModuleLoader;
 
   final JsSourcesRuntime _runtime;
-  final SourcesModuleLoader _modules = SourcesModuleLoader();
+  final SourcesModuleLoader _modules;
 
   static final HttpClient _http = HttpClient()
     ..userAgent =
@@ -111,6 +124,36 @@ class JsModuleExecutor {
     final v = meta?[key];
     if (v is String && v.trim().isNotEmpty) return v;
     return null;
+  }
+
+  static int? _intMeta(Map<String, dynamic>? meta, String key) {
+    final v = meta?[key];
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) {
+      final t = v.trim();
+      if (t.isEmpty) return null;
+      return int.tryParse(t);
+    }
+    return null;
+  }
+
+  static Duration _streamExtractTimeout(Map<String, dynamic>? meta) {
+    const defaultMs = 45000;
+    const minMs = 5000;
+    const maxMs = 180000;
+
+    var timeoutMs = _intMeta(meta, 'streamTimeoutMs') ??
+        _intMeta(meta, 'streamTimeoutMS') ??
+        _intMeta(meta, 'streamTimeoutMillis');
+    if (timeoutMs == null) {
+      final sec = _intMeta(meta, 'streamTimeoutSec') ??
+          _intMeta(meta, 'streamTimeoutSeconds');
+      if (sec != null) timeoutMs = sec * 1000;
+    }
+
+    final effective = (timeoutMs ?? defaultMs).clamp(minMs, maxMs).toInt();
+    return Duration(milliseconds: effective);
   }
 
   static Map<String, String> _defaultHeaders({String? referer}) {
@@ -629,6 +672,7 @@ class JsModuleExecutor {
     final asyncJs = _isAsyncModule(meta);
     final streamAsyncJs = _boolMeta(meta, 'streamAsyncJS') ||
         _boolMeta(meta, 'streamAsyncJs');
+    final streamTimeout = _streamExtractTimeout(meta);
 
     String? raw;
 
@@ -641,6 +685,7 @@ class JsModuleExecutor {
           episodeHref,
           if (voiceover != null && voiceover.trim().isNotEmpty) voiceover.trim(),
         ],
+        timeout: streamTimeout,
       );
     } else {
       // Normal mode and streamAsyncJS mode: extractStreamUrl receives HTML.
@@ -656,6 +701,7 @@ class JsModuleExecutor {
           html,
           if (voiceover != null && voiceover.trim().isNotEmpty) voiceover.trim(),
         ],
+        timeout: streamTimeout,
       );
 
       // If the module is marked streamAsyncJS, keep strict behavior and do not retry with episodeHref.
@@ -669,6 +715,7 @@ class JsModuleExecutor {
             episodeHref,
             if (voiceover != null && voiceover.trim().isNotEmpty) voiceover.trim(),
           ],
+          timeout: streamTimeout,
         );
       }
     }
@@ -856,7 +903,49 @@ class JsModuleExecutor {
     }
   }
 
-  Future<List<String>> getVoiceovers(
+  List<String> _decodeVoiceoverTitles(String raw) {
+    final decoded = _tryJsonDecode(raw);
+    final titles = <String>[];
+
+    if (decoded is List) {
+      for (final item in decoded) {
+        final s = (item ?? '').toString().trim();
+        if (s.isNotEmpty) titles.add(s);
+      }
+    } else if (decoded is Map) {
+      final list =
+          decoded['voiceovers'] ?? decoded['dubbings'] ?? decoded['translations'];
+      if (list is List) {
+        for (final item in list) {
+          final s = (item ?? '').toString().trim();
+          if (s.isNotEmpty) titles.add(s);
+        }
+      }
+    } else {
+      // Sometimes modules return a plain string list joined by separators.
+      final s = raw.trim();
+      if (s.isNotEmpty && s.length < 1000) {
+        final split = s.split(RegExp(r'[,\n;|]+')).map((e) => e.trim());
+        for (final t in split) {
+          if (t.isNotEmpty) titles.add(t);
+        }
+      }
+    }
+
+    // Deduplicate case-insensitively.
+    final unique = <String>[];
+    final seen = <String>{};
+    for (final t in titles) {
+      final k = t.toLowerCase();
+      if (seen.add(k)) unique.add(t);
+    }
+
+    // Never return pure quality labels as voiceovers.
+    unique.removeWhere(_isPureQualityLabel);
+    return unique;
+  }
+
+  Future<List<String>> _getVoiceoversDirect(
     String moduleId,
     String episodeHref,
   ) async {
@@ -892,17 +981,11 @@ class JsModuleExecutor {
       }
     }
 
-    // If the function is missing or returns nothing, infer from extractStreams titles.
+    // Missing function or empty response means no dedicated voiceover endpoint.
     if (raw == null ||
         raw.startsWith('__JS_ERROR__:missing_function:') ||
         raw.trim().isEmpty) {
-      try {
-        final selection = await extractStreams(moduleId, episodeHref);
-        final inferred = _inferVoiceoversFromStreams(selection.streams);
-        return inferred;
-      } catch (_) {
-        return const <String>[];
-      }
+      return const <String>[];
     }
 
     if (raw.startsWith('__JS_ERROR__:')) {
@@ -910,46 +993,48 @@ class JsModuleExecutor {
       throw StateError(raw);
     }
 
-    final decoded = _tryJsonDecode(raw);
+    return _decodeVoiceoverTitles(raw);
+  }
 
-    final titles = <String>[];
+  Future<List<String>> getVoiceovers(
+    String moduleId,
+    String episodeHref, {
+    bool allowInferenceFallback = true,
+  }) async {
+    final direct = await _getVoiceoversDirect(moduleId, episodeHref);
+    if (direct.isNotEmpty || !allowInferenceFallback) return direct;
 
-    if (decoded is List) {
-      for (final item in decoded) {
-        final s = (item ?? '').toString().trim();
-        if (s.isNotEmpty) titles.add(s);
-      }
-    } else if (decoded is Map) {
-      final list = decoded['voiceovers'] ?? decoded['dubbings'] ?? decoded['translations'];
-      if (list is List) {
-        for (final item in list) {
-          final s = (item ?? '').toString().trim();
-          if (s.isNotEmpty) titles.add(s);
-        }
-      }
-    } else {
-      // Sometimes modules return a plain string list joined by separators.
-      final s = raw.trim();
-      if (s.isNotEmpty && s.length < 1000) {
-        final split = s.split(RegExp(r'[,\n;|]+')).map((e) => e.trim());
-        for (final t in split) {
-          if (t.isNotEmpty) titles.add(t);
-        }
-      }
+    try {
+      final selection = await extractStreams(moduleId, episodeHref);
+      return _inferVoiceoversFromStreams(selection.streams);
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  Future<JsVoiceoverProbe> probeVoiceovers(
+    String moduleId,
+    String episodeHref,
+  ) async {
+    final direct = await getVoiceovers(
+      moduleId,
+      episodeHref,
+      allowInferenceFallback: false,
+    );
+    if (direct.isNotEmpty) {
+      return JsVoiceoverProbe(voiceoverTitles: direct);
     }
 
-    // Deduplicate case-insensitively.
-    final unique = <String>[];
-    final seen = <String>{};
-    for (final t in titles) {
-      final k = t.toLowerCase();
-      if (seen.add(k)) unique.add(t);
+    try {
+      final selection = await extractStreams(moduleId, episodeHref);
+      final inferred = _inferVoiceoversFromStreams(selection.streams);
+      return JsVoiceoverProbe(
+        voiceoverTitles: inferred,
+        prefetchedSelection: selection.streams.isEmpty ? null : selection,
+      );
+    } catch (_) {
+      return const JsVoiceoverProbe(voiceoverTitles: <String>[]);
     }
-
-    // Never return pure quality labels as voiceovers.
-    unique.removeWhere(_isPureQualityLabel);
-
-    return unique;
   }
 
   static bool _isPureQualityLabel(String t) {

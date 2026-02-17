@@ -29,7 +29,7 @@ class SettingsModulesSubview extends StatefulWidget {
 class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   final _urlCtrl = TextEditingController();
   final _remote = RemoteModulesStore();
-  final _loader = SourcesModuleLoader();
+  final _loader = sharedSourcesModuleLoader;
 
   bool _busy = false;
   static const String _exportFileName = 'animeshin_extensions.json';
@@ -99,6 +99,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
   }
 
   Future<void> _refresh() async {
+    _loader.clearCache();
     _loader.invalidateIndex();
     setState(() {});
   }

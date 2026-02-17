@@ -24,7 +24,10 @@ final _notificationCtrl = StreamController<String>.broadcast();
 
 Future<void> _updateRemoteModulesOnStartup() async {
   try {
-    await RemoteModulesStore().downloadAllEnabledRemote();
+    await RemoteModulesStore().downloadAllEnabledRemote(
+      perModuleTimeout: const Duration(seconds: 8),
+      skipLoopbackHosts: true,
+    );
   } catch (e) {
     if (kDebugMode) {
       debugPrint('module auto-update failed: $e');

@@ -102,7 +102,7 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
 
   Future<List<SourcesModuleDescriptor>> _loadModules() async {
     try {
-      return await SourcesModuleLoader().listModules();
+      return await sharedSourcesModuleLoader.listModules();
     } catch (_) {
       return const <SourcesModuleDescriptor>[];
     }

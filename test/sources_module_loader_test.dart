@@ -1,3 +1,5 @@
+import 'package:animeshin/util/module_loader/remote_modules_store.dart';
+import 'package:animeshin/util/module_loader/sources_module.dart';
 import 'package:animeshin/util/module_loader/sources_module_loader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -84,4 +86,65 @@ void main() {
     expect(loaded.descriptor.name, 'Alpha');
     expect(loaded.script, contains('export'));
   });
+
+  test('loadIndex does not trigger blocking remote refresh', () async {
+    final assets = <String, String>{
+      'assets/sources/index.json': r'''
+{
+  "generatedAt": "x",
+  "count": 1,
+  "modules": [
+    {
+      "id": "demo",
+      "jsonAsset": "assets/sources/demo/demo.json",
+      "jsAsset": "assets/sources/demo/demo.js",
+      "name": "Demo",
+      "meta": {"name": "Demo"}
+    }
+  ]
+}
+''',
+    };
+
+    final remote = _LoaderFakeRemoteStore();
+    final loader = SourcesModuleLoader(
+      readAsset: (p) async {
+        final v = assets[p];
+        if (v == null) throw StateError('missing asset: $p');
+        return v;
+      },
+      remoteStore: remote,
+    );
+
+    final list = await loader.listModules();
+    expect(list, hasLength(1));
+    expect(remote.downloadAllEnabledRemoteCalled, isFalse);
+    expect(remote.buildDescriptorsCalls, 1);
+  });
+}
+
+class _LoaderFakeRemoteStore extends RemoteModulesStore {
+  bool downloadAllEnabledRemoteCalled = false;
+  int buildDescriptorsCalls = 0;
+
+  @override
+  Future<void> downloadAllEnabledRemote({
+    Duration perModuleTimeout = const Duration(seconds: 20),
+    bool skipLoopbackHosts = false,
+  }) async {
+    downloadAllEnabledRemoteCalled = true;
+  }
+
+  @override
+  Future<List<SourcesModuleDescriptor>> buildDescriptors({
+    bool includeDisabled = false,
+  }) async {
+    buildDescriptorsCalls += 1;
+    return const <SourcesModuleDescriptor>[];
+  }
+
+  @override
+  Future<Set<String>> disabledModuleIds() async {
+    return const <String>{};
+  }
 }

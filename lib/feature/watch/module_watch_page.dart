@@ -1,5 +1,4 @@
 import 'package:animeshin/feature/player/player_page.dart';
-import 'package:animeshin/feature/player/local_hls_proxy.dart';
 import 'package:animeshin/feature/watch/watch_types.dart';
 import 'package:animeshin/util/module_loader/js_module_executor.dart';
 import 'package:animeshin/util/module_loader/js_sources_runtime.dart';
@@ -818,26 +817,33 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     _voiceoverInitAttempts += 1;
 
     if (eps.isEmpty) return;
+    final firstEp = eps.first;
 
     debugPrint(
-      '[VoiceoverDebug] init module=${widget.module.id} epHref=${eps.first.href}',
+      '[VoiceoverDebug] init module=${widget.module.id} epHref=${firstEp.href}',
     );
 
     try {
-      Stopwatch? voiceoverSw;
-      String? voiceoverLabel;
+      Stopwatch? probeSw;
+      String? probeLabel;
       if (kDebugMode) {
-        voiceoverLabel = 'getVoiceovers module=${widget.module.id}';
-        debugPrint('[Perf] $voiceoverLabel start');
-        voiceoverSw = Stopwatch()..start();
+        probeLabel = 'probeVoiceovers module=${widget.module.id}';
+        debugPrint('[Perf] $probeLabel start');
+        probeSw = Stopwatch()..start();
       }
-      var list = await _exec.getVoiceovers(widget.module.id, eps.first.href);
-      if (kDebugMode && voiceoverSw != null) {
-        voiceoverSw.stop();
-        debugPrint('[Perf] $voiceoverLabel ${voiceoverSw.elapsedMilliseconds}ms');
+      final probe = await _exec.probeVoiceovers(widget.module.id, firstEp.href);
+      if (kDebugMode && probeSw != null) {
+        probeSw.stop();
+        debugPrint('[Perf] $probeLabel ${probeSw.elapsedMilliseconds}ms');
       }
+
+      if (probe.prefetchedSelection != null) {
+        _cacheSelection(firstEp, probe.prefetchedSelection!);
+      }
+
+      var list = probe.voiceoverTitles;
       debugPrint(
-        '[VoiceoverDebug] getVoiceovers raw module=${widget.module.id}: ${list.join(" | ")}',
+        '[VoiceoverDebug] probeVoiceovers raw module=${widget.module.id}: ${list.join(" | ")}',
       );
 
       // Never treat qualities as voiceovers.
@@ -854,7 +860,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
       setState(() => _voiceoverTitles = normalized);
 
       debugPrint(
-        '[VoiceoverDebug] getVoiceovers normalized module=${widget.module.id}: ${normalized.join(" | ")}',
+        '[VoiceoverDebug] probeVoiceovers normalized module=${widget.module.id}: ${normalized.join(" | ")}',
       );
 
       if (normalized.length >= 2 && _preferredVoiceoverTitle == null) {
@@ -868,71 +874,16 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
         return;
       }
 
-      final inferred = await _inferVoiceoversFromStreams(eps.first);
-      if (inferred) {
+      if (probe.prefetchedSelection != null) {
         _voiceoverInitDone = true;
       }
       return;
     } catch (_) {
       debugPrint(
-        '[VoiceoverDebug] getVoiceovers failed module=${widget.module.id}, falling back to stream inference',
+        '[VoiceoverDebug] probeVoiceovers failed module=${widget.module.id}',
       );
       // Allow a retry on next frame; do not mark done.
-      final inferred = await _inferVoiceoversFromStreams(eps.first);
-      if (inferred) {
-        _voiceoverInitDone = true;
-      }
     }
-  }
-
-  Future<bool> _inferVoiceoversFromStreams(JsModuleEpisode ep) async {
-    // If module doesn't expose getVoiceovers:
-    // - for voiceover-first modules, treat stream titles as voiceovers directly.
-    // - otherwise, infer based on host + provider/quality patterns.
-    try {
-      Stopwatch? inferSw;
-      String? inferLabel;
-      if (kDebugMode) {
-        inferLabel =
-            'extractStreams module=${widget.module.id} stage=infer_voiceovers';
-        debugPrint('[Perf] $inferLabel start');
-        inferSw = Stopwatch()..start();
-      }
-      final selection = await _loadSelection(ep, voiceover: null);
-      if (kDebugMode && inferSw != null) {
-        inferSw.stop();
-        debugPrint('[Perf] $inferLabel ${inferSw.elapsedMilliseconds}ms');
-      }
-      debugPrint(
-        '[VoiceoverDebug] infer selection.count module=${widget.module.id}: ${selection.streams.length}',
-      );
-      final candidates = _buildVoiceoverCandidates(selection.streams);
-      debugPrint(
-        '[VoiceoverDebug] infer candidates.count module=${widget.module.id}: ${candidates.length}',
-      );
-      debugPrint(
-        '[VoiceoverDebug] infer candidates module=${widget.module.id}: ${candidates.join(" | ")}',
-      );
-
-      if (candidates.length >= 2) {
-        candidates.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        if (!mounted) return false;
-        setState(() => _voiceoverTitles = candidates);
-        debugPrint(
-          '[VoiceoverDebug] infer setVoiceoverTitles module=${widget.module.id}: ${candidates.length}',
-        );
-        if (_preferredVoiceoverTitle == null) {
-          debugPrint(
-            '[VoiceoverDebug] infer prompting dialog module=${widget.module.id}',
-          );
-          await _pickVoiceover(showAuto: true);
-        }
-        return true;
-      }
-    } catch (_) {
-      // Ignore; allow a retry on next frame.
-    }
-    return false;
   }
 
   Future<void> _pickVoiceover({required bool showAuto}) async {
@@ -1002,18 +953,6 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     _serverDialogOpen = false;
     if (!mounted) return;
     setState(() => _preferredServerTitle = picked);
-  }
-
-  /// Warm up the local HLS proxy to avoid coldstart delays on first play.
-  /// This is a best-effort operation; any errors are silently ignored.
-  Future<void> _maybeWarmupProxy() async {
-    try {
-      final proxy = LocalHlsProxy();
-      await proxy.start();
-    } catch (e) {
-      // Silently ignore - proxy will start normally in player if needed
-      debugPrint('[ModuleWatch] Proxy warmup failed: $e');
-    }
   }
 
   Future<void> _openEpisode(JsModuleEpisode ep) async {
@@ -1225,10 +1164,6 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
     if (!mounted) return;
 
-    // Pre-warm the proxy to avoid coldstart delays on first play.
-    // This is best-effort; any errors are silently ignored.
-    unawaited(_maybeWarmupProxy());
-
     final moduleEpisodes = _episodesCache == null
         ? null
         : List<JsModuleEpisode>.unmodifiable(_episodesCache!);
@@ -1261,7 +1196,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
           sync: entry != null,
           animeVoice: AnimeVoice.modules,
           startupBannerText: bannerTitle,
-          startWithProxy: false,
+          startWithProxy: true,
         ),
       ),
     );

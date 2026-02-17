@@ -25,7 +25,7 @@ class JsSourcesRuntime {
 
   final Set<String> _loadedModules = <String>{};
   JavascriptRuntime? _runtime;
-  final SourcesModuleLoader _loader = SourcesModuleLoader();
+  final SourcesModuleLoader _loader = sharedSourcesModuleLoader;
 
   // Shared HttpClient for connection reuse and performance.
   // These limits help avoid stalls when modules do many requests.
