@@ -35,7 +35,7 @@
   Full AniList integration for tracking anime and manga.
 
 - **🏠 Russian Titles & Search**  
-  Displays Russian titles from Shikimori and supports searching your library using them.
+  Displays Russian titles from Shikimori and supports Russian searching.
 
 - **📚 Library Management**  
   Update progress with gestures, rate entries, and attach personal notes.
