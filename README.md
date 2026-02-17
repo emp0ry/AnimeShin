@@ -23,7 +23,7 @@
     <img src="https://img.shields.io/badge/Flutter-3.0%2B-44D1FD?logo=flutter" alt="Flutter Version">
   </a>
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/emp0ry/AnimeShin?color=00C853" alt="License: MIT">
+    <img src="https://img.shields.io/github/license/emp0ry/AnimeShin?color=00C853" alt="License: GNU">
   </a>
 </p>
 
