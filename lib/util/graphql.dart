@@ -239,6 +239,7 @@ abstract class GqlQuery {
         isLicensed: $isLicensed, countryOfOrigin: $countryOfOrigin, season: $season,
         source_in: $sources, sort: $sort) {
           id
+          idMal
           type
           title {userPreferred english romaji native}
           synonyms

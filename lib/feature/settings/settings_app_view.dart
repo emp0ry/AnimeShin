@@ -7,7 +7,7 @@ import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/input/stateful_tiles.dart';
 import 'package:animeshin/feature/discover/discover_model.dart';
 import 'package:animeshin/widget/input/chip_selector.dart';
-import 'package:animeshin/feature/home/home_model.dart';
+import 'package:animeshin/feature/home/home_tab_order.dart';
 import 'package:animeshin/feature/settings/theme_preview.dart';
 import 'package:animeshin/feature/player/subtitle_style_dialog.dart';
 import 'package:flutter/foundation.dart';
@@ -213,7 +213,7 @@ class SettingsAppSubview extends ConsumerWidget {
               padding: tilePadding,
               child: ChipSelector.ensureSelected(
                 title: 'Home Tab',
-                items: HomeTab.values.map((v) => (v.label, v)).toList(),
+                items: homeTabUiOrder.map((v) => (v.label, v)).toList(),
                 value: options.homeTab,
                 onChanged: (v) => update(options.copyWith(homeTab: v)),
               ),

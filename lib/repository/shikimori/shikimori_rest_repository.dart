@@ -85,6 +85,57 @@ class ShikimoriRestRepository {
     return (ru: ru, url: url);
   }
 
+  Future<List<String>> searchTitleCandidates(
+    String query, {
+    required bool ofAnime,
+    int limit = 5,
+    bool includeAdult = true,
+  }) async {
+    final q = query.trim();
+    if (q.isEmpty || limit <= 0) return const <String>[];
+
+    final path = ofAnime ? '/api/animes' : '/api/mangas';
+    final params = <String, String>{
+      'search': q,
+      'limit': limit.clamp(1, 50).toString(),
+      if (includeAdult) 'censored': 'false',
+    };
+    final uri = Uri.parse('$_base$path').replace(queryParameters: params);
+
+    final resp = await _client.get(
+      uri,
+      headers: {
+        'User-Agent': 'animeshin (app; discover search fallback)',
+        'Accept': 'application/json',
+      },
+    );
+    if (resp.statusCode != 200) return const <String>[];
+
+    final raw = jsonDecode(resp.body);
+    if (raw is! List || raw.isEmpty) return const <String>[];
+
+    final out = <String>[];
+    final seen = <String>{};
+
+    void addCandidate(dynamic value) {
+      if (out.length >= limit) return;
+      final t = value?.toString().trim();
+      if (t == null || t.isEmpty) return;
+      final key = t.toLowerCase();
+      if (!seen.add(key)) return;
+      out.add(t);
+    }
+
+    for (final item in raw) {
+      if (out.length >= limit) break;
+      if (item is! Map) continue;
+      addCandidate(item['name']);
+      addCandidate(item['russian']);
+    }
+
+    return out;
+  }
+
   Future<Map<String, dynamic>?> fetchByMalId(int malId, {required bool ofAnime}) async {
     final endpoint = ofAnime ? 'animes' : 'mangas';
     final uri = Uri.parse('https://shikimori.one/api/$endpoint?ids=$malId&limit=1');

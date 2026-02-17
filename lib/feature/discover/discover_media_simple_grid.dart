@@ -1,21 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/discover/discover_title_resolver.dart';
 import 'package:animeshin/feature/media/media_route_tile.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
 
-class DiscoverMediaSimpleGrid extends StatelessWidget {
+class DiscoverMediaSimpleGrid extends ConsumerWidget {
   const DiscoverMediaSimpleGrid(this.items);
 
   final List<DiscoverMediaItem> items;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showRu = ref.watch(
+      persistenceProvider.select((s) => s.options.ruTitle),
+    );
+    final hasAnySecondary = showRu &&
+        items.any(
+          (item) => discoverSecondaryTitle(
+                item,
+                showRussianTitle: true,
+              ) != null,
+        );
+
     return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithMinWidthAndExtraHeight(
+      gridDelegate: SliverGridDelegateWithMinWidthAndExtraHeight(
         minWidth: 100,
-        extraHeight: 40,
+        extraHeight: hasAnySecondary ? 58 : 40,
         rawHWRatio: Theming.coverHtoWRatio,
       ),
       delegate: SliverChildBuilderDelegate(
@@ -26,13 +40,23 @@ class DiscoverMediaSimpleGrid extends StatelessWidget {
   }
 }
 
-class _Tile extends StatelessWidget {
+class _Tile extends ConsumerWidget {
   const _Tile(this.item);
 
   final DiscoverMediaItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showRu = ref.watch(
+      persistenceProvider.select((s) => s.options.ruTitle),
+    );
+    final primaryTitle = discoverPrimaryTitle(item);
+    final secondaryTitle = discoverSecondaryTitle(
+      item,
+      showRussianTitle: showRu,
+    );
+    final titleBlockHeight = secondaryTitle != null ? 52.0 : 35.0;
+
     return MediaRouteTile(
       id: item.id,
       imageUrl: item.imageUrl,
@@ -49,12 +73,24 @@ class _Tile extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           SizedBox(
-            height: 35,
-            child: Text(
-              item.name,
-              maxLines: 2,
-              overflow: TextOverflow.fade,
-              style: TextTheme.of(context).bodyMedium,
+            height: titleBlockHeight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  primaryTitle,
+                  maxLines: secondaryTitle == null ? 2 : 1,
+                  overflow: TextOverflow.fade,
+                  style: TextTheme.of(context).bodyMedium,
+                ),
+                if (secondaryTitle != null)
+                  Text(
+                    secondaryTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextTheme.of(context).labelSmall,
+                  ),
+              ],
             ),
           ),
         ],

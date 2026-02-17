@@ -208,7 +208,7 @@ class Options {
         themeMode: ThemeMode.system,
         themeBase: null,
         highContrast: false,
-        homeTab: HomeTab.feed,
+        homeTab: HomeTab.discover,
         discoverType: DiscoverType.anime,
         imageQuality: ImageQuality.high,
         animeCollectionPreview: true,

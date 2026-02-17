@@ -81,10 +81,13 @@ class DiscoverRecommendationItems extends DiscoverItems {
 class DiscoverMediaItem {
   DiscoverMediaItem._({
     required this.id,
+    required this.malId,
     required this.name,
     required this.titleEnglish,
     required this.titleRomaji,
     required this.titleNative,
+    required this.titleRussian,
+    required this.titleShikimoriRomaji,
     required this.synonyms,
     required this.imageUrl,
     required this.isAnime,
@@ -104,10 +107,13 @@ class DiscoverMediaItem {
   ) =>
       DiscoverMediaItem._(
         id: map['id'],
+        malId: map['idMal'] as int?,
         name: map['title']['userPreferred'],
         titleEnglish: map['title']?['english'],
         titleRomaji: map['title']?['romaji'],
         titleNative: map['title']?['native'],
+        titleRussian: map['title']?['russian'],
+        titleShikimoriRomaji: map['title']?['shikimoriRomaji'],
         synonyms: (map['synonyms'] is List)
             ? List<String>.from(map['synonyms'].whereType<String>())
             : const <String>[],
@@ -123,10 +129,13 @@ class DiscoverMediaItem {
       );
 
   final int id;
+  final int? malId;
   final String name;
   final String? titleEnglish;
   final String? titleRomaji;
   final String? titleNative;
+  final String? titleRussian;
+  final String? titleShikimoriRomaji;
   final List<String> synonyms;
   final String imageUrl;
   final bool isAnime;
@@ -142,12 +151,21 @@ class DiscoverMediaItem {
   /// multiple title variants.
   final double? searchMatch;
 
-  DiscoverMediaItem copyWith({double? searchMatch}) => DiscoverMediaItem._(
+  DiscoverMediaItem copyWith({
+    double? searchMatch,
+    (String?,)? titleRussian,
+    (String?,)? titleShikimoriRomaji,
+  }) => DiscoverMediaItem._(
         id: id,
+        malId: malId,
         name: name,
         titleEnglish: titleEnglish,
         titleRomaji: titleRomaji,
         titleNative: titleNative,
+        titleRussian: titleRussian == null ? this.titleRussian : titleRussian.$1,
+        titleShikimoriRomaji: titleShikimoriRomaji == null
+            ? this.titleShikimoriRomaji
+            : titleShikimoriRomaji.$1,
         synonyms: synonyms,
         imageUrl: imageUrl,
         isAnime: isAnime,

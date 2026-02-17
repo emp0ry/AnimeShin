@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/feature/discover/discover_model.dart';
+import 'package:animeshin/feature/discover/discover_title_resolver.dart';
 import 'package:animeshin/feature/media/media_route_tile.dart';
+import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:animeshin/util/theming.dart';
 import 'package:animeshin/widget/cached_image.dart';
 import 'package:animeshin/widget/grid/sliver_grid_delegates.dart';
@@ -20,7 +23,7 @@ class DiscoverMediaGrid extends StatelessWidget {
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithMinWidthAndFixedHeight(
         minWidth: 290,
-        height: 110,
+        height: 150,
       ),
       delegate: SliverChildBuilderDelegate(
         childCount: items.length,
@@ -30,13 +33,22 @@ class DiscoverMediaGrid extends StatelessWidget {
   }
 }
 
-class _Tile extends StatelessWidget {
+class _Tile extends ConsumerWidget {
   const _Tile(this.item);
 
   final DiscoverMediaItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final showRu = ref.watch(
+      persistenceProvider.select((s) => s.options.ruTitle),
+    );
+    final primaryTitle = discoverPrimaryTitle(item);
+    final secondaryTitle = discoverSecondaryTitle(
+      item,
+      showRussianTitle: showRu,
+    );
+
     final textRailItems = <String, bool>{};
     if (item.format != null) textRailItems[item.format!] = false;
     if (item.releaseStatus != null) {
@@ -67,7 +79,7 @@ class _Tile extends StatelessWidget {
                   left: Theming.radiusSmall,
                 ),
                 child: Container(
-                  width: 120 / Theming.coverHtoWRatio,
+                  width: 150 / Theming.coverHtoWRatio,
                   color: ColorScheme.of(context).surfaceContainerHighest,
                   child: CachedImage(item.imageUrl),
                 ),
@@ -87,10 +99,20 @@ class _Tile extends StatelessWidget {
                         children: [
                           Flexible(
                             child: Text(
-                              item.name,
-                              overflow: TextOverflow.fade,
+                              primaryTitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          if (secondaryTitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              secondaryTitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextTheme.of(context).labelSmall,
+                            ),
+                          ],
                           const SizedBox(height: 5),
                           TextRail(
                             textRailItems,

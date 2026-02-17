@@ -81,8 +81,8 @@ Future<void> main() async {
     var box = Hive.box('window_settings');
 
     // Get saved window size or use default
-    final width = box.get('window_width', defaultValue: 1200.0);
-    final height = box.get('window_height', defaultValue: 800.0);
+    final width = box.get('window_width', defaultValue: 510.0);
+    final height = box.get('window_height', defaultValue: 860.0);
 
     await windowManager.setSize(Size(width, height));
   }
