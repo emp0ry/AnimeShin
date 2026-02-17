@@ -64,23 +64,28 @@ class CollectionTopBarTrailingContent extends StatelessWidget {
                 ),
               ),
               IconButton(
-                tooltip: 'Random',
-                icon: const Icon(Ionicons.shuffle_outline),
-                onPressed: () {
-                  final entries = ref.read(collectionEntriesProvider(tag));
-
-                  if (entries.isEmpty) {
-                    ConfirmationDialog.show(context, title: 'No entries');
-                    return;
-                  }
-
-                  final e = entries[Random().nextInt(entries.length)];
-                  context.push(Routes.media(e.mediaId, e.imageUrl));
-                },
+                tooltip: 'Reload',
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: () => ref.invalidate(collectionProvider(tag)),
               ),
+              // IconButton(
+              //   tooltip: 'Random',
+              //   icon: const Icon(Ionicons.shuffle_outline),
+              //   onPressed: () {
+              //     final entries = ref.read(collectionEntriesProvider(tag));
+
+              //     if (entries.isEmpty) {
+              //       ConfirmationDialog.show(context, title: 'No entries');
+              //       return;
+              //     }
+
+              //     final e = entries[Random().nextInt(entries.length)];
+              //     context.push(Routes.media(e.mediaId, e.imageUrl));
+              //   },
+              // ),
               if (tag.ofAnime)
                 IconButton(
-                  tooltip: 'Search',
+                  tooltip: 'Global Search',
                   icon: const Icon(Ionicons.search_outline),
                   onPressed: () {
                     final collectionFilter =

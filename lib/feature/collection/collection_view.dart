@@ -25,17 +25,17 @@ import 'package:animeshin/widget/loaders.dart';
 import 'package:animeshin/feature/collection/collection_list.dart';
 import 'package:animeshin/feature/media/media_models.dart';
 
-class CollectionView extends StatefulWidget {
+class CollectionView extends ConsumerStatefulWidget {
   const CollectionView(this.userId, this.ofAnime);
 
   final int userId;
   final bool ofAnime;
 
   @override
-  State<CollectionView> createState() => _CollectionViewState();
+  ConsumerState<CollectionView> createState() => _CollectionViewState();
 }
 
-class _CollectionViewState extends State<CollectionView> {
+class _CollectionViewState extends ConsumerState<CollectionView> {
   final _ctrl = ScrollController();
 
   @override
@@ -50,7 +50,9 @@ class _CollectionViewState extends State<CollectionView> {
     final formFactor = Theming.of(context).formFactor;
 
     return AdaptiveScaffold(
-      topBar: TopBar(trailing: [CollectionTopBarTrailingContent(tag, null)]),
+      topBar: TopBar(
+        trailing: [CollectionTopBarTrailingContent(tag, null)],
+      ),
       floatingAction: formFactor == FormFactor.phone
           ? HidingFloatingActionButton(
               key: const Key('lists'),

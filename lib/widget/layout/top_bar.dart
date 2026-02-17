@@ -7,10 +7,16 @@ const _preferredSize = Size.fromHeight(Theming.normalTapTarget);
 
 /// A top app bar implementation that uses a blurred, translucent background.
 class TopBar extends StatelessWidget implements PreferredSizeWidget {
-  const TopBar({super.key, this.title, this.trailing = const []});
+  const TopBar({
+    super.key,
+    this.title,
+    this.trailing = const [],
+    this.leading,
+  });
 
   final String? title;
   final List<Widget> trailing;
+  final Widget? leading;
 
   @override
   Size get preferredSize => _preferredSize;
@@ -37,6 +43,8 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
                   icon: const Icon(Icons.arrow_back_ios_rounded),
                   onPressed: context.back,
                 )
+              else if (leading != null)
+                leading!
               else
                 const SizedBox(width: Theming.offset),
               if (title != null)
