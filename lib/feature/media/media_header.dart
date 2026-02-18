@@ -149,6 +149,7 @@ class MediaHeader extends ConsumerWidget {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => ModuleSearchPage(
+                      mediaId: info.id,
                       item: entry,
                       isManga: !info.isAnime,
                       searchQueries: queries,

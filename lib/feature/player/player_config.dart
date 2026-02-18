@@ -74,6 +74,10 @@ class PlayerTuning {
   static const int windowsBufferBytes = 128 * 1024 * 1024;
   static const int otherBufferBytes = 64 * 1024 * 1024;
 
+  // Windows fallback switch:
+  // keep hardware rendering as default; allow forcing software if needed.
+  static const bool windowsForceSoftwareVideoOutput = false;
+
   // Speed menu
   static const List<double> speedMenu = [
     0.25,

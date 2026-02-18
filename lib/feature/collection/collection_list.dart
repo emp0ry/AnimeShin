@@ -324,6 +324,7 @@ class __TileContentState extends State<_TileContent> {
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => ModuleSearchPage(
+            mediaId: widget.item.mediaId,
             item: widget.item,
             isManga: isManga,
           ),

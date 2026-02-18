@@ -1,8 +1,94 @@
 import 'package:animeshin/feature/player/player_config.dart';
 
+enum StreamUrlKind {
+  hls,
+  directFile,
+  unknown,
+}
+
+const Set<String> _hlsExtensions = <String>{'.m3u8', '.m3u'};
+const Set<String> _directFileExtensions = <String>{
+  '.mp4',
+  '.mkv',
+  '.webm',
+  '.mov',
+  '.m4v',
+  '.avi',
+  '.flv',
+  '.mp3',
+  '.aac',
+  '.m4a',
+  '.ogg',
+  '.oga',
+  '.wav',
+  '.flac',
+};
+
 bool _isPresentUrl(String? s) {
   final v = s?.trim();
   return v != null && v.isNotEmpty && v.toLowerCase() != 'null';
+}
+
+String _safeDecode(String value) {
+  try {
+    return Uri.decodeFull(value);
+  } catch (_) {
+    return value;
+  }
+}
+
+bool _containsExtension(Iterable<String> values, Set<String> extensions) {
+  for (final value in values) {
+    final lowered = _safeDecode(value).toLowerCase();
+    for (final ext in extensions) {
+      final pattern = RegExp('${RegExp.escape(ext)}(?:\$|[/?#&])');
+      if (pattern.hasMatch(lowered)) return true;
+    }
+  }
+  return false;
+}
+
+/// Classifies URL shape to choose playback transport policy.
+StreamUrlKind classifyStreamUrl(String url) {
+  final raw = url.trim();
+  if (raw.isEmpty) return StreamUrlKind.unknown;
+
+  final probes = <String>[raw];
+  try {
+    final uri = Uri.parse(raw);
+    if (uri.path.isNotEmpty) probes.add(uri.path);
+    if (uri.fragment.isNotEmpty) probes.add(uri.fragment);
+    if (uri.query.isNotEmpty) probes.add(uri.query);
+    for (final values in uri.queryParametersAll.values) {
+      for (final v in values) {
+        if (v.trim().isNotEmpty) probes.add(v);
+      }
+    }
+  } catch (_) {
+    // Keep raw probe only.
+  }
+
+  if (_containsExtension(probes, _hlsExtensions)) return StreamUrlKind.hls;
+  if (_containsExtension(probes, _directFileExtensions)) {
+    return StreamUrlKind.directFile;
+  }
+  return StreamUrlKind.unknown;
+}
+
+bool shouldStartWithProxy({
+  required bool startWithProxy,
+  required String url,
+}) {
+  if (!startWithProxy) return false;
+  return classifyStreamUrl(url) == StreamUrlKind.hls;
+}
+
+bool shouldAllowProxyFallback({
+  required bool startWithProxy,
+  required String url,
+}) {
+  if (!startWithProxy) return false;
+  return classifyStreamUrl(url) != StreamUrlKind.directFile;
 }
 
 /// Picks the best available URL given a preferred [quality] and fallback order.

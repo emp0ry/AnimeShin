@@ -24,12 +24,14 @@ import '../viewer/repository_provider.dart';
 class ModuleWatchPage extends ConsumerStatefulWidget {
   const ModuleWatchPage({
     super.key,
+    required this.mediaId,
     required this.module,
     required this.title,
     required this.href,
     required this.item,
-  });
+  }) : assert(mediaId > 0, 'ModuleWatchPage.mediaId must be > 0');
 
+  final int mediaId;
   final SourcesModuleDescriptor module;
   final String title;
   final String href;
@@ -956,6 +958,14 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   }
 
   Future<void> _openEpisode(JsModuleEpisode ep) async {
+    if (widget.mediaId <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid media id for playback resume')),
+      );
+      return;
+    }
+
     final entry = _readEntry();
     if (!mounted) return;
 
@@ -1173,7 +1183,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
         settings: const RouteSettings(name: 'player'),
         builder: (_) => PlayerPage(
           args: PlayerArgs(
-            id: 0,
+            id: widget.mediaId,
             url: widget.href,
             ordinal: ep.number,
             title: '${widget.title} • Ep ${ep.number}',

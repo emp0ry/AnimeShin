@@ -48,11 +48,13 @@ bool _moduleSupportsType(SourcesModuleDescriptor m, {required bool isManga}) {
 class ModuleSearchPage extends StatefulWidget {
   const ModuleSearchPage({
     super.key,
+    required this.mediaId,
     required this.item,
     required this.isManga,
     this.searchQueries,
   });
 
+  final int mediaId;
   final Entry? item;
   final bool isManga;
   final List<({String by, String query})>? searchQueries;
@@ -170,6 +172,7 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => ModuleSearchResultsPage(
+                          mediaId: widget.mediaId,
                           item: widget.item,
                           isManga: widget.isManga,
                           module: module,
@@ -191,12 +194,14 @@ class _ModuleSearchPageState extends State<ModuleSearchPage> {
 class ModuleSearchResultsPage extends StatefulWidget {
   const ModuleSearchResultsPage({
     super.key,
+    required this.mediaId,
     required this.item,
     required this.isManga,
     required this.module,
     this.searchQueries,
   });
 
+  final int mediaId;
   final Entry? item;
   final bool isManga;
   final SourcesModuleDescriptor module;
@@ -491,6 +496,7 @@ class _ModuleSearchResultsPageState extends State<ModuleSearchResultsPage> {
                                 item: widget.item,
                               )
                             : ModuleWatchPage(
+                                mediaId: widget.mediaId,
                                 module: widget.module,
                                 title: item.tile.title,
                                 href: item.tile.href,

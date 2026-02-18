@@ -116,10 +116,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Timer? _autosaveTimer;
   Timer? _volumePersistDebounce; // <- debounce saves to prefs
   Timer? _uiHideTimer;
-  Timer? _qualityReopenTimer; // <- re-enable quality reaction after initial load
+  Timer?
+      _qualityReopenTimer; // <- re-enable quality reaction after initial load
 
   // Quality
-  String? _chosenUrl; // stores the ORIGINAL remote HLS URL (master or media)
+  String? _chosenUrl; // stores the ORIGINAL remote stream URL
   PlayerQuality _currentQuality = PlayerQuality.p1080;
   bool _suppressPrefQualityReopen = false;
 
@@ -147,6 +148,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // --- Jump detection / logging-only ------------------------------------------
 
   Duration _lastPos = Duration.zero;
+  int _lastUiPosSecond = -1;
   bool _plannedSeek = false;
   // --- Auto-skip guard flags (Android-friendly) ---
   bool _openingSkipped = false;
@@ -199,6 +201,10 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   // Mirrors effective progress; updated locally after successful persist
   int? _knownProgress;
+  bool _saveInFlight = false;
+  int _lastSavedOrdinal = -1;
+  int _lastSavedSecond = -1;
+  bool _lastSavedWasCleared = false;
 
   // Prevents double increment for the same episode
   bool _autoIncDoneForThisEp = false;
@@ -225,8 +231,53 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   bool _looksLikeHlsUrl(String url) {
-    final v = url.trim().toLowerCase();
-    return v.contains('m3u8');
+    return classifyStreamUrl(url) == StreamUrlKind.hls;
+  }
+
+  bool _shouldStartWithProxyForUrl(String url) {
+    return shouldStartWithProxy(
+      startWithProxy: widget.startWithProxy,
+      url: url,
+    );
+  }
+
+  bool _shouldAllowProxyFallbackForUrl(String url) {
+    return shouldAllowProxyFallback(
+      startWithProxy: widget.startWithProxy,
+      url: url,
+    );
+  }
+
+  Future<bool> _ensureProxyReady({required String reason}) async {
+    if (_proxyReady) return true;
+    try {
+      await _proxy.start();
+      _proxyReady = true;
+      return true;
+    } catch (e) {
+      _log('proxy start failed in $reason: $e');
+      return false;
+    }
+  }
+
+  Future<({String toOpen, bool openedViaProxy})> _resolveOpenTransport(
+    String originalUrl, {
+    required String reason,
+  }) async {
+    if (!_shouldStartWithProxyForUrl(originalUrl)) {
+      return (toOpen: originalUrl, openedViaProxy: false);
+    }
+
+    final ready = await _ensureProxyReady(reason: reason);
+    if (!ready) return (toOpen: originalUrl, openedViaProxy: false);
+
+    try {
+      final proxied = _proxy.playlistUrl(Uri.parse(originalUrl)).toString();
+      return (toOpen: proxied, openedViaProxy: true);
+    } catch (e) {
+      _log('proxy url build failed in $reason: $e');
+      return (toOpen: originalUrl, openedViaProxy: false);
+    }
   }
 
   int? _durationHintSeconds() {
@@ -370,13 +421,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     bool iosSettleTimeoutFired = false;
 
     // Safety timeout — don't hang forever.
-    final timeout =
-        Future<void>.delayed(const Duration(seconds: 10), () {
-          if (!settle.isCompleted) {
-            iosSettleTimeoutFired = true;
-            settle.complete();
-          }
-        });
+    final timeout = Future<void>.delayed(const Duration(seconds: 10), () {
+      if (!settle.isCompleted) {
+        iosSettleTimeoutFired = true;
+        settle.complete();
+      }
+    });
 
     _log('iOS restore: waiting for duration settle...');
     subDur = _player.stream.duration.listen(
@@ -389,7 +439,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         _log('iOS restore: duration update ${d.inSeconds}s');
         if (d > const Duration(seconds: 3)) {
           if (!settle.isCompleted) {
-            _log('iOS restore settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
+            _log(
+                'iOS restore settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
             settle.complete();
           }
         }
@@ -406,7 +457,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     await Future.any([settle.future, timeout]);
     await subDur.cancel();
-    
+
     if (iosSettleTimeoutFired) {
       _log('iOS settle TIMEOUT (10s) - no valid duration reported');
     }
@@ -1237,35 +1288,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _currentQuality = _pickInitialQualityAndUrl();
 
     if (_chosenUrl == null || _chosenUrl!.isEmpty) {
-      _snack('No HLS URL available.');
+      _snack('No stream URL available.');
       return;
     }
-
-    // Start local proxy BEFORE building proxied URL to avoid LateInitializationError.
-    if (!_proxyReady) {
-      try {
-        await _proxy.start();
-        _proxyReady = true;
-      } catch (e) {
-        _log('proxy start failed: $e');
-      }
-    }
-
-    // Build proxied URL (no trimming, no t=..., to keep absolute progress bar)
-    final toOpen = _proxyReady && widget.startWithProxy
-        ? _proxy.playlistUrl(Uri.parse(_chosenUrl!)).toString()
-        : _chosenUrl!;
+    final originalUrl = _chosenUrl!.trim();
+    final transport = await _resolveOpenTransport(
+      originalUrl,
+      reason: 'init',
+    );
 
     _proxyFallbackAttempted = false;
-    _openedViaProxy = _proxyReady && widget.startWithProxy;
+    _openedViaProxy = transport.openedViaProxy;
 
     await _openAt(
-      toOpen,
+      transport.toOpen,
       // We still perform a normal seek — progress bar remains absolute.
       position: await _restoreSavedPosition(),
       play: true,
-      fallbackProxyUrl: _chosenUrl,
+      originalUrl: originalUrl,
       openedViaProxy: _openedViaProxy,
+      allowOppositeRetry: true,
     );
 
     // Ensure subtitle visibility matches prefs after the first open.
@@ -1304,9 +1346,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // Save desktop volume back to prefs when user changes it via controls.
     _subVolume = _player.stream.volume.listen((v) {
       if (!_isDesktop) return;
+      if ((v - _desktopVolume).abs() < 0.05) return;
       // mpv volume is 0..100.0; store as-is.
       _desktopVolume = v;
-      _safeSetState(() {}); // update UI if you later show it
       _volumePersistDebounce?.cancel();
       _volumePersistDebounce = Timer(PlayerTuning.volumePersistDebounce, () {
         unawaited(
@@ -1360,7 +1402,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         unawaited(_maybeAutoIncrementProgress(pos));
       }
 
-      _safeSetState(() {});
+      // Keep UI updates bounded (position stream can emit very frequently).
+      final sec = pos.inSeconds;
+      if (sec != _lastUiPosSecond) {
+        _lastUiPosSecond = sec;
+        _safeSetState(() {});
+      }
     });
 
     _subCompleted = _player.stream.completed.listen((done) {
@@ -1436,7 +1483,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       final last = DateTime.fromMillisecondsSinceEpoch(lastWatchedEpochMs);
       final age = DateTime.now().difference(last);
       if (age >= const Duration(days: 30)) {
-        _log('restore: saved=${saved}s, age=${age.inDays}d, starting fresh (stale)');
+        _log(
+            'restore: saved=${saved}s, age=${age.inDays}d, starting fresh (stale)');
         return Duration.zero;
       }
     }
@@ -1448,26 +1496,54 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     bool clearIfCompleted = false,
     bool allowClear = true,
   }) async {
-    if (_navigatingAway) return;
+    if (_navigatingAway || _saveInFlight) return;
 
     final pos = _player.state.position;
     final dur = _player.state.duration;
     if (dur.inSeconds <= 0) return;
 
+    final ordinal = widget.args.ordinal;
+    final sec = pos.inSeconds;
     final isCompleted = pos.inMilliseconds >= (dur.inMilliseconds * 0.98);
-    if (clearIfCompleted || isCompleted) {
-      if (!allowClear) return;
-      if (isCompleted) _log('save: episode completed, clearing position for ordinal=${widget.args.ordinal}');
-      await _playback.clearEpisode(
-          widget.animeVoice, widget.args.id, widget.args.ordinal);
-    } else {
-      _log('save: saving position=${pos.inSeconds}s to ordinal=${widget.args.ordinal}');
-      await _playback.saveEntry(
-        widget.animeVoice,
-        widget.args.id,
-        widget.args.ordinal,
-        seconds: pos.inSeconds,
-      );
+    if ((clearIfCompleted || isCompleted) && !allowClear) return;
+    final wantsClear = (clearIfCompleted || isCompleted) && allowClear;
+    if (wantsClear && _lastSavedOrdinal == ordinal && _lastSavedWasCleared) {
+      return;
+    }
+    if (!wantsClear &&
+        _lastSavedOrdinal == ordinal &&
+        !_lastSavedWasCleared &&
+        _lastSavedSecond == sec) {
+      return;
+    }
+
+    _saveInFlight = true;
+    try {
+      if (wantsClear) {
+        if (isCompleted) {
+          _log(
+              'save: episode completed, clearing position for ordinal=${widget.args.ordinal}');
+        }
+        await _playback.clearEpisode(
+            widget.animeVoice, widget.args.id, widget.args.ordinal);
+        _lastSavedOrdinal = ordinal;
+        _lastSavedSecond = -1;
+        _lastSavedWasCleared = true;
+      } else {
+        _log(
+            'save: saving position=${pos.inSeconds}s to ordinal=${widget.args.ordinal}');
+        await _playback.saveEntry(
+          widget.animeVoice,
+          widget.args.id,
+          widget.args.ordinal,
+          seconds: sec,
+        );
+        _lastSavedOrdinal = ordinal;
+        _lastSavedSecond = sec;
+        _lastSavedWasCleared = false;
+      }
+    } finally {
+      _saveInFlight = false;
     }
   }
 
@@ -1486,7 +1562,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     _plannedSeek = true;
     try {
-      _log('seek: starting seek to ${tgt.inSeconds}s reason=${reason ?? "n/a"}');
+      _log(
+          'seek: starting seek to ${tgt.inSeconds}s reason=${reason ?? "n/a"}');
       final stopwatch = Stopwatch()..start();
       await _player.seek(tgt);
       _log('seek: completed in ${stopwatch.elapsedMilliseconds}ms');
@@ -1506,12 +1583,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     String url, {
     required Duration position,
     required bool play,
-    String? fallbackProxyUrl,
+    required String originalUrl,
     bool openedViaProxy = false,
+    bool allowOppositeRetry = true,
   }) async {
     if (!_alive) return;
 
     _openedViaProxy = openedViaProxy;
+    final canProxyFallback = _shouldAllowProxyFallbackForUrl(originalUrl);
+    final shouldWaitForHlsSettle =
+        openedViaProxy || _looksLikeHlsUrl(originalUrl);
 
     // Reset auto-skip flags for a fresh media open (quality change / next episode).
     _openingSkipped = false;
@@ -1529,24 +1610,65 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       };
       _log('Opening URL: $url');
       final openStopwatch = Stopwatch()..start();
-      
+
       // Add a timeout to the open call itself (normally quick, but detect hanging)
-      await _player.open(
+      await _player
+          .open(
         Media(
           url,
           httpHeaders: headers,
         ),
         play: play,
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          _log('WARNING: player.open() timed out after 10 seconds for URL: $url');
+          _log(
+              'WARNING: player.open() timed out after 10 seconds for URL: $url');
           throw TimeoutException('player.open() took too long');
         },
       );
       _log('Opened URL in ${openStopwatch.elapsedMilliseconds}ms');
     } catch (e) {
-      _log('open failed (not alive?): $e');
+      _log('open failed: $e');
+
+      if (!allowOppositeRetry || !_alive) return;
+
+      if (openedViaProxy) {
+        _log('openAt: proxy open failed; reopening direct once');
+        await _openAt(
+          originalUrl,
+          position: position,
+          play: play,
+          originalUrl: originalUrl,
+          openedViaProxy: false,
+          allowOppositeRetry: false,
+        );
+        return;
+      }
+
+      if (canProxyFallback) {
+        final ready = await _ensureProxyReady(reason: 'openAt_retry_proxy');
+        if (ready) {
+          try {
+            final proxied =
+                _proxy.playlistUrl(Uri.parse(originalUrl)).toString();
+            _log('openAt: direct open failed; reopening via proxy once');
+            await _openAt(
+              proxied,
+              position: position,
+              play: play,
+              originalUrl: originalUrl,
+              openedViaProxy: true,
+              allowOppositeRetry: false,
+            );
+            return;
+          } catch (e2) {
+            _log('openAt: proxy retry build failed: $e2');
+          }
+        }
+      }
+
       return;
     }
 
@@ -1591,85 +1713,105 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _endingSkipped = false;
     _autoSkipBlockedUntil = null;
 
-    // Wait for HLS to report a valid duration (no fallback on position ticks).
-    final settle = Completer<void>();
-    late final StreamSubscription subDur;
     bool settleTimeoutFired = false;
 
-    final timeout =
-        Future<void>.delayed(const Duration(seconds: 15), () {
-          if (!settle.isCompleted) {
-            settleTimeoutFired = true;
-            settle.complete();
-          }
-        });
+    if (shouldWaitForHlsSettle) {
+      // Wait for HLS to report a valid duration (no fallback on position ticks).
+      final settle = Completer<void>();
+      late final StreamSubscription subDur;
 
-    _log('Waiting for HLS to settle (max 15s)...');
-    subDur = _player.stream.duration.listen(
-      (d) {
-        if (!_alive) {
+      final timeout = Future<void>.delayed(const Duration(seconds: 15), () {
+        if (!settle.isCompleted) {
+          settleTimeoutFired = true;
+          settle.complete();
+        }
+      });
+
+      _log('Waiting for HLS to settle (max 15s)...');
+      subDur = _player.stream.duration.listen(
+        (d) {
+          if (!_alive) {
+            if (!settle.isCompleted) settle.complete();
+            subDur.cancel();
+            return;
+          }
+          _log('HLS duration update: ${d.inSeconds}s');
+          if (d > const Duration(seconds: 3)) {
+            if (!settle.isCompleted) {
+              _log(
+                  'HLS settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
+              settle.complete();
+            }
+          }
+        },
+        onError: (error) {
+          _log('ERROR in HLS duration stream: $error');
           if (!settle.isCompleted) settle.complete();
-          subDur.cancel();
-          return;
-        }
-        _log('HLS duration update: ${d.inSeconds}s');
-        if (d > const Duration(seconds: 3)) {
-          if (!settle.isCompleted) {
-            _log('HLS settled with duration: ${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}');
-            settle.complete();
-          }
-        }
-      },
-      onError: (error) {
-        _log('ERROR in HLS duration stream: $error');
-        if (!settle.isCompleted) settle.complete();
-      },
-      onDone: () {
-        _log('HLS duration stream closed prematurely');
-        if (!settle.isCompleted) settle.complete();
-      },
-    );
+        },
+        onDone: () {
+          _log('HLS duration stream closed prematurely');
+          if (!settle.isCompleted) settle.complete();
+        },
+      );
 
-    await Future.any([settle.future, timeout]);
-    await subDur.cancel();
-    
-    if (settleTimeoutFired) {
-      _log('HLS settle TIMEOUT (15s) - no valid duration reported, continuing anyway');
+      await Future.any([settle.future, timeout]);
+      await subDur.cancel();
+
+      if (settleTimeoutFired) {
+        _log(
+            'HLS settle TIMEOUT (15s) - no valid duration reported, continuing anyway');
+      }
     }
 
     if (!_alive) return;
 
     final settledDuration = _player.state.duration;
+    final durationLooksUnusable = _shouldFallbackToProxy(settledDuration);
+
+    if (_openedViaProxy &&
+        allowOppositeRetry &&
+        (settleTimeoutFired || durationLooksUnusable)) {
+      _log(
+        'openAt: proxy duration=${settledDuration.inSeconds}s seems unusable; reopening direct once',
+      );
+      await _openAt(
+        originalUrl,
+        position: position,
+        play: play,
+        originalUrl: originalUrl,
+        openedViaProxy: false,
+        allowOppositeRetry: false,
+      );
+      return;
+    }
+
     if (!_openedViaProxy &&
         !_proxyFallbackAttempted &&
-        fallbackProxyUrl != null &&
-        _looksLikeHlsUrl(fallbackProxyUrl) &&
-        _shouldFallbackToProxy(settledDuration)) {
+        allowOppositeRetry &&
+        canProxyFallback &&
+        shouldWaitForHlsSettle &&
+        durationLooksUnusable) {
       _proxyFallbackAttempted = true;
       _log(
           'openAt: duration=${settledDuration.inSeconds}s seems truncated; reopening via proxy');
 
       // Ensure proxy is running before retry.
-      if (!_proxyReady) {
+      final ready = await _ensureProxyReady(reason: 'openAt_fallback');
+      if (ready) {
         try {
-          await _proxy.start();
-          _proxyReady = true;
+          final proxied = _proxy.playlistUrl(Uri.parse(originalUrl)).toString();
+          await _openAt(
+            proxied,
+            position: position,
+            play: play,
+            originalUrl: originalUrl,
+            openedViaProxy: true,
+            allowOppositeRetry: false,
+          );
+          return;
         } catch (e) {
-          _log('proxy start failed in openAt fallback: $e');
+          _log('openAt: proxy fallback build failed: $e');
         }
-      }
-
-      if (_proxyReady) {
-        final proxied =
-            _proxy.playlistUrl(Uri.parse(fallbackProxyUrl)).toString();
-        await _openAt(
-          proxied,
-          position: position,
-          play: play,
-          fallbackProxyUrl: null,
-          openedViaProxy: true,
-        );
-        return;
       }
     }
 
@@ -1726,8 +1868,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _currentQuality = label;
       _safeSetState(() {});
 
+      // Reopen at the same position only if we have a playable URL.
+      final baseUrl = (_chosenUrl?.trim().isNotEmpty == true)
+          ? _chosenUrl!.trim()
+          : (rawUrls.isNotEmpty ? rawUrls.first : null);
+      if (baseUrl == null || baseUrl.isEmpty) return;
+      final baseIsHls = _looksLikeHlsUrl(baseUrl);
+
       // For mpv (desktop NativePlayer), limit HLS bitrate to approximate the selection.
-      if (_isDesktop) {
+      if (_isDesktop && baseIsHls) {
         // mpv `hls-bitrate` accepts: no|min|max|<rate>.
         // If given a number, mpv picks the highest BANDWIDTH <= <rate>.
         // HLS BANDWIDTH values are typically in bits-per-second.
@@ -1740,37 +1889,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         };
 
         try {
-          final baseUrl = (_chosenUrl?.trim().isNotEmpty == true)
-              ? _chosenUrl!.trim()
-              : (rawUrls.isNotEmpty ? rawUrls.first : null);
-          if (baseUrl != null && baseUrl.isNotEmpty) {
-            final targetHeight = switch (label) {
-              PlayerQuality.p1080 => 1080,
-              PlayerQuality.p720 => 720,
-              PlayerQuality.p480 => 480,
-            };
+          final targetHeight = switch (label) {
+            PlayerQuality.p1080 => 1080,
+            PlayerQuality.p720 => 720,
+            PlayerQuality.p480 => 480,
+          };
 
-            // Ensure proxy client exists.
-            if (!_proxyReady) {
-              try {
-                await _proxy.start();
-                _proxyReady = true;
-              } catch (_) {}
-            }
+          // Ensure proxy client exists.
+          final ready = await _ensureProxyReady(reason: 'changeQuality_probe');
+          if (ready) {
+            final cap = await _proxy.suggestHlsBitrateCap(
+              Uri.parse(baseUrl),
+              targetHeight: targetHeight,
+              headers: widget.args.httpHeaders,
+            );
 
-            if (_proxyReady) {
-              final cap = await _proxy.suggestHlsBitrateCap(
-                Uri.parse(baseUrl),
-                targetHeight: targetHeight,
-                headers: widget.args.httpHeaders,
-              );
-
-              if (cap != null && cap > 0) {
-                if (label == PlayerQuality.p1080) {
-                  opt = 'max';
-                } else {
-                  opt = cap.toString();
-                }
+            if (cap != null && cap > 0) {
+              if (label == PlayerQuality.p1080) {
+                opt = 'max';
+              } else {
+                opt = cap.toString();
               }
             }
           }
@@ -1781,42 +1919,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         unawaited(_setMpv('hls-bitrate', opt));
       }
 
-      // Reopen at the same position only if we have a playable URL.
-      final baseUrl = (_chosenUrl?.trim().isNotEmpty == true)
-          ? _chosenUrl!.trim()
-          : (rawUrls.isNotEmpty ? rawUrls.first : null);
-      if (baseUrl == null || baseUrl.isEmpty) return;
-
       final wasPlaying = _player.state.playing;
       final pos = _player.state.position;
+      final transport = await _resolveOpenTransport(
+        baseUrl,
+        reason: 'changeQuality_master',
+      );
 
-      // Ensure proxy is running
-      if (!_proxyReady) {
-        try {
-          await _proxy.start();
-          _proxyReady = true;
-        } catch (e) {
-          _log('proxy start failed in changeQuality(master): $e');
-        }
-      }
-
-      final toOpen = _proxyReady && widget.startWithProxy
-          ? _proxy.playlistUrl(Uri.parse(baseUrl)).toString()
-          : baseUrl;
-
-        _proxyFallbackAttempted = false;
-        _openedViaProxy = _proxyReady && widget.startWithProxy;
+      _proxyFallbackAttempted = false;
+      _openedViaProxy = transport.openedViaProxy;
 
       // Only add fudge for mid-video resumes; keep small positions as-is
-      final resume = pos.inSeconds > 5
-          ? pos + PlayerTuning.openAtResumeFudge
-          : pos;
+      final resume =
+          pos.inSeconds > 5 ? pos + PlayerTuning.openAtResumeFudge : pos;
       await _openAt(
-        toOpen,
+        transport.toOpen,
         position: resume,
         play: wasPlaying,
-        fallbackProxyUrl: baseUrl,
+        originalUrl: baseUrl,
         openedViaProxy: _openedViaProxy,
+        allowOppositeRetry: true,
       );
 
       if (_isDesktop) {
@@ -1879,34 +2001,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     _chosenUrl = url;
     _currentQuality = effectiveQuality;
-
-    // Ensure proxy is running
-    if (!_proxyReady) {
-      try {
-        await _proxy.start();
-        _proxyReady = true;
-      } catch (e) {
-        _log('proxy start failed in changeQuality: $e');
-      }
-    }
-
-    final toOpen = _proxyReady && widget.startWithProxy
-        ? _proxy.playlistUrl(Uri.parse(url)).toString()
-        : url;
+    final transport = await _resolveOpenTransport(
+      url,
+      reason: 'changeQuality',
+    );
 
     _proxyFallbackAttempted = false;
-    _openedViaProxy = _proxyReady && widget.startWithProxy;
+    _openedViaProxy = transport.openedViaProxy;
 
     // Only add fudge for mid-video resumes; keep small positions as-is
-    final resume = pos.inSeconds > 5
-        ? pos + PlayerTuning.openAtResumeFudge
-        : pos;
+    final resume =
+        pos.inSeconds > 5 ? pos + PlayerTuning.openAtResumeFudge : pos;
     await _openAt(
-      toOpen,
+      transport.toOpen,
       position: resume,
       play: wasPlaying,
-      fallbackProxyUrl: url,
+      originalUrl: url,
       openedViaProxy: _openedViaProxy,
+      allowOppositeRetry: true,
     );
 
     // Re-apply persisted desktop volume after reopen.
@@ -2075,16 +2187,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final wasFs = _wasFullscreen;
     _log('_openNextEpisode(); wasFs=$wasFs');
 
-      if (wasFs) {
-        _log('exiting fullscreen (lib + native) before auto-next');
-        bool exitedViaControls = false;
-        final ctx = _controlsCtxFullscreen;
-        if (ctx != null && ctx.mounted) {
-          try {
-            await exitFullscreen(ctx);
-            exitedViaControls = true;
-          } catch (_) {}
-        }
+    if (wasFs) {
+      _log('exiting fullscreen (lib + native) before auto-next');
+      bool exitedViaControls = false;
+      final ctx = _controlsCtxFullscreen;
+      if (ctx != null && ctx.mounted) {
+        try {
+          await exitFullscreen(ctx);
+          exitedViaControls = true;
+        } catch (_) {}
+      }
       _wasFullscreen = false;
       // Avoid double native fullscreen toggles; onExitFullscreen already calls it.
       if (!exitedViaControls) {
@@ -2121,7 +2233,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             .timeout(PlayerTuning.autoNextResolveTimeout);
         if (kDebugMode && episodesSw != null) {
           episodesSw.stop();
-          debugPrint('[Perf] $episodesLabel ${episodesSw.elapsedMilliseconds}ms');
+          debugPrint(
+              '[Perf] $episodesLabel ${episodesSw.elapsedMilliseconds}ms');
         }
       }
       if (episodes.isEmpty) {
@@ -2254,7 +2367,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
               moduleId: moduleId,
               moduleEpisodes: widget.args.moduleEpisodes,
               preferredStreamTitle: widget.args.preferredStreamTitle,
-              preferredStreamIsVoiceover: widget.args.preferredStreamIsVoiceover,
+              preferredStreamIsVoiceover:
+                  widget.args.preferredStreamIsVoiceover,
               subtitleUrl: subtitleUrl,
               url480: url480,
               url720: url720,
@@ -2283,9 +2397,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     } catch (e, st) {
       _log('failed to open next episode: $e\n$st');
       final timedOut = e is TimeoutException;
-      _showBanner(timedOut
-          ? 'Next episode timed out'
-          : 'Failed to open next episode');
+      _showBanner(
+          timedOut ? 'Next episode timed out' : 'Failed to open next episode');
     } finally {
       if (!navigated) {
         _navigatingAway = false;
@@ -2388,7 +2501,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       onSelectQuality: (q) async {
         _currentQuality = q;
         _safeSetState(() {});
-        unawaited(ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
+        unawaited(
+            ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
         _suppressPrefQualityReopen = true;
         try {
           await _changeQuality(q);
