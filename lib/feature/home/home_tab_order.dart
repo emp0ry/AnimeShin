@@ -4,7 +4,6 @@ const List<HomeTab> homeTabUiOrder = <HomeTab>[
   HomeTab.discover,
   HomeTab.anime,
   HomeTab.manga,
-  HomeTab.feed,
   HomeTab.profile,
 ];
 

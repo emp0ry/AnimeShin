@@ -31,6 +31,11 @@ class SettingsAppSubview extends ConsumerWidget {
     final update = (Options options) =>
         ref.read(persistenceProvider.notifier).setOptions(options);
 
+    final homeTabItems = homeTabUiOrder;
+    final effectiveHomeTab = homeTabItems.contains(options.homeTab)
+        ? options.homeTab
+        : homeTabItems.first;
+
     final isDesktop = !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux ||
@@ -213,8 +218,8 @@ class SettingsAppSubview extends ConsumerWidget {
               padding: tilePadding,
               child: ChipSelector.ensureSelected(
                 title: 'Home Tab',
-                items: homeTabUiOrder.map((v) => (v.label, v)).toList(),
-                value: options.homeTab,
+                items: homeTabItems.map((v) => (v.label, v)).toList(),
+                value: effectiveHomeTab,
                 onChanged: (v) => update(options.copyWith(homeTab: v)),
               ),
             ),

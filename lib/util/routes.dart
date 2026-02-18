@@ -17,6 +17,7 @@ import 'package:animeshin/feature/calendar/calendar_view.dart';
 import 'package:animeshin/feature/character/character_view.dart';
 import 'package:animeshin/feature/collection/collection_view.dart';
 import 'package:animeshin/feature/favorites/favorites_view.dart';
+import 'package:animeshin/feature/feed/feed_view.dart';
 import 'package:animeshin/feature/home/home_model.dart';
 import 'package:animeshin/feature/home/home_view.dart';
 import 'package:animeshin/feature/media/media_view.dart';
@@ -43,6 +44,8 @@ class Routes {
   static const notifications = '/notifications';
 
   static const calendar = '/calendar';
+
+  static const feed = '/feed';
 
   static String home([HomeTab? tab]) =>
       '/home${tab != null ? "?tab=${tab.name}" : ""}';
@@ -148,6 +151,10 @@ class Routes {
             tab: tabName != null ? HomeTab.values.byName(tabName) : null,
           );
         },
+      ),
+      GoRoute(
+        path: feed,
+        builder: (context, state) => const FeedView(),
       ),
       GoRoute(
         path: '/settings',

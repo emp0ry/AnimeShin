@@ -431,7 +431,7 @@ class _SettingsModulesSubviewState extends State<SettingsModulesSubview> {
                           child: Text(
                               e.id.isNotEmpty ? e.id[0].toUpperCase() : '?'));
                     }(),
-                    isThreeLine: true,
+                    isThreeLine: descriptorById[e.id] != null,
                     title: Text(
                       descriptorById[e.id]?.name ?? e.id,
                       maxLines: 2,

@@ -217,14 +217,19 @@ class _ButtonRow extends StatelessWidget {
         onTap: () => context.push(Routes.activities(userId)),
       ),
       _Button(
-        label: 'Social',
-        icon: Ionicons.people_circle,
-        onTap: () => context.push(Routes.social(userId)),
-      ),
-      _Button(
         label: 'Favourites',
         icon: Icons.favorite,
         onTap: () => context.push(Routes.favorites(userId)),
+      ),
+      _Button(
+        label: 'Feed',
+        icon: Ionicons.file_tray_outline,
+        onTap: () => context.push(Routes.feed),
+      ),
+      _Button(
+        label: 'Social',
+        icon: Ionicons.people_circle,
+        onTap: () => context.push(Routes.social(userId)),
       ),
       _Button(
         label: 'Statistics',

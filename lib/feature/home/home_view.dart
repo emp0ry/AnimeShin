@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:animeshin/extension/scroll_controller_extension.dart';
-import 'package:animeshin/feature/activity/activities_provider.dart';
-import 'package:animeshin/feature/activity/activities_view.dart';
 import 'package:animeshin/feature/collection/collection_entries_provider.dart';
 import 'package:animeshin/feature/collection/collection_floating_action.dart';
 import 'package:animeshin/feature/collection/collection_models.dart';
@@ -14,8 +12,6 @@ import 'package:animeshin/feature/discover/discover_floating_action.dart';
 import 'package:animeshin/feature/discover/discover_provider.dart';
 import 'package:animeshin/feature/discover/discover_top_bar.dart';
 import 'package:animeshin/feature/discover/discover_search_focus_provider.dart';
-import 'package:animeshin/feature/feed/feed_floating_action.dart';
-import 'package:animeshin/feature/feed/feed_top_bar.dart';
 import 'package:animeshin/feature/home/home_model.dart';
 import 'package:animeshin/feature/home/home_tab_order.dart';
 import 'package:animeshin/feature/home/home_provider.dart';
@@ -50,9 +46,6 @@ class _HomeViewState extends ConsumerState<HomeView>
 
   final _animeScrollCtrl = ScrollController();
   final _mangaScrollCtrl = ScrollController();
-  late final _feedScrollCtrl = PagedController(
-    loadMore: () => ref.read(activitiesProvider(null).notifier).fetch(),
-  );
   late final _discoverScrollCtrl = PagedController(
     loadMore: () => ref.read(discoverProvider.notifier).fetch(),
   );
@@ -93,7 +86,6 @@ class _HomeViewState extends ConsumerState<HomeView>
   void deactivate() {
     ref.invalidate(discoverProvider);
     ref.invalidate(discoverFilterProvider);
-    ref.invalidate(activitiesProvider(null));
     super.deactivate();
   }
 
@@ -105,7 +97,6 @@ class _HomeViewState extends ConsumerState<HomeView>
 
     _animeScrollCtrl.dispose();
     _mangaScrollCtrl.dispose();
-    _feedScrollCtrl.dispose();
     _discoverScrollCtrl.dispose();
 
     _tabCtrl.dispose();
@@ -128,9 +119,7 @@ class _HomeViewState extends ConsumerState<HomeView>
       });
     }
 
-    if (currentTab == HomeTab.feed) {
-      ref.watch(activitiesProvider(null).select((_) => null));
-    } else if (currentTab == HomeTab.discover) {
+    if (currentTab == HomeTab.discover) {
       ref.watch(discoverProvider.select((_) => null));
     }
 
@@ -183,13 +172,6 @@ class _HomeViewState extends ConsumerState<HomeView>
               ),
             ],
           ),
-        HomeTab.feed => const TopBar(
-            key: Key('feedTopBar'),
-            title: 'Feed',
-            trailing: [
-              FeedTopBarTrailingContent(),
-            ],
-          ),
         _ => const EmptyTopBar() as PreferredSizeWidget,
       },
     );
@@ -212,7 +194,8 @@ class _HomeViewState extends ConsumerState<HomeView>
 
         switch (tab) {
           case HomeTab.feed:
-            _feedScrollCtrl.scrollToTop();
+            context.push(Routes.feed);
+            return;
           case HomeTab.anime:
             final animePixels = safePixels(_animeScrollCtrl);
             if (animePixels != null && animePixels > 0) {
@@ -274,11 +257,6 @@ class _HomeViewState extends ConsumerState<HomeView>
               child: CollectionFloatingAction(mangaCollectionTag),
             )
           : null,
-      HomeTab.feed => HidingFloatingActionButton(
-          key: const Key('feed'),
-          scrollCtrl: _feedScrollCtrl,
-          child: FeedFloatingAction(ref),
-        ),
       _ => null,
     };
 
@@ -299,7 +277,6 @@ class _HomeViewState extends ConsumerState<HomeView>
           formFactor: formFactor,
           key: Key(false.toString()),
         ),
-        ActivitiesSubView(null, _feedScrollCtrl),
         UserHomeView(
           userTag,
           null,
@@ -321,7 +298,6 @@ class _HomeViewState extends ConsumerState<HomeView>
     HomeTab.discover.label: Ionicons.compass_outline,
     HomeTab.anime.label: Ionicons.film_outline,
     HomeTab.manga.label: Ionicons.book_outline,
-    HomeTab.feed.label: Ionicons.file_tray_outline,
     HomeTab.profile.label: Ionicons.person_outline,
   };
 

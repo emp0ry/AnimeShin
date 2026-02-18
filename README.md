@@ -86,7 +86,7 @@ Users are solely responsible for the sources they configure and access.
 
 ---
 
-## 📸 Preview (outdated)
+## 📸 Preview
 
 <p align="center">
   <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/1.PNG?raw=true" width="32%">
@@ -102,8 +102,15 @@ Users are solely responsible for the sources they configure and access.
     <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/6.PNG?raw=true" width="32%">
   </p>
   <p align="center">
-    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/7.PNG?raw=true" width="48%">
-    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/8.PNG?raw=true" width="48%">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/7.PNG?raw=true" width="32%">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/8.PNG?raw=true" width="32%">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/9.PNG?raw=true" width="32%">
+  </p>
+  <hr>
+  <p align="center">An example of what the player looks like</p>
+  <p align="center">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/10.PNG?raw=true" width="48%">
+    <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/screenshots/11.PNG?raw=true" width="48%">
   </p>
 </details>
 
