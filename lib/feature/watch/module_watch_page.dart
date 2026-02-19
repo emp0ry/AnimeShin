@@ -604,6 +604,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
   int _voiceoverInitAttempts = 0;
   bool _voiceoverInitDone = false;
+  bool _voiceoverInitInProgress = false;
   bool _voiceoverDialogOpen = false;
   List<String> _voiceoverTitles = const <String>[];
   String? _preferredVoiceoverTitle;
@@ -612,6 +613,25 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   String? _preferredServerTitle;
   List<String> _serverTitles = const <String>[];
   bool _episodeLoadInProgress = false;
+  DateTime? _lastVoiceoverWaitSnackAt;
+  static const Duration _voiceoverWaitSnackThrottle = Duration(
+    milliseconds: 1500,
+  );
+
+  void _showVoiceoverLoadingWaitSnackBar() {
+    if (!mounted) return;
+    final now = DateTime.now();
+    final last = _lastVoiceoverWaitSnackAt;
+    if (last != null && now.difference(last) < _voiceoverWaitSnackThrottle) {
+      return;
+    }
+    _lastVoiceoverWaitSnackAt = now;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please wait, voiceovers are still loading...'),
+      ),
+    );
+  }
 
   Future<void> _showModuleDebug() async {
     final rt = JsSourcesRuntime.instance;
@@ -813,6 +833,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
   Future<void> _maybeInitVoiceovers(List<JsModuleEpisode> eps) async {
     if (_voiceoverInitDone) return;
+    if (_voiceoverInitInProgress) return;
     if (_voiceoverInitAttempts >= 2) {
       _voiceoverInitDone = true;
       return;
@@ -821,12 +842,13 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
 
     if (eps.isEmpty) return;
     final firstEp = eps.first;
-
-    debugPrint(
-      '[VoiceoverDebug] init module=${widget.module.id} epHref=${firstEp.href}',
-    );
+    _voiceoverInitInProgress = true;
 
     try {
+      debugPrint(
+        '[VoiceoverDebug] init module=${widget.module.id} epHref=${firstEp.href}',
+      );
+
       Stopwatch? probeSw;
       String? probeLabel;
       if (kDebugMode) {
@@ -886,6 +908,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
         '[VoiceoverDebug] probeVoiceovers failed module=${widget.module.id}',
       );
       // Allow a retry on next frame; do not mark done.
+    } finally {
+      _voiceoverInitInProgress = false;
     }
   }
 
@@ -959,6 +983,11 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   }
 
   Future<void> _openEpisode(JsModuleEpisode ep) async {
+    if (_voiceoverInitInProgress) {
+      _showVoiceoverLoadingWaitSnackBar();
+      return;
+    }
+
     if (_episodeLoadInProgress) return;
     _episodeLoadInProgress = true;
     void releaseEpisodeLoadLock() {
