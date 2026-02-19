@@ -86,6 +86,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Fullscreen helpers (media_kit's internal fullscreen needs a controls subtree context).
   BuildContext? _controlsCtxNormal;
   BuildContext? _controlsCtxFullscreen;
+  OverlayEntry? _fullscreenBannerOverlayEntry;
   bool _startFsHandled = false;
   bool _wasFullscreen = false;
   bool _nativeFsInFlight = false;
@@ -534,6 +535,95 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     } catch (e) {
       _log('cursor overlay remove failed: $e');
     }
+  }
+
+  bool _isFullscreenBannerHostActive() {
+    final fsCtx = _controlsCtxFullscreen;
+    if (fsCtx == null || !fsCtx.mounted) return false;
+    try {
+      return isFullscreen(fsCtx);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _buildBannerWidget() {
+    if (!_bannerVisible) return const SizedBox.shrink();
+
+    return PlayerBannerOverlay(
+      visible: _bannerVisible,
+      text: _bannerText,
+      showUndo: _undoSeekFrom != null,
+      onUndo: _undoSkip,
+    );
+  }
+
+  void _removeFullscreenBannerOverlayIfAny() {
+    final entry = _fullscreenBannerOverlayEntry;
+    _fullscreenBannerOverlayEntry = null;
+    if (entry == null) return;
+    try {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    } catch (e) {
+      _log('fullscreen banner overlay remove failed: $e');
+    }
+  }
+
+  void _syncFullscreenBannerOverlay() {
+    final fsCtx = _controlsCtxFullscreen;
+    if (!_bannerVisible || fsCtx == null || !fsCtx.mounted) {
+      _removeFullscreenBannerOverlayIfAny();
+      return;
+    }
+
+    final inFullscreen = _isFullscreenBannerHostActive();
+    if (!inFullscreen) {
+      _removeFullscreenBannerOverlayIfAny();
+      return;
+    }
+
+    final overlay = Overlay.maybeOf(fsCtx);
+    if (overlay == null || !overlay.mounted) {
+      _removeFullscreenBannerOverlayIfAny();
+      return;
+    }
+
+    final existing = _fullscreenBannerOverlayEntry;
+    if (existing != null) {
+      existing.markNeedsBuild();
+      return;
+    }
+
+    final entry = OverlayEntry(builder: (_) => _buildBannerWidget());
+    _fullscreenBannerOverlayEntry = entry;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_fullscreenBannerOverlayEntry != entry) return;
+      if (!_bannerVisible) {
+        _removeFullscreenBannerOverlayIfAny();
+        return;
+      }
+      final ctx = _controlsCtxFullscreen;
+      if (ctx == null || !ctx.mounted) {
+        _removeFullscreenBannerOverlayIfAny();
+        return;
+      }
+      final currentOverlay = Overlay.maybeOf(ctx);
+      if (!_isFullscreenBannerHostActive() ||
+          currentOverlay == null ||
+          !currentOverlay.mounted) {
+        _removeFullscreenBannerOverlayIfAny();
+        return;
+      }
+      try {
+        currentOverlay.insert(entry);
+      } catch (e) {
+        _log('fullscreen banner overlay insert failed: $e');
+        _removeFullscreenBannerOverlayIfAny();
+      }
+    });
   }
 
   void _bumpUiVisibility() {
@@ -1241,6 +1331,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Break reference to now-deactivated controls subtree.
     _controlsCtxNormal = null;
+    _removeFullscreenBannerOverlayIfAny();
     _controlsCtxFullscreen = null;
 
     _removeCursorOverlayIfAny();
@@ -2192,6 +2283,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       } catch (_) {}
     }
     _wasFullscreen = false;
+    _removeFullscreenBannerOverlayIfAny();
     _controlsCtxFullscreen = null;
     await _exitNativeFullscreen();
     _removeCursorOverlayIfAny();
@@ -2502,6 +2594,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _cursorForceVisible.value = affectCursor;
 
     _safeSetState(() {});
+    _syncFullscreenBannerOverlay();
     _bannerTimer = Timer(hideAfter, _hideBanner);
   }
 
@@ -2513,6 +2606,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _cursorForceVisible.value = false;
 
     _safeSetState(() {});
+    _removeFullscreenBannerOverlayIfAny();
     Future.delayed(const Duration(milliseconds: 1), _cursorHideController.kick);
   }
 
@@ -2669,13 +2763,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       animeVoice: widget.animeVoice,
     );
 
-    final banner = _bannerVisible
-        ? PlayerBannerOverlay(
-            visible: _bannerVisible,
-            text: _bannerText,
-            showUndo: _undoSeekFrom != null,
-            onUndo: _undoSkip,
-          )
+    final banner = (_bannerVisible && !_isFullscreenBannerHostActive())
+        ? _buildBannerWidget()
         : const SizedBox.shrink();
 
     Widget wrapDesktopCursorHider(Widget child) {
@@ -2753,6 +2842,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             } else {
               _controlsCtxNormal = ctx;
             }
+            _syncFullscreenBannerOverlay();
             _log(
                 'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
@@ -2800,6 +2890,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           // Insert cursor overlay on desktop while fullscreen is active.
           _insertCursorOverlayIfNeeded();
           _cursorHideController.kick();
+          _syncFullscreenBannerOverlay();
 
           _log('native fullscreen requested from onEnterFullscreen()');
         },
@@ -2807,6 +2898,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           if (_isIOS) return;
           _log('onExitFullscreen() fired (lib)');
           _wasFullscreen = false;
+          _removeFullscreenBannerOverlayIfAny();
           _controlsCtxFullscreen = null;
           if (!mounted || _navigatingAway) return;
           if (_nativeFsActive) {
