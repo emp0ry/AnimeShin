@@ -9,8 +9,6 @@ import 'package:animeshin/feature/discover/discover_model.dart';
 import 'package:animeshin/widget/input/chip_selector.dart';
 import 'package:animeshin/feature/home/home_tab_order.dart';
 import 'package:animeshin/feature/settings/theme_preview.dart';
-import 'package:animeshin/feature/player/subtitle_style_dialog.dart';
-import 'package:flutter/foundation.dart';
 
 class SettingsAppSubview extends ConsumerWidget {
   const SettingsAppSubview(this.scrollCtrl);
@@ -35,11 +33,6 @@ class SettingsAppSubview extends ConsumerWidget {
     final effectiveHomeTab = homeTabItems.contains(options.homeTab)
         ? options.homeTab
         : homeTabItems.first;
-
-    final isDesktop = !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.linux ||
-        defaultTargetPlatform == TargetPlatform.macOS);
 
     return ListView(
       controller: scrollCtrl,
@@ -165,22 +158,6 @@ class SettingsAppSubview extends ConsumerWidget {
               onChanged: (v) => update(
                 options.copyWith(anilibriaEpDub: v),
               ),
-            ),
-            ListTile(
-              title: const Text('Subtitle style'),
-              subtitle: Text(
-                isDesktop
-                    ? 'Size, color, outline'
-                    : 'Size, color, outline (desktop only)',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                showSubtitleStyleDialog(
-                  context: context,
-                  ref: ref,
-                  isDesktop: isDesktop,
-                );
-              },
             ),
           ],
         ),
