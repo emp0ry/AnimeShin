@@ -1224,9 +1224,12 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
     final moduleReferer = _moduleImageReferer(widget.module);
     final lastFetchOrigin = _lastFetchOrigin;
 
+    // Only use episodes with number > 0 for progress/continue logic
+    final progressEps = eps?.where((e) => e.number > 0).toList(growable: false) ?? const <JsModuleEpisode>[];
+
     int? continueEp;
-    if (eps != null && eps.isNotEmpty) {
-      final max = eps.map((e) => e.number).reduce((a, b) => a > b ? a : b);
+    if (progressEps.isNotEmpty) {
+      final max = progressEps.map((e) => e.number).reduce((a, b) => a > b ? a : b);
       final next = (continued <= 0) ? 1 : (continued + 1);
       continueEp = next.clamp(1, max);
     }
@@ -1280,17 +1283,18 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
             );
           }
 
-          final eps = snapshot.data ?? const <JsModuleEpisode>[];
-          if (eps.isEmpty) {
+          // Show all episodes, including episode 0
+          final allEps = (snapshot.data ?? const <JsModuleEpisode>[]);
+          if (allEps.isEmpty) {
             return const Center(child: Text('No episodes found'));
           }
 
           return ListView.separated(
             padding: const EdgeInsets.all(Theming.offset),
-            itemCount: eps.length,
+            itemCount: allEps.length,
             separatorBuilder: (_, __) => const SizedBox(height: Theming.offset),
             itemBuilder: (context, i) {
-              final ep = eps[i];
+              final ep = allEps[i];
 
               final anilistThumb = _anilistThumbs?[ep.number];
               final anilistTitle = _anilistEpisodeTitles?[ep.number];
@@ -1301,8 +1305,9 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
                       ? anilistTitle
                       : aniZipTitle;
 
-              final watched = ep.number <= continued;
-              final isContinue = ep.number == continued + 1;
+              // Only mark as watched/continue if ep.number > 0
+              final watched = ep.number > 0 && ep.number <= continued;
+              final isContinue = ep.number > 0 && ep.number == continued + 1;
 
               return _ModuleEpisodeTile(
                 episode: ep,
@@ -1324,8 +1329,8 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
           : FloatingActionButton.extended(
               heroTag: null,
               onPressed: () {
-                final list = _episodesCache;
-                if (list == null) return;
+                final list = progressEps;
+                if (list.isEmpty) return;
                 final target = continueEp!;
                 final ep = list.firstWhere(
                   (e) => e.number == target,
