@@ -503,9 +503,27 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
 
   void _updateState(Collection? Function(Collection) mutator) {
     if (!state.hasValue) return;
-    final result = mutator(state.value!);
-    if (result != null) state = AsyncValue.data(result);
+    final current = state.value!;
+    final result = mutator(current);
+    if (result == null) return;
+    if (identical(result, current)) {
+      state = AsyncValue.data(_wrapCollection(result));
+      return;
+    }
+    state = AsyncValue.data(result);
   }
+
+  Collection _wrapCollection(Collection collection) => switch (collection) {
+        FullCollection c => FullCollection.wrap(
+            lists: c.lists,
+            index: c.index,
+            scoreFormat: c.scoreFormat,
+          ),
+        PreviewCollection c => PreviewCollection.wrap(
+            list: c.list,
+            scoreFormat: c.scoreFormat,
+          ),
+      };
 
   /// Optional RU DUB enrichment to restore dub indicator data.
   Future<void> _enrichAniLibertyMeta(Map<String, dynamic> data) async {

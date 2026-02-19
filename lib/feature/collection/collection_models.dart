@@ -23,6 +23,15 @@ class PreviewCollection extends Collection {
     required super.scoreFormat,
   });
 
+  factory PreviewCollection.wrap({
+    required EntryList list,
+    required ScoreFormat scoreFormat,
+  }) =>
+      PreviewCollection._(
+        list: list,
+        scoreFormat: scoreFormat,
+      );
+
   factory PreviewCollection(
     Map<String, dynamic> map,
     ImageQuality imageQuality,
@@ -64,6 +73,17 @@ class FullCollection extends Collection {
     required this.index,
     required super.scoreFormat,
   });
+
+  factory FullCollection.wrap({
+    required List<EntryList> lists,
+    required int index,
+    required ScoreFormat scoreFormat,
+  }) =>
+      FullCollection._(
+        lists: lists,
+        index: index,
+        scoreFormat: scoreFormat,
+      );
 
   factory FullCollection(
     Map<String, dynamic> map,
