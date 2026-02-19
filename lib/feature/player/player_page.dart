@@ -2176,10 +2176,92 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _lastSkipKind = null;
   }
 
+  Future<bool> _closePlayerAfterAutoNextFailure() async {
+    if (!mounted) return false;
+
+    _navigatingAway = true;
+    _hideCursorInstant();
+    _autoSkipBlockedUntil = null;
+
+    // Force windowed mode before leaving player, even when onExitFullscreen
+    // callbacks are suppressed by _navigatingAway.
+    final fsCtx = _controlsCtxFullscreen;
+    if (fsCtx != null && fsCtx.mounted) {
+      try {
+        await exitFullscreen(fsCtx);
+      } catch (_) {}
+    }
+    _wasFullscreen = false;
+    _controlsCtxFullscreen = null;
+    await _exitNativeFullscreen();
+    _removeCursorOverlayIfAny();
+
+    _detachListeners();
+
+    await _flushDesktopVolumeToPrefs(reason: 'auto_next_failure_close');
+
+    if (!mounted) return false;
+
+    Future<bool> tryCloseOn(
+      NavigatorState navigator, {
+      Route<dynamic>? targetRoute,
+    }) async {
+      if (!navigator.mounted) return false;
+
+      bool reachedTarget = false;
+      if (targetRoute != null) {
+        navigator.popUntil((route) {
+          final isTarget = identical(route, targetRoute);
+          if (isTarget) reachedTarget = true;
+          return isTarget;
+        });
+      } else {
+        navigator.popUntil((route) {
+          final isPlayerRoute = route.settings.name == 'player';
+          if (isPlayerRoute) reachedTarget = true;
+          return isPlayerRoute;
+        });
+      }
+
+      if (!navigator.mounted) return false;
+
+      if (reachedTarget && navigator.canPop()) {
+        try {
+          navigator.pop();
+          return true;
+        } catch (_) {}
+      }
+
+      return navigator.maybePop();
+    }
+
+    final currentRoute = ModalRoute.of(context);
+    final ownerNavigator = currentRoute?.navigator;
+
+    bool popped = false;
+    if (ownerNavigator != null && currentRoute != null) {
+      popped = await tryCloseOn(
+        ownerNavigator,
+        targetRoute: currentRoute,
+      );
+    }
+
+    if (!popped && mounted) {
+      popped = await tryCloseOn(Navigator.of(context, rootNavigator: true));
+    }
+
+    if (!popped && mounted) {
+      _navigatingAway = false;
+    }
+
+    return popped;
+  }
+
   Future<void> _openNextEpisode() async {
     if (_navigatingAway) return;
     _navigatingAway = true;
     var navigated = false;
+    var closedOnFailure = false;
     _hideCursorInstant();
     _autoSkipBlockedUntil = null;
     _log('_openNextEpisode() called');
@@ -2211,7 +2293,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       final moduleId = widget.args.moduleId;
       if (moduleId == null || moduleId.trim().isEmpty) {
         _log('modules: missing moduleId, cannot auto-next');
-        _showBanner('Next episode not supported');
+        closedOnFailure = await _closePlayerAfterAutoNextFailure();
         return;
       }
 
@@ -2239,7 +2321,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
       if (episodes.isEmpty) {
         _log('modules: extractEpisodes returned empty');
-        _showBanner('Next episode not available');
+        closedOnFailure = await _closePlayerAfterAutoNextFailure();
         return;
       }
 
@@ -2257,7 +2339,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       if (next.number == widget.args.ordinal) {
         _log('modules: no next episode found');
-        _showBanner('Next episode not available');
+        closedOnFailure = await _closePlayerAfterAutoNextFailure();
         return;
       }
 
@@ -2282,7 +2364,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       }
       if (selection.streams.isEmpty) {
         _log('modules: extractStreams returned empty');
-        _showBanner('Next episode stream not available');
+        closedOnFailure = await _closePlayerAfterAutoNextFailure();
         return;
       }
 
@@ -2322,7 +2404,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
       if (url1080 == null && url720 == null && url480 == null) {
         _log('modules: no stream URLs after normalization');
-        _showBanner('Next episode stream not available');
+        closedOnFailure = await _closePlayerAfterAutoNextFailure();
         return;
       }
 
@@ -2396,11 +2478,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _log('pushReplacement issued');
     } catch (e, st) {
       _log('failed to open next episode: $e\n$st');
-      final timedOut = e is TimeoutException;
-      _showBanner(
-          timedOut ? 'Next episode timed out' : 'Failed to open next episode');
+      closedOnFailure = await _closePlayerAfterAutoNextFailure();
     } finally {
-      if (!navigated) {
+      if (!navigated && !closedOnFailure) {
         _navigatingAway = false;
       }
     }
