@@ -611,6 +611,7 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   bool _serverDialogOpen = false;
   String? _preferredServerTitle;
   List<String> _serverTitles = const <String>[];
+  bool _episodeLoadInProgress = false;
 
   Future<void> _showModuleDebug() async {
     final rt = JsSourcesRuntime.instance;
@@ -958,262 +959,278 @@ class _ModuleWatchPageState extends ConsumerState<ModuleWatchPage> {
   }
 
   Future<void> _openEpisode(JsModuleEpisode ep) async {
-    if (widget.mediaId <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid media id for playback resume')),
-      );
-      return;
+    if (_episodeLoadInProgress) return;
+    _episodeLoadInProgress = true;
+    void releaseEpisodeLoadLock() {
+      _episodeLoadInProgress = false;
     }
 
-    final entry = _readEntry();
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Loading stream...')),
-    );
-
-    JsStreamSelection selection;
     try {
-      Stopwatch? streamsSw;
-      String? streamsLabel;
-      if (kDebugMode) {
-        streamsLabel =
-            'extractStreams module=${widget.module.id} stage=open_episode';
-        debugPrint('[Perf] $streamsLabel start');
-        streamsSw = Stopwatch()..start();
-      }
-      selection = await _loadSelection(
-        ep,
-        voiceover: _preferredVoiceoverTitle,
-      );
-      if (kDebugMode && streamsSw != null) {
-        streamsSw.stop();
-        debugPrint('[Perf] $streamsLabel ${streamsSw.elapsedMilliseconds}ms');
-      }
-    } catch (_) {
-      selection = const JsStreamSelection(streams: <JsStreamCandidate>[]);
-    }
-
-    if (!mounted) return;
-
-    if (selection.streams.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not resolve stream URL')),
-      );
-      return;
-    }
-
-    _lastOpenedSelection = selection;
-
-    debugPrint(
-      '[VoiceoverDebug] openEpisode selection.count module=${widget.module.id}: ${selection.streams.length}',
-    );
-
-    final rawTitles = selection.streams
-        .map((s) => s.title.trim())
-        .where((t) => t.isNotEmpty)
-        .toSet()
-        .toList();
-    if (rawTitles.isNotEmpty) {
-      debugPrint(
-        '[VoiceoverDebug] openEpisode module=${widget.module.id} titles: ${rawTitles.join(" | ")}',
-      );
-    }
-
-    final allQuality = selection.streams.every((s) => _isQualityLabel(s.title));
-
-    String? url480;
-    String? url720;
-    String? url1080;
-    Map<String, String>? headers;
-    String? subtitleUrl = selection.subtitleUrl;
-    String? bannerTitle;
-    bool preferredIsVoiceover = false;
-    String? preferredStreamTitle;
-
-    if (allQuality) {
-      for (final s in selection.streams) {
-        final rawUrl = s.streamUrl.trim();
-        if (rawUrl.isEmpty) continue;
-        final normUrl = rawUrl.startsWith('//') ? 'https:$rawUrl' : rawUrl;
-        final q = _qualityFromTitleOrUrl(s.title, normUrl);
-        if (q == 480) url480 = normUrl;
-        if (q == 720) url720 = normUrl;
-        if (q == 1080) url1080 = normUrl;
-        headers ??= s.headers;
-        subtitleUrl ??= s.subtitleUrl;
-      }
-
-      // Fallback: pick first available if titles weren't parseable.
-      if (url1080 == null && url720 == null && url480 == null) {
-        final first = selection.streams.first;
-        final rawUrl = first.streamUrl.trim();
-        url1080 = rawUrl.startsWith('//') ? 'https:$rawUrl' : rawUrl;
-        headers ??= first.headers;
-        subtitleUrl ??= first.subtitleUrl;
-      }
-    } else {
-      // Non-quality mode: either voiceover choices or server choices.
-      final candidates = _buildVoiceoverCandidates(selection.streams);
-      final looksLikeVoiceovers = _voiceoverTitles.length >= 2 ||
-          candidates.length >= 2 ||
-          (_modulePrefersVoiceoverPicker && candidates.isNotEmpty);
-      preferredIsVoiceover = looksLikeVoiceovers;
-
-      debugPrint(
-        '[VoiceoverDebug] openEpisode module=${widget.module.id} candidates: ${candidates.join(" | ")}',
-      );
-      debugPrint(
-        '[VoiceoverDebug] openEpisode module=${widget.module.id} looksLikeVoiceovers: $looksLikeVoiceovers',
-      );
-
-      if (looksLikeVoiceovers) {
-        debugPrint(
-          '[VoiceoverDebug] openEpisode voiceoverTitles.count module=${widget.module.id}: ${_voiceoverTitles.length}',
-        );
-        if (_voiceoverTitles.length < 2 && candidates.length >= 2) {
-          setState(() => _voiceoverTitles = candidates);
-          debugPrint(
-            '[VoiceoverDebug] openEpisode setVoiceoverTitles module=${widget.module.id}: ${candidates.length}',
-          );
-        }
-        if (_preferredVoiceoverTitle == null && candidates.length >= 2) {
-          debugPrint(
-            '[VoiceoverDebug] openEpisode prompting dialog (uniqueTitles) module=${widget.module.id}',
-          );
-          await _pickVoiceover(showAuto: true);
-        } else if (_preferredVoiceoverTitle == null && _voiceoverTitles.length >= 2) {
-          debugPrint(
-            '[VoiceoverDebug] openEpisode prompting dialog (cached) module=${widget.module.id}',
-          );
-          await _pickVoiceover(showAuto: true);
-        } else {
-          debugPrint(
-            '[VoiceoverDebug] openEpisode dialog skipped module=${widget.module.id} preferred=${_preferredVoiceoverTitle ?? "(null)"}',
-          );
-        }
-
-        // Some modules need the voiceover passed into extractStreamUrl; refetch after pick.
+      if (widget.mediaId <= 0) {
         if (!mounted) return;
-        if (_preferredVoiceoverTitle != null) {
-          try {
-            Stopwatch? refetchSw;
-            String? refetchLabel;
-            if (kDebugMode) {
-              refetchLabel =
-                  'extractStreams module=${widget.module.id} stage=open_episode_refetch';
-              debugPrint('[Perf] $refetchLabel start');
-              refetchSw = Stopwatch()..start();
-            }
-            selection = await _loadSelection(
-              ep,
-              voiceover: _preferredVoiceoverTitle,
-            );
-            if (kDebugMode && refetchSw != null) {
-              refetchSw.stop();
-              debugPrint('[Perf] $refetchLabel ${refetchSw.elapsedMilliseconds}ms');
-            }
-          } catch (_) {
-            // Keep existing selection.
-          }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid media id for playback resume')),
+        );
+        return;
+      }
+
+      final entry = _readEntry();
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading stream...')),
+      );
+
+      JsStreamSelection selection;
+      try {
+        Stopwatch? streamsSw;
+        String? streamsLabel;
+        if (kDebugMode) {
+          streamsLabel =
+              'extractStreams module=${widget.module.id} stage=open_episode';
+          debugPrint('[Perf] $streamsLabel start');
+          streamsSw = Stopwatch()..start();
+        }
+        selection = await _loadSelection(
+          ep,
+          voiceover: _preferredVoiceoverTitle,
+        );
+        if (kDebugMode && streamsSw != null) {
+          streamsSw.stop();
+          debugPrint('[Perf] $streamsLabel ${streamsSw.elapsedMilliseconds}ms');
+        }
+      } catch (_) {
+        selection = const JsStreamSelection(streams: <JsStreamCandidate>[]);
+      }
+
+      if (!mounted) return;
+
+      if (selection.streams.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not resolve stream URL')),
+        );
+        return;
+      }
+
+      _lastOpenedSelection = selection;
+
+      debugPrint(
+        '[VoiceoverDebug] openEpisode selection.count module=${widget.module.id}: ${selection.streams.length}',
+      );
+
+      final rawTitles = selection.streams
+          .map((s) => s.title.trim())
+          .where((t) => t.isNotEmpty)
+          .toSet()
+          .toList();
+      if (rawTitles.isNotEmpty) {
+        debugPrint(
+          '[VoiceoverDebug] openEpisode module=${widget.module.id} titles: ${rawTitles.join(" | ")}',
+        );
+      }
+
+      final allQuality =
+          selection.streams.every((s) => _isQualityLabel(s.title));
+
+      String? url480;
+      String? url720;
+      String? url1080;
+      Map<String, String>? headers;
+      String? subtitleUrl = selection.subtitleUrl;
+      String? bannerTitle;
+      bool preferredIsVoiceover = false;
+      String? preferredStreamTitle;
+
+      if (allQuality) {
+        for (final s in selection.streams) {
+          final rawUrl = s.streamUrl.trim();
+          if (rawUrl.isEmpty) continue;
+          final normUrl = rawUrl.startsWith('//') ? 'https:$rawUrl' : rawUrl;
+          final q = _qualityFromTitleOrUrl(s.title, normUrl);
+          if (q == 480) url480 = normUrl;
+          if (q == 720) url720 = normUrl;
+          if (q == 1080) url1080 = normUrl;
+          headers ??= s.headers;
+          subtitleUrl ??= s.subtitleUrl;
+        }
+
+        // Fallback: pick first available if titles weren't parseable.
+        if (url1080 == null && url720 == null && url480 == null) {
+          final first = selection.streams.first;
+          final rawUrl = first.streamUrl.trim();
+          url1080 = rawUrl.startsWith('//') ? 'https:$rawUrl' : rawUrl;
+          headers ??= first.headers;
+          subtitleUrl ??= first.subtitleUrl;
         }
       } else {
-        final uniqueServerTitles = _serverTitlesFromSelection(selection);
-        if (mounted) {
-          setState(() => _serverTitles = uniqueServerTitles);
-        }
-        if (uniqueServerTitles.length >= 2 && _preferredServerTitle == null) {
+        // Non-quality mode: either voiceover choices or server choices.
+        final candidates = _buildVoiceoverCandidates(selection.streams);
+        final looksLikeVoiceovers = _voiceoverTitles.length >= 2 ||
+            candidates.length >= 2 ||
+            (_modulePrefersVoiceoverPicker && candidates.isNotEmpty);
+        preferredIsVoiceover = looksLikeVoiceovers;
+
+        debugPrint(
+          '[VoiceoverDebug] openEpisode module=${widget.module.id} candidates: ${candidates.join(" | ")}',
+        );
+        debugPrint(
+          '[VoiceoverDebug] openEpisode module=${widget.module.id} looksLikeVoiceovers: $looksLikeVoiceovers',
+        );
+
+        if (looksLikeVoiceovers) {
           debugPrint(
-            '[VoiceoverDebug] openEpisode prompting server dialog module=${widget.module.id}',
+            '[VoiceoverDebug] openEpisode voiceoverTitles.count module=${widget.module.id}: ${_voiceoverTitles.length}',
           );
-          await _pickServer(uniqueServerTitles);
+          if (_voiceoverTitles.length < 2 && candidates.length >= 2) {
+            setState(() => _voiceoverTitles = candidates);
+            debugPrint(
+              '[VoiceoverDebug] openEpisode setVoiceoverTitles module=${widget.module.id}: ${candidates.length}',
+            );
+          }
+          if (_preferredVoiceoverTitle == null && candidates.length >= 2) {
+            debugPrint(
+              '[VoiceoverDebug] openEpisode prompting dialog (uniqueTitles) module=${widget.module.id}',
+            );
+            await _pickVoiceover(showAuto: true);
+          } else if (_preferredVoiceoverTitle == null &&
+              _voiceoverTitles.length >= 2) {
+            debugPrint(
+              '[VoiceoverDebug] openEpisode prompting dialog (cached) module=${widget.module.id}',
+            );
+            await _pickVoiceover(showAuto: true);
+          } else {
+            debugPrint(
+              '[VoiceoverDebug] openEpisode dialog skipped module=${widget.module.id} preferred=${_preferredVoiceoverTitle ?? "(null)"}',
+            );
+          }
+
+          // Some modules need the voiceover passed into extractStreamUrl; refetch after pick.
+          if (!mounted) return;
+          if (_preferredVoiceoverTitle != null) {
+            try {
+              Stopwatch? refetchSw;
+              String? refetchLabel;
+              if (kDebugMode) {
+                refetchLabel =
+                    'extractStreams module=${widget.module.id} stage=open_episode_refetch';
+                debugPrint('[Perf] $refetchLabel start');
+                refetchSw = Stopwatch()..start();
+              }
+              selection = await _loadSelection(
+                ep,
+                voiceover: _preferredVoiceoverTitle,
+              );
+              if (kDebugMode && refetchSw != null) {
+                refetchSw.stop();
+                debugPrint(
+                  '[Perf] $refetchLabel ${refetchSw.elapsedMilliseconds}ms',
+                );
+              }
+            } catch (_) {
+              // Keep existing selection.
+            }
+          }
+        } else {
+          final uniqueServerTitles = _serverTitlesFromSelection(selection);
+          if (mounted) {
+            setState(() => _serverTitles = uniqueServerTitles);
+          }
+          if (uniqueServerTitles.length >= 2 && _preferredServerTitle == null) {
+            debugPrint(
+              '[VoiceoverDebug] openEpisode prompting server dialog module=${widget.module.id}',
+            );
+            await _pickServer(uniqueServerTitles);
+          }
         }
+
+        if (!mounted) return;
+
+        preferredStreamTitle = looksLikeVoiceovers
+            ? _preferredVoiceoverTitle
+            : _preferredServerTitle;
+
+        // Pick a single stream by preferred title.
+        _lastOpenedSelection = selection;
+        JsStreamCandidate picked = selection.streams.first;
+        final want = looksLikeVoiceovers
+            ? _preferredVoiceoverTitle?.trim()
+            : _preferredServerTitle?.trim();
+        if (want != null && want.isNotEmpty) {
+          final w = want.toLowerCase();
+          for (final s in selection.streams) {
+            final t = s.title.trim().toLowerCase();
+            if (t == w || t.contains(w) || w.contains(t)) {
+              picked = s;
+              break;
+            }
+          }
+        }
+
+        final rawUrl = picked.streamUrl.trim();
+        url1080 = rawUrl.startsWith('//') ? 'https:$rawUrl' : rawUrl;
+
+        // If module provided per-quality URLs for this voiceover, pass them through.
+        String? norm(String? u) {
+          final s = u?.trim();
+          if (s == null || s.isEmpty) return null;
+          return s.startsWith('//') ? 'https:$s' : s;
+        }
+
+        url480 = norm(picked.url480) ?? url480;
+        url720 = norm(picked.url720) ?? url720;
+        url1080 = norm(picked.url1080) ?? url1080;
+
+        headers = picked.headers;
+        subtitleUrl ??= picked.subtitleUrl;
+        bannerTitle = picked.title;
       }
 
       if (!mounted) return;
 
-      preferredStreamTitle =
-          looksLikeVoiceovers ? _preferredVoiceoverTitle : _preferredServerTitle;
+      final moduleEpisodes = _episodesCache == null
+          ? null
+          : List<JsModuleEpisode>.unmodifiable(_episodesCache!);
 
-      // Pick a single stream by preferred title.
-      _lastOpenedSelection = selection;
-      JsStreamCandidate picked = selection.streams.first;
-      final want = looksLikeVoiceovers
-          ? _preferredVoiceoverTitle?.trim()
-          : _preferredServerTitle?.trim();
-      if (want != null && want.isNotEmpty) {
-        final w = want.toLowerCase();
-        for (final s in selection.streams) {
-          final t = s.title.trim().toLowerCase();
-          if (t == w || t.contains(w) || w.contains(t)) {
-            picked = s;
-            break;
-          }
-        }
-      }
-
-      final rawUrl = picked.streamUrl.trim();
-      url1080 = rawUrl.startsWith('//') ? 'https:$rawUrl' : rawUrl;
-
-      // If module provided per-quality URLs for this voiceover, pass them through.
-      String? norm(String? u) {
-        final s = u?.trim();
-        if (s == null || s.isEmpty) return null;
-        return s.startsWith('//') ? 'https:$s' : s;
-      }
-
-      url480 = norm(picked.url480) ?? url480;
-      url720 = norm(picked.url720) ?? url720;
-      url1080 = norm(picked.url1080) ?? url1080;
-
-      headers = picked.headers;
-      subtitleUrl ??= picked.subtitleUrl;
-      bannerTitle = picked.title;
-    }
-
-    if (!mounted) return;
-
-    final moduleEpisodes = _episodesCache == null
-        ? null
-        : List<JsModuleEpisode>.unmodifiable(_episodesCache!);
-
-    await Navigator.of(context).push(
-      NoSwipeBackMaterialPageRoute(
-        settings: const RouteSettings(name: 'player'),
-        builder: (_) => PlayerPage(
-          args: PlayerArgs(
-            id: widget.mediaId,
-            url: widget.href,
-            ordinal: ep.number,
-            title: '${widget.title} • Ep ${ep.number}',
-            moduleId: widget.module.id,
-            moduleEpisodes: moduleEpisodes,
-            preferredStreamTitle: preferredStreamTitle,
-            preferredStreamIsVoiceover: preferredIsVoiceover,
-            subtitleUrl: subtitleUrl,
-            url480: url480,
-            url720: url720,
-            url1080: url1080,
-            duration: ep.durationSeconds,
-            openingStart: ep.openingStart,
-            openingEnd: ep.openingEnd,
-            endingStart: ep.endingStart,
-            endingEnd: ep.endingEnd,
-            httpHeaders: headers,
+      releaseEpisodeLoadLock();
+      await Navigator.of(context).push(
+        NoSwipeBackMaterialPageRoute(
+          settings: const RouteSettings(name: 'player'),
+          builder: (_) => PlayerPage(
+            args: PlayerArgs(
+              id: widget.mediaId,
+              url: widget.href,
+              ordinal: ep.number,
+              title: '${widget.title} • Ep ${ep.number}',
+              moduleId: widget.module.id,
+              moduleEpisodes: moduleEpisodes,
+              preferredStreamTitle: preferredStreamTitle,
+              preferredStreamIsVoiceover: preferredIsVoiceover,
+              subtitleUrl: subtitleUrl,
+              url480: url480,
+              url720: url720,
+              url1080: url1080,
+              duration: ep.durationSeconds,
+              openingStart: ep.openingStart,
+              openingEnd: ep.openingEnd,
+              endingStart: ep.endingStart,
+              endingEnd: ep.endingEnd,
+              httpHeaders: headers,
+            ),
+            item: entry,
+            sync: entry != null,
+            animeVoice: AnimeVoice.modules,
+            startupBannerText: bannerTitle,
+            startWithProxy: true,
           ),
-          item: entry,
-          sync: entry != null,
-          animeVoice: AnimeVoice.modules,
-          startupBannerText: bannerTitle,
-          startWithProxy: true,
         ),
-      ),
-    );
+      );
 
-    // Rebuild to reflect updated progress after returning.
-    if (!mounted) return;
-    setState(() {});
+      // Rebuild to reflect updated progress after returning.
+      if (!mounted) return;
+      setState(() {});
+    } finally {
+      releaseEpisodeLoadLock();
+    }
   }
 
   @override

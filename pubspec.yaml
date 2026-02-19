@@ -55,7 +55,7 @@ dependencies:
   workmanager: ^0.9.0+3
 
   # Sending device notifications.
-  flutter_local_notifications: ^20.1.0
+  flutter_local_notifications: ^21.0.0-dev.1
 
   # Parsing html into flutter widgets.
   flutter_widget_from_html_core: ^0.17.0
@@ -66,7 +66,7 @@ dependencies:
 
   flutter_slidable: ^4.0.3
   window_manager: ^0.5.1
-  timezone: ^0.10.1
+  timezone: ^0.11.0
   webview_flutter: ^4.13.1
   shared_preferences: ^2.5.4
 
