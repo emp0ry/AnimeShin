@@ -31,10 +31,12 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
 
   @override
   FutureOr<Collection> build() async {
-    final index = switch (state.asData?.value) {
+    final previousCollection = state.asData?.value;
+    final previousIndex = switch (previousCollection) {
       FullCollection c => c.index,
       _ => 0,
     };
+    final wasPreviewCollection = previousCollection is PreviewCollection;
 
     final viewerId = ref.watch(viewerIdProvider);
 
@@ -80,12 +82,23 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
     final imageQuality = ref.read(persistenceProvider).options.imageQuality;
 
     final collection = isFull
-        ? FullCollection(
-            data['MediaListCollection'],
-            arg.ofAnime,
-            index,
-            imageQuality,
-          )
+        ? () {
+            final fullCollection = FullCollection(
+              data['MediaListCollection'],
+              arg.ofAnime,
+              previousIndex,
+              imageQuality,
+            );
+            final selectedIndex = wasPreviewCollection
+                ? _preferredExpandedListIndex(
+                    fullCollection,
+                    fallbackIndex: fullCollection.index,
+                  )
+                : fullCollection.index;
+            return selectedIndex == fullCollection.index
+                ? fullCollection
+                : fullCollection.withIndex(selectedIndex);
+          }()
         : PreviewCollection(data['MediaListCollection'], imageQuality);
     collection.sort(_sort);
 
@@ -499,6 +512,25 @@ class CollectionNotifier extends AsyncNotifier<Collection> {
     }
 
     return collection.withIndex(index);
+  }
+
+  int _preferredExpandedListIndex(
+    FullCollection collection, {
+    required int fallbackIndex,
+  }) {
+    for (int i = 0; i < collection.lists.length; i++) {
+      if (collection.lists[i].status == ListStatus.current) {
+        return i;
+      }
+    }
+
+    for (int i = 0; i < collection.lists.length; i++) {
+      if (collection.lists[i].status == ListStatus.repeating) {
+        return i;
+      }
+    }
+
+    return fallbackIndex;
   }
 
   void _updateState(Collection? Function(Collection) mutator) {

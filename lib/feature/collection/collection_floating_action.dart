@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ionicons/ionicons.dart';
+import 'package:animeshin/feature/collection/collection_filter_provider.dart';
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/collection/collection_provider.dart';
 import 'package:animeshin/feature/home/home_provider.dart';
@@ -30,9 +31,14 @@ class CollectionFloatingAction extends StatelessWidget {
           PreviewCollection _ => FloatingActionButton(
               tooltip: 'Load Entire Collection',
               child: const Icon(Ionicons.enter_outline),
-              onPressed: () => ref.read(homeProvider.notifier).expandCollection(
-                    tag.ofAnime,
-                  ),
+              onPressed: () {
+                ref.read(collectionFilterProvider(tag).notifier).update((s) {
+                  final mediaFilter = s.mediaFilter.copy()
+                    ..sort = s.mediaFilter.previewSort;
+                  return s.copyWith(mediaFilter: mediaFilter);
+                });
+                ref.read(homeProvider.notifier).expandCollection(tag.ofAnime);
+              },
             ),
           FullCollection c => c.lists.length < 2
               ? const SizedBox()
