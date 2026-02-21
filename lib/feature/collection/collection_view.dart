@@ -266,6 +266,8 @@ class _Content extends StatelessWidget {
         ));
 
     context.go(Routes.home(HomeTab.discover));
-    ref.invalidate(collectionFilterProvider(tag));
+    ref
+        .read(collectionFilterProvider(tag).notifier)
+        .resetActivePageToDefaults();
   }
 }

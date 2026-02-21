@@ -97,9 +97,39 @@ class PersistenceNotifier extends Notifier<Persistence> {
     state = state.copyWith(animeCollectionMediaFilter: mediaFilter);
   }
 
+  void setAnimeCollectionMediaFilterForPage(
+    String pageKey,
+    CollectionMediaFilter mediaFilter,
+  ) {
+    final byPage = Map<String, CollectionMediaFilter>.from(
+      state.animeCollectionMediaFilterByPage,
+    )..[pageKey] = mediaFilter.copy();
+
+    _box.put(
+      'animeCollectionMediaFilterByPage',
+      collectionMediaFiltersByPageToPersistenceMap(byPage),
+    );
+    state = state.copyWith(animeCollectionMediaFilterByPage: byPage);
+  }
+
   void setMangaCollectionMediaFilter(CollectionMediaFilter mediaFilter) {
     _box.put('mangaCollectionMediaFilter', mediaFilter.toPersistenceMap());
     state = state.copyWith(mangaCollectionMediaFilter: mediaFilter);
+  }
+
+  void setMangaCollectionMediaFilterForPage(
+    String pageKey,
+    CollectionMediaFilter mediaFilter,
+  ) {
+    final byPage = Map<String, CollectionMediaFilter>.from(
+      state.mangaCollectionMediaFilterByPage,
+    )..[pageKey] = mediaFilter.copy();
+
+    _box.put(
+      'mangaCollectionMediaFilterByPage',
+      collectionMediaFiltersByPageToPersistenceMap(byPage),
+    );
+    state = state.copyWith(mangaCollectionMediaFilterByPage: byPage);
   }
 
   void setDiscoverMediaFilter(DiscoverMediaFilter discoverMediaFilter) {

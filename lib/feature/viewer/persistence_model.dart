@@ -12,6 +12,30 @@ import 'package:animeshin/util/theming.dart';
 
 late String appVersion;
 
+Map<String, CollectionMediaFilter>
+    _collectionMediaFiltersByPageFromPersistenceMap(
+  dynamic raw,
+) {
+  if (raw is! Map) return const <String, CollectionMediaFilter>{};
+
+  final out = <String, CollectionMediaFilter>{};
+  for (final entry in raw.entries) {
+    final key = entry.key?.toString();
+    final value = entry.value;
+    if (key == null || key.isEmpty || value is! Map) continue;
+    out[key] = CollectionMediaFilter.fromPersistenceMap(value);
+  }
+
+  return out;
+}
+
+Map<String, dynamic> collectionMediaFiltersByPageToPersistenceMap(
+  Map<String, CollectionMediaFilter> filtersByPage,
+) =>
+    filtersByPage.map(
+      (k, v) => MapEntry(k, v.toPersistenceMap()),
+    );
+
 class Persistence {
   const Persistence({
     required this.systemColors,
@@ -20,6 +44,8 @@ class Persistence {
     required this.appMeta,
     required this.animeCollectionMediaFilter,
     required this.mangaCollectionMediaFilter,
+    required this.animeCollectionMediaFilterByPage,
+    required this.mangaCollectionMediaFilterByPage,
     required this.discoverMediaFilter,
     required this.homeActivitiesFilter,
     required this.calendarFilter,
@@ -32,6 +58,8 @@ class Persistence {
         appMeta: AppMeta.empty(),
         animeCollectionMediaFilter: CollectionMediaFilter(),
         mangaCollectionMediaFilter: CollectionMediaFilter(),
+        animeCollectionMediaFilterByPage: const {},
+        mangaCollectionMediaFilterByPage: const {},
         discoverMediaFilter: DiscoverMediaFilter(MediaSort.titleRomaji),
         homeActivitiesFilter: HomeActivitiesFilter.empty(),
         calendarFilter: CalendarFilter.empty(),
@@ -55,6 +83,14 @@ class Persistence {
         mangaCollectionMediaFilter: CollectionMediaFilter.fromPersistenceMap(
           map['mangaCollectionMediaFilter'] ?? const {},
         ),
+        animeCollectionMediaFilterByPage:
+            _collectionMediaFiltersByPageFromPersistenceMap(
+          map['animeCollectionMediaFilterByPage'],
+        ),
+        mangaCollectionMediaFilterByPage:
+            _collectionMediaFiltersByPageFromPersistenceMap(
+          map['mangaCollectionMediaFilterByPage'],
+        ),
         discoverMediaFilter: DiscoverMediaFilter.fromPersistenceMap(
           map['discoverMediaFilter'] ?? const {},
         ),
@@ -72,6 +108,8 @@ class Persistence {
   final AppMeta appMeta;
   final CollectionMediaFilter animeCollectionMediaFilter;
   final CollectionMediaFilter mangaCollectionMediaFilter;
+  final Map<String, CollectionMediaFilter> animeCollectionMediaFilterByPage;
+  final Map<String, CollectionMediaFilter> mangaCollectionMediaFilterByPage;
   final DiscoverMediaFilter discoverMediaFilter;
   final HomeActivitiesFilter homeActivitiesFilter;
   final CalendarFilter calendarFilter;
@@ -83,6 +121,8 @@ class Persistence {
     AppMeta? appMeta,
     CollectionMediaFilter? animeCollectionMediaFilter,
     CollectionMediaFilter? mangaCollectionMediaFilter,
+    Map<String, CollectionMediaFilter>? animeCollectionMediaFilterByPage,
+    Map<String, CollectionMediaFilter>? mangaCollectionMediaFilterByPage,
     DiscoverMediaFilter? discoverMediaFilter,
     HomeActivitiesFilter? homeActivitiesFilter,
     CalendarFilter? calendarFilter,
@@ -96,6 +136,10 @@ class Persistence {
             animeCollectionMediaFilter ?? this.animeCollectionMediaFilter,
         mangaCollectionMediaFilter:
             mangaCollectionMediaFilter ?? this.mangaCollectionMediaFilter,
+        animeCollectionMediaFilterByPage: animeCollectionMediaFilterByPage ??
+            this.animeCollectionMediaFilterByPage,
+        mangaCollectionMediaFilterByPage: mangaCollectionMediaFilterByPage ??
+            this.mangaCollectionMediaFilterByPage,
         discoverMediaFilter: discoverMediaFilter ?? this.discoverMediaFilter,
         homeActivitiesFilter: homeActivitiesFilter ?? this.homeActivitiesFilter,
         calendarFilter: calendarFilter ?? this.calendarFilter,

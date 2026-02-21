@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/feature/collection/collection_filter_model.dart';
+import 'package:animeshin/feature/collection/collection_filter_provider.dart';
 import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/widget/dialogs.dart';
 import 'package:animeshin/widget/input/chip_selector.dart';
@@ -52,12 +53,9 @@ class _FilterCollectionViewState extends ConsumerState<CollectionFilterView> {
       icon: Icons.restore_rounded,
       foregroundColor: ColorScheme.of(context).secondary,
       onTap: () {
-        final persistence = ref.read(persistenceProvider);
-        if (widget.tag.ofAnime) {
-          widget.onChanged(persistence.animeCollectionMediaFilter);
-        } else {
-          widget.onChanged(persistence.mangaCollectionMediaFilter);
-        }
+        final notifier =
+            ref.read(collectionFilterProvider(widget.tag).notifier);
+        widget.onChanged(notifier.defaultMediaFilterForActivePage());
 
         Navigator.pop(context);
       },
@@ -74,13 +72,9 @@ class _FilterCollectionViewState extends ConsumerState<CollectionFilterView> {
         primaryAction: 'Yes',
         secondaryAction: 'No',
         onConfirm: () {
-          final notifier = ref.read(persistenceProvider.notifier);
-          if (widget.tag.ofAnime) {
-            notifier.setAnimeCollectionMediaFilter(_filter);
-          } else {
-            notifier.setMangaCollectionMediaFilter(_filter);
-          }
-
+          final notifier =
+              ref.read(collectionFilterProvider(widget.tag).notifier);
+          notifier.saveActivePageDefault(_filter);
           widget.onChanged(_filter);
           Navigator.pop(context);
         },
