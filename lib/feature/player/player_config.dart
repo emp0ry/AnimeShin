@@ -35,7 +35,7 @@ class PlayerTuning {
   const PlayerTuning._();
 
   // UI
-  static const Duration bannerHideAfter = Duration(seconds: 3);
+  static const Duration bannerHideAfter = Duration(seconds: 5);
   static const Duration cursorIdleHide = Duration(seconds: 3);
 
   // Autosave
@@ -63,6 +63,15 @@ class PlayerTuning {
   // Auto-skip
   static const Duration autoSkipBlockAfterSkip = Duration(seconds: 2);
   static const Duration autoSkipBlockAfterUndo = Duration(seconds: 10);
+
+  // HLS proxy diagnostics & retries
+  static const Duration hlsSegmentTimeout = Duration(seconds: 8);
+  static const int hlsSegmentMaxRetries = 3;
+  static const int hlsRetryBackoffBaseMs = 140;
+  static const bool hlsShortReadRetryEnabled = true;
+  static const Duration hlsJumpCorrelationWindow = Duration(seconds: 8);
+  static const bool hlsUpstreamPersistentConnections = false;
+  static const bool mpvHlsPersistentConnection = false;
 
   // Fullscreen/native timing
   static const Duration nativeFullscreenDelay = Duration(milliseconds: 150);

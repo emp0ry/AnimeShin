@@ -21,6 +21,7 @@ import 'package:animeshin/feature/player/player_quality_helpers.dart';
 import 'package:animeshin/feature/player/player_banner_overlay.dart';
 import 'package:animeshin/feature/player/player_cursor_overlay.dart';
 import 'package:animeshin/feature/player/player_controls_ctx_bridge.dart';
+import 'package:animeshin/feature/player/player_transport_trace.dart';
 
 // watch types / data
 import 'package:animeshin/feature/watch/watch_types.dart';
@@ -72,7 +73,8 @@ enum _AutoSkipKind { opening, ending }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
   // Disable unexpected jump detector logging.
-  static const bool _enableJumpDetector = false;
+  static const bool _enableJumpDetector = kDebugMode;
+  static int _traceSequence = 0;
   // --- Platform / channels -----------------------------------------------------
 
   static const MethodChannel _iosNativePlayer =
@@ -100,14 +102,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   final JsModuleExecutor _jsExec = JsModuleExecutor();
 
   // Local HLS proxy
-  final LocalHlsProxy _proxy = LocalHlsProxy();
+  late final LocalHlsProxy _proxy;
   bool _proxyReady = false; // set true after start()
 
   // Subs / timers
   StreamSubscription<Duration>? _subPos;
   StreamSubscription<bool>? _subCompleted;
+  StreamSubscription<bool>? _subBuffering;
   StreamSubscription<double>? _subRate;
   StreamSubscription<double>? _subVolume; // <- listen volume changes
+  bool? _lastBufferingState;
 
   bool _bannerVisible = false;
   String _bannerText = '';
@@ -161,6 +165,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   DateTime? _jumpWindowStartedAt;
   int _consecutiveJumpCount = 0;
   DateTime? _quarantineUntil;
+  final PlayerTransportCorrelator _transportCorrelator =
+      PlayerTransportCorrelator(
+    correlationWindow: PlayerTuning.hlsJumpCorrelationWindow,
+  );
+  late final String _transportTraceId = _makeTransportTraceId();
 
   bool get _inQuarantine =>
       _quarantineUntil != null && DateTime.now().isBefore(_quarantineUntil!);
@@ -732,6 +741,36 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         '[PlayerPage#${identityHashCode(this)} @${DateTime.now().toIso8601String()}] $msg');
   }
 
+  String _makeTransportTraceId() {
+    _traceSequence++;
+    final ts = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
+    final seq = _traceSequence.toRadixString(36);
+    return 'pp-$ts-$seq';
+  }
+
+  void _emitTransportEvent(PlayerTransportEvent event) {
+    if (!kDebugMode) return;
+    _log('[transport] ${event.toDebugLine()}');
+  }
+
+  void _onProxyEvent(HlsProxyEvent event) {
+    _transportCorrelator.registerProxyEvent(event);
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: event.timestamp,
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.proxyEvent,
+        note: 'proxy:${event.type.name} req=${event.requestId} '
+            'status=${event.statusCode?.toString() ?? "-"} '
+            'retry=${event.retry} '
+            'bytes=${event.bytesReceived?.toString() ?? "-"}'
+            '/${event.bytesExpected?.toString() ?? "-"} '
+            'err=${event.errorType ?? "-"} '
+            'hash=${event.segmentUrlHash}',
+      ),
+    );
+  }
+
   // Safe setState: ignore updates when widget is unmounted or we're navigating away.
   void _safeSetState(VoidCallback fn) {
     if (!mounted || _navigatingAway) return;
@@ -743,10 +782,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _subPos = null;
     _subCompleted?.cancel();
     _subCompleted = null;
+    _subBuffering?.cancel();
+    _subBuffering = null;
     _subRate?.cancel();
     _subRate = null;
     _subVolume?.cancel();
     _subVolume = null;
+    _lastBufferingState = null;
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
     _bannerTimer?.cancel();
@@ -1036,24 +1078,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     // unawaited(_setMpv('interpolation', 'yes'));
     // unawaited(_setMpv('tscale', 'oversample'));
 
-    // --- Hardware decoding: use a stable Windows path while keeping HW accel enabled ---
-    if (_isWindows) {
-      unawaited(_setMpv('hwdec', 'd3d11va-copy'));
-      unawaited(_setMpv('hwdec-extra-frames', '8'));
-    } else {
-      unawaited(_setMpv('hwdec', 'auto-safe'));
-    }
+    // --- Hardware decoding policy ---
+    // Use auto-safe to allow mpv to fall back when hardware decode becomes
+    // unstable on specific HLS segments after long pauses/seeks.
+    unawaited(_setMpv('hwdec', 'auto-safe'));
+    unawaited(_setMpv('vd-lavc-software-fallback', 'yes'));
 
     // --- Stabilize timestamp probing for HLS/TS (helps missing PTS) ---
     unawaited(_setMpv('demuxer-lavf-analyzeduration', '10')); // seconds
     unawaited(_setMpv('demuxer-lavf-probesize', '${50 * 1024 * 1024}'));
-    // Generate missing PTS and drop corrupt frames if upstream is wobbly.
-    unawaited(_setMpv('demuxer-lavf-o', 'fflags=+genpts+discardcorrupt'));
+    // Generate missing PTS without aggressively dropping "corrupt" packets.
+    // Dropping on transient HLS transport glitches can permanently hide frames.
+    unawaited(_setMpv('demuxer-lavf-o', 'fflags=+genpts'));
 
     // --- HTTP/HLS transport safety (you already set some; keep them consolidated) ---
     final streamLavfOptions = <String>[
-      // Keep persistent connections to reduce mid-segment stalls.
-      'http_persistent=1',
+      // Avoid stale keep-alive connections across long pause/seek windows.
+      'http_persistent=${PlayerTuning.mpvHlsPersistentConnection ? 1 : 0}',
       'reconnect=1',
       'reconnect_streamed=1',
       'reconnect_on_http_error=4xx,5xx',
@@ -1089,6 +1130,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       ),
     );
     _video = VideoController(_player);
+    _proxy = LocalHlsProxy(
+      traceId: _transportTraceId,
+      onEvent: _onProxyEvent,
+    );
+    _log('transport trace id: $_transportTraceId');
 
     // // Safe mpv tweaks (HLS host-switch & log filtering).
     // unawaited(_setMpv(
@@ -1450,6 +1496,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       });
     });
 
+    _subBuffering = _player.stream.buffering.listen((isBuffering) {
+      if (_lastBufferingState == isBuffering) return;
+      _lastBufferingState = isBuffering;
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: isBuffering
+              ? PlayerTransportEventType.bufferingStart
+              : PlayerTransportEventType.bufferingEnd,
+          position: _player.state.position,
+        ),
+      );
+    });
+
     _subPos = _player.stream.position.listen((pos) {
       // Log-only jump detector: report suspicious forward leaps but do nothing.
       final prev = _lastPos;
@@ -1477,9 +1538,23 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
           final bigLeap = diff >= PlayerTuning.jumpBigLeap;
           final burst = _consecutiveJumpCount >= 3;
+          final correlated = _transportCorrelator.correlateJump(DateTime.now());
 
           _log('! unexpected jump detected: +${diff.inMilliseconds}ms '
-              '(prev=$prev → now=$pos, bigLeap=$bigLeap, burst=$burst)');
+              '(prev=$prev → now=$pos, bigLeap=$bigLeap, burst=$burst, '
+              'relatedReq=${correlated.requestId?.toString() ?? "-"}, '
+              'relatedAgeMs=${correlated.age?.inMilliseconds.toString() ?? "-"})');
+          _emitTransportEvent(
+            PlayerTransportEvent(
+              timestamp: DateTime.now(),
+              traceId: _transportTraceId,
+              type: PlayerTransportEventType.unexpectedJump,
+              position: pos,
+              note: 'deltaMs=${diff.inMilliseconds} bigLeap=$bigLeap burst=$burst',
+              relatedProxyRequestId: correlated.requestId,
+              relatedProxyAge: correlated.age,
+            ),
+          );
 
           // IMPORTANT: No corrective actions here (logging-only requirement).
         }
@@ -1650,6 +1725,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Clamp the requested position.
     final tgt = _clampSeekAbsolute(to);
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.seekStart,
+        position: _player.state.position,
+        targetPosition: tgt,
+        note: reason,
+      ),
+    );
 
     _plannedSeek = true;
     try {
@@ -1658,6 +1743,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       final stopwatch = Stopwatch()..start();
       await _player.seek(tgt);
       _log('seek: completed in ${stopwatch.elapsedMilliseconds}ms');
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: PlayerTransportEventType.seekEnd,
+          position: _player.state.position,
+          targetPosition: tgt,
+          note: reason,
+        ),
+      );
     } catch (e) {
       // Avoid crashing if seek races with dispose
       _log('seek skipped (not alive): $e');
