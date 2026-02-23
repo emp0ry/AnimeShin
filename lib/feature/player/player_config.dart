@@ -70,8 +70,9 @@ class PlayerTuning {
   static const int hlsRetryBackoffBaseMs = 140;
   static const bool hlsShortReadRetryEnabled = true;
   static const Duration hlsJumpCorrelationWindow = Duration(seconds: 8);
-  static const bool hlsUpstreamPersistentConnections = false;
-  static const bool mpvHlsPersistentConnection = false;
+  static const bool hlsUpstreamPersistentConnections = true;
+  static const bool mpvHlsPersistentConnection = true;
+  static const Duration hlsUpstreamIdleResetAfter = Duration(seconds: 45);
 
   // Fullscreen/native timing
   static const Duration nativeFullscreenDelay = Duration(milliseconds: 150);

@@ -75,8 +75,10 @@ class LocalHlsProxy {
   final int retryBackoffBaseMs;
   final bool shortReadRetryEnabled;
   final bool upstreamPersistentConnections;
+  final Duration upstreamIdleResetAfter;
   final void Function(HlsProxyEvent event)? onEvent;
   String? traceId;
+  DateTime? _lastSegmentFetchAt;
 
   LocalHlsProxy({
     this.userAgent =
@@ -87,6 +89,7 @@ class LocalHlsProxy {
     this.shortReadRetryEnabled = PlayerTuning.hlsShortReadRetryEnabled,
     this.upstreamPersistentConnections =
         PlayerTuning.hlsUpstreamPersistentConnections,
+    this.upstreamIdleResetAfter = PlayerTuning.hlsUpstreamIdleResetAfter,
     this.onEvent,
     this.traceId,
   });
@@ -109,6 +112,7 @@ class LocalHlsProxy {
       _client?.close(force: true);
     } catch (_) {}
     _client = null;
+    _lastSegmentFetchAt = null;
   }
 
   HttpClient _createClient() {
@@ -345,20 +349,21 @@ class LocalHlsProxy {
       for (int attempt = 1; attempt <= attempts; attempt++) {
         final retry = attempt - 1;
         final sw = Stopwatch()..start();
+        final idleResetDuration = _resetClientIfIdle();
         _emitEvent(
           HlsProxyEventType.segmentFetch,
           requestId: requestId,
           uri: uri,
           retry: retry,
+          errorType: idleResetDuration != null
+              ? 'idle_reset_${idleResetDuration.inMilliseconds}ms'
+              : null,
         );
 
         try {
           final upstreamReq =
               await _requireClient().getUrl(uri).timeout(segmentTimeout);
           upstreamReq.persistentConnection = upstreamPersistentConnections;
-          if (!upstreamPersistentConnections) {
-            upstreamReq.headers.set(HttpHeaders.connectionHeader, 'close');
-          }
           _applyUpstreamHeaders(
             upstreamReq,
             uri,
@@ -688,6 +693,26 @@ class LocalHlsProxy {
     if (backoff > Duration.zero) {
       await Future.delayed(backoff);
     }
+  }
+
+  Duration? _resetClientIfIdle() {
+    final threshold = upstreamIdleResetAfter;
+    if (threshold <= Duration.zero) {
+      _lastSegmentFetchAt = DateTime.now();
+      return null;
+    }
+
+    final now = DateTime.now();
+    final last = _lastSegmentFetchAt;
+    _lastSegmentFetchAt = now;
+    if (last == null) return null;
+
+    final idle = now.difference(last);
+    if (idle >= threshold) {
+      _resetClient();
+      return idle;
+    }
+    return null;
   }
 
   void _cacheForwardHeaders(Map<String, String> headers) {

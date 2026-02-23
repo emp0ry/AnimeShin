@@ -185,7 +185,7 @@ void main() {
       expect(body, const <int>[2, 3, 4, 5]);
     });
 
-    test('uses non-persistent upstream segment connections by default', () async {
+    test('does not force Connection: close by default', () async {
       final proxy = LocalHlsProxy(
         traceId: 'test-upstream-close',
         segmentMaxRetries: 0,
@@ -218,7 +218,57 @@ void main() {
       await _readBytes(resp);
 
       expect(resp.statusCode, HttpStatus.ok);
-      expect(capturedConnection?.toLowerCase(), 'close');
+      expect(proxy.upstreamPersistentConnections, isTrue);
+      expect(capturedConnection?.toLowerCase(), isNot('close'));
+    });
+
+    test('resets upstream client after idle threshold', () async {
+      final events = <HlsProxyEvent>[];
+      final proxy = LocalHlsProxy(
+        traceId: 'test-idle-reset',
+        onEvent: events.add,
+        segmentMaxRetries: 0,
+        upstreamPersistentConnections: true,
+        upstreamIdleResetAfter: const Duration(milliseconds: 20),
+      );
+      await proxy.start();
+      addTearDown(() async => proxy.stop());
+
+      final upstream = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async => upstream.close(force: true));
+      upstream.listen((req) async {
+        req.response
+          ..statusCode = HttpStatus.ok
+          ..headers.set(HttpHeaders.contentTypeHeader, 'video/mp2t')
+          ..add(const <int>[7, 7, 7]);
+        await req.response.close();
+      });
+
+      final client = HttpClient();
+      addTearDown(() => client.close(force: true));
+
+      Future<void> fetchOnce() async {
+        final upstreamUrl =
+            Uri.parse('http://127.0.0.1:${upstream.port}/idle-reset.ts');
+        final proxyUrl = proxy.base.replace(
+          path: '/seg',
+          queryParameters: {'u': upstreamUrl.toString()},
+        );
+        final req = await client.getUrl(proxyUrl);
+        final resp = await req.close();
+        await _readBytes(resp);
+        expect(resp.statusCode, HttpStatus.ok);
+      }
+
+      await fetchOnce();
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      await fetchOnce();
+
+      final idleResets = events.where((e) {
+        return e.type == HlsProxyEventType.segmentFetch &&
+            (e.errorType?.startsWith('idle_reset_') ?? false);
+      });
+      expect(idleResets.isNotEmpty, isTrue);
     });
   });
 
