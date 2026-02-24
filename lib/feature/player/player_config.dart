@@ -54,6 +54,22 @@ class PlayerTuning {
       Duration(milliseconds: 250);
   static const Duration openAtResumeFudge = Duration(milliseconds: 300);
   static const Duration openAtForceZeroIfStartedAfter = Duration(seconds: 2);
+  static const Duration seekCoalesceWindow = Duration(milliseconds: 140);
+  static const Duration seekVerifyDelay = Duration(milliseconds: 220);
+  static const Duration seekVerifyTolerance = Duration(milliseconds: 350);
+  static const Duration seekMismatchRetryThreshold = Duration(seconds: 2);
+  static const int seekMismatchMaxCorrection = 1;
+  static const Duration longPauseBufferResetAfter = Duration(minutes: 8);
+  static const String mpvVideoSyncMode = 'audio';
+  static const bool resumeAnchorEnabled = true;
+  static const Duration resumeAnchorApplyAfterPause = Duration(seconds: 20);
+  static const Duration resumeAnchorVerifyDelay = Duration(milliseconds: 260);
+  static const Duration resumeAnchorSecondVerifyDelay =
+      Duration(milliseconds: 1300);
+  static const Duration resumeAnchorDriftTolerance =
+      Duration(milliseconds: 450);
+  static const Duration resumeAnchorMismatchThreshold = Duration(seconds: 2);
+  static const int resumeAnchorMaxCorrection = 1;
 
   // Jump detection
   static const Duration jumpLogThreshold = Duration(milliseconds: 3500);
@@ -73,6 +89,14 @@ class PlayerTuning {
   static const bool hlsUpstreamPersistentConnections = true;
   static const bool mpvHlsPersistentConnection = true;
   static const Duration hlsUpstreamIdleResetAfter = Duration(seconds: 45);
+
+  // Audio drop watchdog & recovery
+  static const bool audioDropWatchEnabled = true;
+  static const Duration audioHealthPollInterval = Duration(seconds: 1);
+  static const Duration audioWatchdogPausedPollInterval = Duration(seconds: 20);
+  static const Duration audioDropConfirmWindow = Duration(seconds: 4);
+  static const Duration audioReselectCooldown = Duration(seconds: 12);
+  static const Duration audioReselectSettleDelay = Duration(milliseconds: 120);
 
   // Fullscreen/native timing
   static const Duration nativeFullscreenDelay = Duration(milliseconds: 150);

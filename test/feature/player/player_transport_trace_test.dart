@@ -55,5 +55,48 @@ void main() {
       expect(miss.requestId, isNull);
       expect(miss.age, isNull);
     });
+
+    test('formats audio transport event in debug line', () {
+      final event = PlayerTransportEvent(
+        timestamp: DateTime.utc(2026, 1, 1, 12, 0, 0),
+        traceId: 'trace-audio',
+        type: PlayerTransportEventType.audioDropDetected,
+        position: const Duration(minutes: 7, seconds: 3),
+        note: 'reason=watchdog aid=no',
+      );
+
+      final line = event.toDebugLine();
+      expect(line, contains('trace=trace-audio'));
+      expect(line, contains('type=audioDropDetected'));
+      expect(line, contains('note="reason=watchdog aid=no"'));
+    });
+
+    test('formats new seek/cache transport event types', () {
+      const types = <PlayerTransportEventType>[
+        PlayerTransportEventType.seekQueued,
+        PlayerTransportEventType.seekCoalesced,
+        PlayerTransportEventType.seekVerify,
+        PlayerTransportEventType.seekMismatch,
+        PlayerTransportEventType.resumeAnchorStart,
+        PlayerTransportEventType.resumeAnchorVerify,
+        PlayerTransportEventType.resumeAnchorMismatch,
+        PlayerTransportEventType.resumeAnchorEnd,
+        PlayerTransportEventType.cacheReset,
+      ];
+
+      for (final type in types) {
+        final event = PlayerTransportEvent(
+          timestamp: DateTime.utc(2026, 1, 1, 12, 0, 0),
+          traceId: 'trace-seek',
+          type: type,
+          position: const Duration(seconds: 11),
+          targetPosition: const Duration(seconds: 13),
+          note: 'note=$type',
+        );
+        final line = event.toDebugLine();
+        expect(line, contains('trace=trace-seek'));
+        expect(line, contains('type=${type.name}'));
+      }
+    });
   });
 }

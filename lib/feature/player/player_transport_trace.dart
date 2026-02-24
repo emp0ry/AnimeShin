@@ -3,9 +3,22 @@ import 'package:animeshin/feature/player/local_hls_proxy.dart';
 enum PlayerTransportEventType {
   seekStart,
   seekEnd,
+  seekQueued,
+  seekCoalesced,
+  seekVerify,
+  seekMismatch,
+  resumeAnchorStart,
+  resumeAnchorVerify,
+  resumeAnchorMismatch,
+  resumeAnchorEnd,
   bufferingStart,
   bufferingEnd,
+  cacheReset,
   unexpectedJump,
+  audioState,
+  audioDropDetected,
+  audioReselectStart,
+  audioReselectEnd,
   proxyEvent,
 }
 

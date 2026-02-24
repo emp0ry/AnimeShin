@@ -21,6 +21,9 @@ import 'package:animeshin/feature/player/player_quality_helpers.dart';
 import 'package:animeshin/feature/player/player_banner_overlay.dart';
 import 'package:animeshin/feature/player/player_cursor_overlay.dart';
 import 'package:animeshin/feature/player/player_controls_ctx_bridge.dart';
+import 'package:animeshin/feature/player/player_audio_recovery.dart';
+import 'package:animeshin/feature/player/player_resume_lock.dart';
+import 'package:animeshin/feature/player/player_seek_coordinator.dart';
 import 'package:animeshin/feature/player/player_transport_trace.dart';
 
 // watch types / data
@@ -71,7 +74,8 @@ class NoSwipeBackMaterialPageRoute<T> extends MaterialPageRoute<T> {
 
 enum _AutoSkipKind { opening, ending }
 
-class _PlayerPageState extends ConsumerState<PlayerPage> {
+class _PlayerPageState extends ConsumerState<PlayerPage>
+    with WidgetsBindingObserver {
   // Disable unexpected jump detector logging.
   static const bool _enableJumpDetector = kDebugMode;
   static int _traceSequence = 0;
@@ -111,6 +115,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   StreamSubscription<bool>? _subBuffering;
   StreamSubscription<double>? _subRate;
   StreamSubscription<double>? _subVolume; // <- listen volume changes
+  StreamSubscription<bool>? _subPlaying;
   bool? _lastBufferingState;
 
   bool _bannerVisible = false;
@@ -123,6 +128,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Timer? _uiHideTimer;
   Timer?
       _qualityReopenTimer; // <- re-enable quality reaction after initial load
+  Timer? _audioHealthTimer;
+  Timer? _seekQueueTimer;
 
   // Quality
   String? _chosenUrl; // stores the ORIGINAL remote stream URL
@@ -155,6 +162,32 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   Duration _lastPos = Duration.zero;
   int _lastUiPosSecond = -1;
   bool _plannedSeek = false;
+  bool _seekPumpRunning = false;
+  bool _playTrackedInFlight = false;
+  bool _audioRecoveryInFlight = false;
+  DateTime? _lastAudioStateLogAt;
+  DateTime? _lastPausedAudioHealthCheckAt;
+  DateTime? _pausedAt;
+  Duration? _resumeAnchorPosition;
+  DateTime? _lastSeekAt;
+  bool _longPauseBufferResetDone = false;
+  bool _resumeAnchorTxnInFlight = false;
+  DateTime? _lastFullscreenTransitionAt;
+  String? _lastFullscreenTransitionType;
+  Completer<void>? _pendingSeekCompleter;
+  final SeekCoordinator _seekCoordinator = SeekCoordinator(
+    coalesceWindow: PlayerTuning.seekCoalesceWindow,
+    duplicateTolerance: PlayerTuning.seekVerifyTolerance,
+  );
+  final ResumeLockController _resumeLockController = ResumeLockController(
+    applyAfterPause: PlayerTuning.resumeAnchorApplyAfterPause,
+    mismatchThreshold: PlayerTuning.resumeAnchorMismatchThreshold,
+    maxCorrection: PlayerTuning.resumeAnchorMaxCorrection,
+  );
+  final AudioDropDetector _audioDropDetector = AudioDropDetector(
+    confirmWindow: PlayerTuning.audioDropConfirmWindow,
+    cooldown: PlayerTuning.audioReselectCooldown,
+  );
   // --- Auto-skip guard flags (Android-friendly) ---
   bool _openingSkipped = false;
   bool _endingSkipped = false;
@@ -492,9 +525,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Resume only after we are at the right place.
     if (wasPlaying && _alive) {
-      try {
-        await _player.play();
-      } catch (_) {}
+      await _playTracked(reason: 'ios_dismiss_restore_resume');
     }
   }
 
@@ -693,13 +724,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     return <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.mediaPlay): () {
-        if (_alive) unawaited(_player.play());
+        if (_alive) unawaited(_playTracked(reason: 'mk_media_play'));
       },
       const SingleActivator(LogicalKeyboardKey.mediaPause): () {
-        if (_alive) unawaited(_player.pause());
+        if (_alive) unawaited(_pauseTracked(reason: 'mk_media_pause'));
       },
       const SingleActivator(LogicalKeyboardKey.mediaPlayPause): () {
-        if (_alive) unawaited(_player.playOrPause());
+        if (_alive) unawaited(_playOrPauseTracked(reason: 'mk_media_toggle'));
       },
       const SingleActivator(LogicalKeyboardKey.mediaTrackNext): () {
         if (_alive) unawaited(_player.next());
@@ -708,7 +739,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         if (_alive) unawaited(_player.previous());
       },
       const SingleActivator(LogicalKeyboardKey.space): () {
-        if (_alive) unawaited(_player.playOrPause());
+        if (_alive) unawaited(_playOrPauseTracked(reason: 'mk_space_toggle'));
       },
       const SingleActivator(LogicalKeyboardKey.keyJ): () {
         seekBy(const Duration(seconds: -10), reason: 'mk_key_j');
@@ -788,6 +819,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _subRate = null;
     _subVolume?.cancel();
     _subVolume = null;
+    _subPlaying?.cancel();
+    _subPlaying = null;
     _lastBufferingState = null;
     _autosaveTimer?.cancel();
     _autosaveTimer = null;
@@ -799,6 +832,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     _uiHideTimer = null;
     _qualityReopenTimer?.cancel();
     _qualityReopenTimer = null;
+    _audioHealthTimer?.cancel();
+    _audioHealthTimer = null;
+    _seekQueueTimer?.cancel();
+    _seekQueueTimer = null;
+    _completeSeekCompleter(_pendingSeekCompleter);
+    _pendingSeekCompleter = null;
+    _seekCoordinator.reset();
+    _resumeLockController.reset();
+    _seekPumpRunning = false;
+    _playTrackedInFlight = false;
+    _audioRecoveryInFlight = false;
+    _lastAudioStateLogAt = null;
+    _lastPausedAudioHealthCheckAt = null;
+    _pausedAt = null;
+    _resumeAnchorPosition = null;
+    _longPauseBufferResetDone = false;
+    _resumeAnchorTxnInFlight = false;
+    _lastFullscreenTransitionAt = null;
+    _lastFullscreenTransitionType = null;
+    _audioDropDetector.reset();
   }
 
   Future<void> _enterNativeFullscreen() async {
@@ -856,6 +909,17 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
   }
 
+  Future<void> _mpvCommand(List<String> args) async {
+    final platform = _player.platform;
+    if (platform is! NativePlayer) return;
+    try {
+      final dyn = platform as dynamic;
+      await dyn.command(args);
+    } catch (e) {
+      _log('command(${args.join(" ")}) failed: $e');
+    }
+  }
+
   Future<void> _applySubtitleStyle() async {
     if (!_alive) return;
     // We only customize mpv rendering (desktop NativePlayer).
@@ -893,15 +957,249 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     await _setMpv('sub-border-color', '#000000');
   }
 
-  Future<dynamic> _getMpv(String property) async {
+  Future<dynamic> _getMpv(String property, {bool logError = true}) async {
     final platform = _player.platform;
     if (platform is! NativePlayer) return null;
     try {
       final dyn = platform as dynamic;
       return await dyn.getProperty(property);
     } catch (e) {
-      _log('getProperty("$property") failed: $e');
+      if (logError) {
+        _log('getProperty("$property") failed: $e');
+      }
       return null;
+    }
+  }
+
+  String? _normalizeAid(dynamic raw) {
+    if (raw == null) return null;
+    final aid = raw.toString().trim();
+    if (aid.isEmpty) return null;
+    if (aid.toLowerCase() == 'auto') return null;
+    return aid;
+  }
+
+  bool _toBool(dynamic raw, {bool fallback = false}) {
+    if (raw == null) return fallback;
+    if (raw is bool) return raw;
+    if (raw is num) return raw != 0;
+    final text = raw.toString().trim().toLowerCase();
+    if (text == 'yes' || text == 'true' || text == '1') return true;
+    if (text == 'no' || text == 'false' || text == '0') return false;
+    return fallback;
+  }
+
+  double? _toDouble(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw.toString().trim());
+  }
+
+  List<Map<String, dynamic>> _audioTracks(dynamic trackList) {
+    if (trackList is! List) return const [];
+    final out = <Map<String, dynamic>>[];
+    for (final item in trackList) {
+      if (item is! Map) continue;
+      final map = <String, dynamic>{};
+      item.forEach((key, value) {
+        map[key.toString()] = value;
+      });
+      if (map['type']?.toString() == 'audio') {
+        out.add(map);
+      }
+    }
+    return out;
+  }
+
+  String? _selectedAidFromTracks(
+    List<Map<String, dynamic>> tracks,
+    dynamic aidRaw,
+  ) {
+    for (final track in tracks) {
+      final selected = _toBool(track['selected']);
+      if (!selected) continue;
+      final id = _normalizeAid(track['id']);
+      if (id != null) return id;
+    }
+    return _normalizeAid(aidRaw);
+  }
+
+  String _audioSnapshotNote(AudioStateSnapshot snapshot,
+      {required String reason}) {
+    final bitrate = snapshot.audioBitrate;
+    final bitrateText = bitrate == null ? '-' : bitrate.toStringAsFixed(0);
+    return 'reason=$reason '
+        'playing=${snapshot.playing} '
+        'buffering=${snapshot.buffering} '
+        'volume=${snapshot.volume.toStringAsFixed(1)} '
+        'muted=${snapshot.muted} '
+        'tracks=${snapshot.audioTrackCount} '
+        'aid=${snapshot.selectedAid ?? "-"} '
+        'bitrate=$bitrateText';
+  }
+
+  bool _shouldEmitPeriodicAudioState(DateTime now) {
+    final last = _lastAudioStateLogAt;
+    if (last == null || now.difference(last) >= const Duration(seconds: 5)) {
+      _lastAudioStateLogAt = now;
+      return true;
+    }
+    return false;
+  }
+
+  Future<AudioStateSnapshot?> _captureAudioStateSnapshot({
+    required String reason,
+    required bool emitState,
+  }) async {
+    if (!_alive) return null;
+    final state = _player.state;
+    final trackListRaw = await _getMpv('track-list', logError: false);
+    final aidRaw = await _getMpv('aid', logError: false);
+    final muteRaw = await _getMpv('mute', logError: false);
+    final bitrateRaw = await _getMpv('audio-bitrate', logError: false);
+
+    final tracks = _audioTracks(trackListRaw);
+    final snapshot = AudioStateSnapshot(
+      playing: state.playing,
+      buffering: state.buffering,
+      volume: state.volume,
+      muted: _toBool(muteRaw),
+      audioTrackCount: tracks.length,
+      selectedAid: _selectedAidFromTracks(tracks, aidRaw),
+      audioBitrate: _toDouble(bitrateRaw),
+    );
+
+    if (emitState) {
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: PlayerTransportEventType.audioState,
+          position: state.position,
+          note: _audioSnapshotNote(snapshot, reason: reason),
+        ),
+      );
+    }
+
+    return snapshot;
+  }
+
+  void _startAudioHealthWatchdog() {
+    _audioHealthTimer?.cancel();
+    _audioHealthTimer = null;
+    if (!PlayerTuning.audioDropWatchEnabled) return;
+
+    _audioHealthTimer = Timer.periodic(
+      PlayerTuning.audioHealthPollInterval,
+      (_) {
+        if (!_alive) return;
+        final now = DateTime.now();
+        if (!_player.state.playing) {
+          final lastPausedCheck = _lastPausedAudioHealthCheckAt;
+          if (lastPausedCheck != null &&
+              now.difference(lastPausedCheck) <
+                  PlayerTuning.audioWatchdogPausedPollInterval) {
+            return;
+          }
+          _lastPausedAudioHealthCheckAt = now;
+        } else {
+          _lastPausedAudioHealthCheckAt = null;
+        }
+        unawaited(_checkAudioHealth(reason: 'watchdog'));
+      },
+    );
+
+    unawaited(_checkAudioHealth(
+      reason: 'watchdog_start',
+      forceLogState: true,
+    ));
+  }
+
+  Future<void> _checkAudioHealth({
+    required String reason,
+    bool forceLogState = false,
+  }) async {
+    if (!PlayerTuning.audioDropWatchEnabled) return;
+    if (!_alive || _audioRecoveryInFlight) return;
+
+    final now = DateTime.now();
+    final emitState = forceLogState ||
+        (_player.state.playing && _shouldEmitPeriodicAudioState(now));
+    final snapshot = await _captureAudioStateSnapshot(
+      reason: reason,
+      emitState: emitState,
+    );
+    if (snapshot == null || !_alive) return;
+
+    final decision = _audioDropDetector.evaluate(snapshot, now: now);
+    if (decision == AudioRecoveryDecision.none) return;
+
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.audioDropDetected,
+        position: _player.state.position,
+        note:
+            'decision=${decision.name} ${_audioSnapshotNote(snapshot, reason: reason)}',
+      ),
+    );
+
+    if (decision == AudioRecoveryDecision.reselectAid) {
+      await _reselectAudioTrack(reason: reason, before: snapshot);
+    }
+  }
+
+  Future<void> _reselectAudioTrack({
+    required String reason,
+    AudioStateSnapshot? before,
+  }) async {
+    if (!_alive || _audioRecoveryInFlight) return;
+    _audioRecoveryInFlight = true;
+    try {
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: PlayerTransportEventType.audioReselectStart,
+          position: _player.state.position,
+          note: before == null
+              ? 'reason=$reason'
+              : _audioSnapshotNote(before, reason: reason),
+        ),
+      );
+
+      await _setMpv('aid', 'no');
+      await Future.delayed(PlayerTuning.audioReselectSettleDelay);
+      if (!_alive) return;
+
+      await _setMpv('aid', 'auto');
+      await Future.delayed(PlayerTuning.audioReselectSettleDelay);
+      if (!_alive) return;
+
+      final after = await _captureAudioStateSnapshot(
+        reason: 'reselect_after',
+        emitState: true,
+      );
+      final success = after != null &&
+          after.audioTrackCount > 0 &&
+          after.selectedAid != null &&
+          after.selectedAid!.toLowerCase() != 'no';
+
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: PlayerTransportEventType.audioReselectEnd,
+          position: _player.state.position,
+          note: after == null
+              ? 'reason=$reason success=false'
+              : 'reason=$reason success=$success '
+                  '${_audioSnapshotNote(after, reason: 'reselect_after')}',
+        ),
+      );
+    } finally {
+      _audioRecoveryInFlight = false;
     }
   }
 
@@ -1055,6 +1353,248 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
   }
 
+  void _notePausedNow() {
+    final now = DateTime.now();
+    _resumeAnchorTxnInFlight = false;
+    _pausedAt ??= now;
+    _longPauseBufferResetDone = false;
+    _resumeAnchorPosition ??= _player.state.position;
+    final anchor = _resumeAnchorPosition;
+    final pausedAt = _pausedAt;
+    if (anchor != null && pausedAt != null) {
+      _resumeLockController.markPaused(
+        anchorPosition: anchor,
+        now: pausedAt,
+      );
+    }
+  }
+
+  void _notePlaybackResumed() {
+    _pausedAt = null;
+    _lastPausedAudioHealthCheckAt = null;
+    if (!_resumeAnchorTxnInFlight) {
+      _resumeAnchorPosition = null;
+      _resumeLockController.clearResumeContext();
+    }
+  }
+
+  void _clearResumeAnchorContext() {
+    _resumeAnchorTxnInFlight = false;
+    _resumeAnchorPosition = null;
+    _resumeLockController.clearResumeContext();
+  }
+
+  String _recentFullscreenTransitionNote(DateTime now) {
+    final ts = _lastFullscreenTransitionAt;
+    if (ts == null) return '';
+    final age = now.difference(ts);
+    if (age.isNegative || age > const Duration(seconds: 3)) return '';
+    final kind = _lastFullscreenTransitionType ?? '-';
+    return ' fsRecent=$kind fsAgeMs=${age.inMilliseconds}';
+  }
+
+  Future<void> _maybeResetBuffersAfterLongPause(
+      {required String reason}) async {
+    final pausedAt = _pausedAt;
+    if (!_alive || pausedAt == null || _longPauseBufferResetDone) return;
+
+    final pausedFor = DateTime.now().difference(pausedAt);
+    final sinceSeek =
+        _lastSeekAt == null ? null : DateTime.now().difference(_lastSeekAt!);
+    if (pausedFor < PlayerTuning.longPauseBufferResetAfter) return;
+
+    _longPauseBufferResetDone = true;
+    await _mpvCommand(const ['drop-buffers']);
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.cacheReset,
+        position: _player.state.position,
+        note: sinceSeek == null
+            ? 'reason=$reason pausedMs=${pausedFor.inMilliseconds}'
+            : 'reason=$reason pausedMs=${pausedFor.inMilliseconds} sinceSeekMs=${sinceSeek.inMilliseconds}',
+      ),
+    );
+  }
+
+  Future<Duration?> _prepareResumeAnchorBeforePlay({
+    required String reason,
+  }) async {
+    if (!_alive || !PlayerTuning.resumeAnchorEnabled) return null;
+    final snapshot = _resumeLockController.snapshotOnResume();
+    if (snapshot == null) return null;
+
+    final decision = _resumeLockController.decideOnResume(snapshot);
+    if (decision != ResumeAnchorDecision.applyAnchor) return null;
+
+    final anchor = _clampSeekAbsolute(snapshot.anchorPosition);
+    _resumeAnchorTxnInFlight = true;
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.resumeAnchorStart,
+        position: _player.state.position,
+        targetPosition: anchor,
+        note: 'reason=$reason pauseMs=${snapshot.pauseDuration.inMilliseconds}',
+      ),
+    );
+    await _seekPlanned(anchor, reason: 'resume_anchor');
+    return anchor;
+  }
+
+  Future<bool> _verifyResumeAnchorOnce({
+    required Duration anchorTarget,
+    required String reason,
+    required Duration delay,
+    required String phase,
+  }) async {
+    await Future.delayed(delay);
+    if (!_alive) return false;
+
+    final state = _player.state;
+    final current = state.position;
+    final delta = (current - anchorTarget).abs();
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.resumeAnchorVerify,
+        position: current,
+        targetPosition: anchorTarget,
+        note: 'reason=$reason phase=$phase deltaMs=${delta.inMilliseconds} '
+            'buffering=${state.buffering}',
+      ),
+    );
+
+    if (delta <= PlayerTuning.resumeAnchorDriftTolerance) return true;
+    if (state.buffering ||
+        delta <= PlayerTuning.resumeAnchorMismatchThreshold) {
+      return false;
+    }
+
+    final decision = _resumeLockController.decideCorrection(
+      currentPosition: current,
+      buffering: state.buffering,
+    );
+    if (decision != ResumeAnchorDecision.correctOnce) {
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: PlayerTransportEventType.resumeAnchorMismatch,
+          position: current,
+          targetPosition: anchorTarget,
+          note: 'reason=$reason phase=$phase '
+              'deltaMs=${delta.inMilliseconds} correction=false',
+        ),
+      );
+      return false;
+    }
+
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.resumeAnchorMismatch,
+        position: current,
+        targetPosition: anchorTarget,
+        note: 'reason=$reason phase=$phase '
+            'deltaMs=${delta.inMilliseconds} correction=true',
+      ),
+    );
+    await _seekPlanned(anchorTarget, reason: 'resume_anchor_correction');
+    return true;
+  }
+
+  Future<bool> _verifyResumeAnchorAfterPlay({
+    required Duration anchorTarget,
+    required String reason,
+  }) async {
+    final first = await _verifyResumeAnchorOnce(
+      anchorTarget: anchorTarget,
+      reason: reason,
+      delay: PlayerTuning.resumeAnchorVerifyDelay,
+      phase: 'first',
+    );
+    final second = await _verifyResumeAnchorOnce(
+      anchorTarget: anchorTarget,
+      reason: reason,
+      delay: PlayerTuning.resumeAnchorSecondVerifyDelay,
+      phase: 'second',
+    );
+    return first && second;
+  }
+
+  Future<void> _playTracked({required String reason}) async {
+    if (!_alive) return;
+    await _maybeResetBuffersAfterLongPause(reason: reason);
+    if (!_alive) return;
+
+    Duration? anchorTarget;
+    bool anchorSuccess = true;
+    String anchorEndNote = '';
+    try {
+      anchorTarget = await _prepareResumeAnchorBeforePlay(reason: reason);
+      if (!_alive) return;
+      await _player.play();
+      _notePlaybackResumed();
+      if (anchorTarget != null) {
+        anchorSuccess = await _verifyResumeAnchorAfterPlay(
+          anchorTarget: anchorTarget,
+          reason: reason,
+        );
+        final correctionUsed = _resumeLockController.correctionAttempts;
+        anchorEndNote = 'reason=$reason success=$anchorSuccess '
+            'correctionUsed=$correctionUsed';
+      }
+    } catch (e) {
+      _log('play failed (reason=$reason): $e');
+      if (anchorTarget != null) {
+        anchorSuccess = false;
+        anchorEndNote = 'reason=$reason success=false error=play_failed';
+      }
+    } finally {
+      if (anchorTarget != null) {
+        _emitTransportEvent(
+          PlayerTransportEvent(
+            timestamp: DateTime.now(),
+            traceId: _transportTraceId,
+            type: PlayerTransportEventType.resumeAnchorEnd,
+            position: _player.state.position,
+            targetPosition: anchorTarget,
+            note: anchorEndNote.isEmpty
+                ? 'reason=$reason success=$anchorSuccess correctionUsed='
+                    '${_resumeLockController.correctionAttempts}'
+                : anchorEndNote,
+          ),
+        );
+      }
+      _clearResumeAnchorContext();
+    }
+  }
+
+  Future<void> _pauseTracked({required String reason}) async {
+    if (!_alive) return;
+    try {
+      await _player.pause();
+    } catch (e) {
+      _log('pause failed (reason=$reason): $e');
+    } finally {
+      _notePausedNow();
+    }
+  }
+
+  Future<void> _playOrPauseTracked({required String reason}) async {
+    if (!_alive) return;
+    if (_player.state.playing) {
+      await _pauseTracked(reason: '${reason}_pause');
+    } else {
+      await _playTracked(reason: '${reason}_play');
+    }
+  }
+
   // Call this right after _player = Player(...);
   Future<void> _hardenMpvForHls() async {
     // --- Core cache knobs: make seeks & jitter resilient ---
@@ -1071,9 +1611,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         _setMpv('hr-seek-framedrop', 'no')); // keep frames on precise seeks
     unawaited(_setMpv('framedrop', 'no')); // prefer not dropping frames
 
-    // --- Make A/V sync follow the display clock (VLC-like smoothness) ---
-    unawaited(_setMpv(
-        'video-sync', 'display-resample')); // reduce "chase" & teleports
+    // --- Keep timeline anchored to audio to reduce late seek teleports ---
+    unawaited(_setMpv('video-sync', PlayerTuning.mpvVideoSyncMode));
     // Optional: if you see micro-judder, you can also try interpolation
     // unawaited(_setMpv('interpolation', 'yes'));
     // unawaited(_setMpv('tscale', 'oversample'));
@@ -1108,6 +1647,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Suppress quality reaction during initial load to prevent race with saved position
     _suppressPrefQualityReopen = true;
@@ -1345,7 +1885,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!_alive || !PlayerTuning.audioDropWatchEnabled) return;
+    unawaited(_checkAudioHealth(
+      reason: 'app_resumed',
+      forceLogState: true,
+    ));
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
     // Mark as leaving & disposed ASAP so any pending futures bail out.
     _navigatingAway = true;
     _isDisposed = true;
@@ -1509,6 +2061,27 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           position: _player.state.position,
         ),
       );
+      if (!isBuffering) {
+        unawaited(_checkAudioHealth(
+          reason: 'buffering_end',
+          forceLogState: true,
+        ));
+      }
+    });
+
+    _subPlaying = _player.stream.playing.listen((isPlaying) {
+      if (isPlaying) {
+        if (!_resumeAnchorTxnInFlight) {
+          unawaited(
+            _maybeResetBuffersAfterLongPause(reason: 'resume_playing_stream'),
+          );
+        }
+        _notePlaybackResumed();
+      } else {
+        if (!_player.state.buffering) {
+          _notePausedNow();
+        }
+      }
     });
 
     _subPos = _player.stream.position.listen((pos) {
@@ -1539,18 +2112,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           final bigLeap = diff >= PlayerTuning.jumpBigLeap;
           final burst = _consecutiveJumpCount >= 3;
           final correlated = _transportCorrelator.correlateJump(DateTime.now());
+          final fsNote = _recentFullscreenTransitionNote(now);
 
           _log('! unexpected jump detected: +${diff.inMilliseconds}ms '
               '(prev=$prev → now=$pos, bigLeap=$bigLeap, burst=$burst, '
               'relatedReq=${correlated.requestId?.toString() ?? "-"}, '
-              'relatedAgeMs=${correlated.age?.inMilliseconds.toString() ?? "-"})');
+              'relatedAgeMs=${correlated.age?.inMilliseconds.toString() ?? "-"}'
+              '$fsNote)');
           _emitTransportEvent(
             PlayerTransportEvent(
               timestamp: DateTime.now(),
               traceId: _transportTraceId,
               type: PlayerTransportEventType.unexpectedJump,
               position: pos,
-              note: 'deltaMs=${diff.inMilliseconds} bigLeap=$bigLeap burst=$burst',
+              note:
+                  'deltaMs=${diff.inMilliseconds} bigLeap=$bigLeap burst=$burst$fsNote',
               relatedProxyRequestId: correlated.requestId,
               relatedProxyAge: correlated.age,
             ),
@@ -1603,6 +2179,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       _safeSetState(() {});
       unawaited(ref.read(playerPrefsProvider.notifier).setSpeed(r));
     });
+
+    _startAudioHealthWatchdog();
 
     if (widget.startupBannerText?.isNotEmpty == true) {
       _showBanner(widget.startupBannerText!, affectCursor: false);
@@ -1717,14 +2295,123 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
   /// Wrapper that marks an intentional seek so our jump-detector won't flag it.
   Future<void> _seekPlanned(Duration to, {String? reason}) async {
-    if (!_alive) return; // bail if page is leaving/disposed
+    if (!_alive) return;
 
-    // Reset auto-skip flags for a fresh media open (quality change / next episode).
+    final tgt = _clampSeekAbsolute(to);
+    final request = SeekRequest(
+      target: tgt,
+      reason: reason,
+      timestamp: DateTime.now(),
+    );
+    final result = _seekCoordinator.enqueue(request);
+
+    switch (result.decision) {
+      case SeekDecision.dropDuplicate:
+        _emitTransportEvent(
+          PlayerTransportEvent(
+            timestamp: DateTime.now(),
+            traceId: _transportTraceId,
+            type: PlayerTransportEventType.seekCoalesced,
+            position: _player.state.position,
+            targetPosition: tgt,
+            note: 'reason=${reason ?? "-"} action=drop_duplicate',
+          ),
+        );
+        return;
+      case SeekDecision.queueLatest:
+        if (result.replacedPending) {
+          _emitTransportEvent(
+            PlayerTransportEvent(
+              timestamp: DateTime.now(),
+              traceId: _transportTraceId,
+              type: PlayerTransportEventType.seekCoalesced,
+              position: _player.state.position,
+              targetPosition: tgt,
+              note: 'reason=${reason ?? "-"} action=replace_pending',
+            ),
+          );
+        } else {
+          _emitTransportEvent(
+            PlayerTransportEvent(
+              timestamp: DateTime.now(),
+              traceId: _transportTraceId,
+              type: PlayerTransportEventType.seekQueued,
+              position: _player.state.position,
+              targetPosition: tgt,
+              note: 'reason=${reason ?? "-"}',
+            ),
+          );
+        }
+
+        _completeSeekCompleter(_pendingSeekCompleter);
+        final completer = Completer<void>();
+        _pendingSeekCompleter = completer;
+        _scheduleSeekPump();
+        await completer.future;
+        return;
+      case SeekDecision.executeNow:
+        await _executeSeekNow(request);
+        await _pumpPendingSeekQueue();
+        return;
+    }
+  }
+
+  void _scheduleSeekPump() {
+    _seekQueueTimer?.cancel();
+    final delay = _seekCoordinator.delayUntilPendingReady();
+    _seekQueueTimer = Timer(delay ?? Duration.zero, () {
+      if (!_alive) return;
+      unawaited(_pumpPendingSeekQueue());
+    });
+  }
+
+  void _completeSeekCompleter(Completer<void>? completer) {
+    if (completer == null) return;
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  Future<void> _pumpPendingSeekQueue() async {
+    if (_seekPumpRunning || !_alive) return;
+    _seekPumpRunning = true;
+    try {
+      while (_alive) {
+        if (_seekCoordinator.inFlight) break;
+
+        final pending = _seekCoordinator.takeReadyPending();
+        if (pending == null) {
+          final wait = _seekCoordinator.delayUntilPendingReady();
+          if (wait != null) {
+            _seekQueueTimer?.cancel();
+            _seekQueueTimer = Timer(wait, () {
+              if (!_alive) return;
+              unawaited(_pumpPendingSeekQueue());
+            });
+          }
+          break;
+        }
+
+        final completer = _pendingSeekCompleter;
+        _pendingSeekCompleter = null;
+        await _executeSeekNow(pending);
+        _completeSeekCompleter(completer);
+      }
+    } finally {
+      _seekPumpRunning = false;
+    }
+  }
+
+  Future<void> _executeSeekNow(SeekRequest request) async {
+    if (!_alive) return;
+
     _openingSkipped = false;
     _endingSkipped = false;
 
-    // Clamp the requested position.
-    final tgt = _clampSeekAbsolute(to);
+    final tgt = _clampSeekAbsolute(request.target);
+    _seekCoordinator.markSeekStarted(request);
+    _lastSeekAt = DateTime.now();
+
     _emitTransportEvent(
       PlayerTransportEvent(
         timestamp: DateTime.now(),
@@ -1732,17 +2419,21 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         type: PlayerTransportEventType.seekStart,
         position: _player.state.position,
         targetPosition: tgt,
-        note: reason,
+        note: request.reason,
       ),
     );
 
     _plannedSeek = true;
     try {
+      await _maybeResetBuffersAfterLongPause(
+        reason: 'seek_${request.reason ?? "unknown"}',
+      );
       _log(
-          'seek: starting seek to ${tgt.inSeconds}s reason=${reason ?? "n/a"}');
+          'seek: starting seek to ${tgt.inSeconds}s reason=${request.reason ?? "n/a"}');
       final stopwatch = Stopwatch()..start();
       await _player.seek(tgt);
       _log('seek: completed in ${stopwatch.elapsedMilliseconds}ms');
+      _seekCoordinator.markSeekFinished(executedTarget: tgt);
       _emitTransportEvent(
         PlayerTransportEvent(
           timestamp: DateTime.now(),
@@ -1750,17 +2441,87 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           type: PlayerTransportEventType.seekEnd,
           position: _player.state.position,
           targetPosition: tgt,
-          note: reason,
+          note: request.reason,
+        ),
+      );
+
+      await _verifySeekResult(target: tgt, reason: request.reason);
+
+      unawaited(_checkAudioHealth(
+        reason: 'seek_end',
+        forceLogState: true,
+      ));
+    } catch (e) {
+      _seekCoordinator.markSeekFinished(executedTarget: tgt);
+      _log('seek skipped (not alive): $e');
+    } finally {
+      await Future.delayed(const Duration(milliseconds: 300));
+      _plannedSeek = false;
+    }
+  }
+
+  Future<void> _verifySeekResult({
+    required Duration target,
+    required String? reason,
+  }) async {
+    await Future.delayed(PlayerTuning.seekVerifyDelay);
+    if (!_alive) return;
+
+    final state = _player.state;
+    final current = state.position;
+    final delta = (current - target).abs();
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.seekVerify,
+        position: current,
+        targetPosition: target,
+        note:
+            'reason=${reason ?? "-"} deltaMs=${delta.inMilliseconds} buffering=${state.buffering}',
+      ),
+    );
+
+    if (state.buffering || delta <= PlayerTuning.seekVerifyTolerance) return;
+    if (!_seekCoordinator.shouldCorrectMismatch(
+      currentPosition: current,
+      retryThreshold: PlayerTuning.seekMismatchRetryThreshold,
+      maxCorrection: PlayerTuning.seekMismatchMaxCorrection,
+    )) {
+      return;
+    }
+
+    _seekCoordinator.noteCorrectionApplied();
+    _emitTransportEvent(
+      PlayerTransportEvent(
+        timestamp: DateTime.now(),
+        traceId: _transportTraceId,
+        type: PlayerTransportEventType.seekMismatch,
+        position: current,
+        targetPosition: target,
+        note: 'reason=${reason ?? "-"} deltaMs=${delta.inMilliseconds}',
+      ),
+    );
+
+    try {
+      await _player.seek(target);
+      await Future.delayed(PlayerTuning.seekVerifyDelay);
+      if (!_alive) return;
+      final corrected = _player.state.position;
+      final correctedDelta = (corrected - target).abs();
+      _emitTransportEvent(
+        PlayerTransportEvent(
+          timestamp: DateTime.now(),
+          traceId: _transportTraceId,
+          type: PlayerTransportEventType.seekVerify,
+          position: corrected,
+          targetPosition: target,
+          note:
+              'reason=${reason ?? "-"} phase=correction deltaMs=${correctedDelta.inMilliseconds}',
         ),
       );
     } catch (e) {
-      // Avoid crashing if seek races with dispose
-      _log('seek skipped (not alive): $e');
-    } finally {
-      // Keep _plannedSeek=true longer to avoid false jump detection
-      // while the position is still settling.
-      await Future.delayed(const Duration(milliseconds: 300));
-      _plannedSeek = false;
+      _log('seek correction failed: $e');
     }
   }
 
@@ -1775,6 +2536,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }) async {
     if (!_alive) return;
 
+    _audioDropDetector.reset();
+    _audioRecoveryInFlight = false;
+    _lastAudioStateLogAt = null;
+    _lastPausedAudioHealthCheckAt = null;
+    _pausedAt = null;
+    _resumeAnchorPosition = null;
+    _longPauseBufferResetDone = false;
+    _resumeAnchorTxnInFlight = false;
+    _seekQueueTimer?.cancel();
+    _seekQueueTimer = null;
+    _completeSeekCompleter(_pendingSeekCompleter);
+    _pendingSeekCompleter = null;
+    _seekCoordinator.reset();
+    _resumeLockController.reset();
+    _seekPumpRunning = false;
+    _playTrackedInFlight = false;
     _openedViaProxy = openedViaProxy;
     final canProxyFallback = _shouldAllowProxyFallbackForUrl(originalUrl);
     final shouldWaitForHlsSettle =
@@ -2027,7 +2804,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     if (play && _alive) {
       try {
         if (!_player.state.playing) {
-          await _player.play();
+          await _playTracked(reason: 'open_at_play');
         }
       } catch (_) {}
     }
@@ -2228,7 +3005,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
 
     // Pause Flutter-side playback before handing off.
     final wasPlaying = _player.state.playing;
-    await _player.pause();
+    await _pauseTracked(reason: 'present_ios_native');
 
     final rawSubtitle = widget.args.subtitleUrl?.trim();
     final normalizedSubtitle = (rawSubtitle == null || rawSubtitle.isEmpty)
@@ -2267,9 +3044,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         } catch (_) {}
       }
       if (wasPlaying && _alive) {
-        try {
-          await _player.play();
-        } catch (_) {}
+        await _playTracked(reason: 'ios_native_present_fail_resume');
       }
     }
   }
@@ -2971,6 +3746,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         ),
         onEnterFullscreen: () async {
           if (_isIOS) return;
+          _lastFullscreenTransitionAt = DateTime.now();
+          _lastFullscreenTransitionType = 'enter';
           _log('onEnterFullscreen() fired (lib)');
           _wasFullscreen = true;
           if (!mounted || _navigatingAway) return;
@@ -2991,6 +3768,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
         },
         onExitFullscreen: () async {
           if (_isIOS) return;
+          _lastFullscreenTransitionAt = DateTime.now();
+          _lastFullscreenTransitionType = 'exit';
           _log('onExitFullscreen() fired (lib)');
           _wasFullscreen = false;
           _removeFullscreenBannerOverlayIfAny();
