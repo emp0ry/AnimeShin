@@ -13,8 +13,8 @@
   <a href="https://github.com/emp0ry/AnimeShin/releases/latest">
     <img src="https://img.shields.io/github/v/release/emp0ry/AnimeShin?logo=github&color=5865F2" alt="Latest Release">
   </a>
-  <a href="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all.yml">
-    <img src="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all.yml/badge.svg" alt="Build All (bundle)">
+  <a href="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all-no-linux.yml">
+    <img src="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all-no-linux.yml/badge.svg" alt="Build (bundle)">
   </a>
   <a href="https://img.shields.io/github/downloads/emp0ry/AnimeShin/total?color=ff6d00&label=Total%20Downloads">
     <img src="https://img.shields.io/github/downloads/emp0ry/AnimeShin/total?color=ff6d00&label=Total%20Downloads" alt="Total Downloads">
@@ -23,7 +23,7 @@
     <img src="https://img.shields.io/badge/Flutter-3.0%2B-44D1FD?logo=flutter" alt="Flutter Version">
   </a>
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/emp0ry/AnimeShin?color=00C853" alt="License: GNU">
+    <img src="https://img.shields.io/github/license/emp0ry/AnimeShin?color=00C853" alt="License: GPL-3.0">
   </a>
 </p>
 
