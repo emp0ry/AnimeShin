@@ -163,7 +163,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   int _lastUiPosSecond = -1;
   bool _plannedSeek = false;
   bool _seekPumpRunning = false;
-  bool _playTrackedInFlight = false;
   bool _audioRecoveryInFlight = false;
   DateTime? _lastAudioStateLogAt;
   DateTime? _lastPausedAudioHealthCheckAt;
@@ -841,7 +840,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _seekCoordinator.reset();
     _resumeLockController.reset();
     _seekPumpRunning = false;
-    _playTrackedInFlight = false;
     _audioRecoveryInFlight = false;
     _lastAudioStateLogAt = null;
     _lastPausedAudioHealthCheckAt = null;
@@ -2551,7 +2549,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _seekCoordinator.reset();
     _resumeLockController.reset();
     _seekPumpRunning = false;
-    _playTrackedInFlight = false;
     _openedViaProxy = openedViaProxy;
     final canProxyFallback = _shouldAllowProxyFallbackForUrl(originalUrl);
     final shouldWaitForHlsSettle =

@@ -62,11 +62,15 @@ class Settings {
         disabledListActivity: {
           for (var activity
               in map['options']?['disabledListActivity'] ?? const [])
-            ListStatus.from(activity['type'])!: activity['disabled']
+            if (activity is Map<String, dynamic>)
+              if (ListStatus.from(activity['type']) case final status?)
+                status: activity['disabled'] == true
         },
         notificationOptions: {
           for (var option in map['options']?['notificationOptions'] ?? const [])
-            NotificationType.from(option['type'])!: option['enabled']
+            if (option is Map<String, dynamic>)
+              if (NotificationType.from(option['type']) case final type?)
+                type: option['enabled'] == true
         },
       );
 
