@@ -3,13 +3,16 @@ name: Build iOS
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-ios:
     runs-on: macos-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -33,7 +36,7 @@ jobs:
           zip -r "AnimeShin-ios-v${VERSION}.ipa" Payload
 
       - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-ios
           path: AnimeShin-ios-v*.ipa

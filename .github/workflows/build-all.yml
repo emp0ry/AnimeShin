@@ -6,15 +6,18 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java (17)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -56,7 +59,7 @@ jobs:
           echo "apk_path=$DEST_APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-android
           path: ${{ steps.apk.outputs.apk_path }}
@@ -65,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -201,7 +204,7 @@ jobs:
           echo "appimage_path=$FINAL" >> "$GITHUB_OUTPUT"
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-linux
           path: |
@@ -212,7 +215,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -253,7 +256,7 @@ jobs:
           "zip_path=$zipFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-windows
           path: ${{ steps.zip.outputs.zip_path }}
@@ -262,7 +265,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -336,13 +339,13 @@ jobs:
           echo "Created $DMG_NAME"
 
       - name: Upload iOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-ios
           path: AnimeShin-ios-v*.ipa
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-macos
           path: AnimeShin-macos-v*.dmg
@@ -352,7 +355,7 @@ jobs:
     needs: [build-android, build-linux, build-windows, build-macos-ios]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Read version from pubspec.yaml
         id: ver
@@ -362,13 +365,13 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
 
       - name: Upload bundle artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-all
           path: dist/*

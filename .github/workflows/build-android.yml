@@ -3,16 +3,19 @@ name: Build Android APK (dev flavor)
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-android-apk:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Java (17)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -48,7 +51,7 @@ jobs:
           echo "apk_path=$DEST_APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-android
           path: ${{ steps.apk.outputs.apk_path }}

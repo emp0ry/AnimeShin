@@ -3,13 +3,16 @@ name: Build Windows (ZIP)
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-windows:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2
@@ -50,7 +53,7 @@ jobs:
           "zip_path=$zipFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: AnimeShin-windows
           path: ${{ steps.zip.outputs.zip_path }}
