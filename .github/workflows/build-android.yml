@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-android-apk:
@@ -51,7 +51,7 @@ jobs:
           echo "apk_path=$DEST_APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-android
           path: ${{ steps.apk.outputs.apk_path }}

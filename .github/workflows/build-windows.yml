@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-windows:
@@ -53,7 +53,7 @@ jobs:
           "zip_path=$zipFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-windows
           path: ${{ steps.zip.outputs.zip_path }}

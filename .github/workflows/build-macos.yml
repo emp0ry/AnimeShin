@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-macos:
@@ -80,7 +80,7 @@ jobs:
           echo "Created $DMG_NAME"
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-macos
           path: AnimeShin-macos-v*.dmg

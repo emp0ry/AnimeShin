@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   build-android:
@@ -59,7 +59,7 @@ jobs:
           echo "apk_path=$DEST_APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload Android artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-android
           path: ${{ steps.apk.outputs.apk_path }}
@@ -109,7 +109,7 @@ jobs:
           "zip_path=$zipFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-windows
           path: ${{ steps.zip.outputs.zip_path }}
@@ -192,13 +192,13 @@ jobs:
           echo "Created $DMG_NAME"
 
       - name: Upload iOS artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-ios
           path: AnimeShin-ios-v*.ipa
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-macos
           path: AnimeShin-macos-v*.dmg
@@ -218,13 +218,13 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
 
       - name: Upload bundle artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: AnimeShin-all
           path: dist/*
