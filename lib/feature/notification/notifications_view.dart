@@ -213,6 +213,18 @@ class _NotificationItem extends StatelessWidget {
                           Routes.media(item.mediaId, item.imageUrl),
                         ),
                       MediaDeletionNotification _ => null,
+                      MediaSubmissionUpdateNotification item =>
+                        item.itemId != null
+                            ? context.push(Routes.media(item.itemId!))
+                            : null,
+                      CharacterSubmissionUpdateNotification item =>
+                        item.itemId != null
+                            ? context.push(Routes.character(item.itemId!))
+                            : null,
+                      StaffSubmissionUpdateNotification item =>
+                        item.itemId != null
+                            ? context.push(Routes.staff(item.itemId!))
+                            : null,
                     },
                     onLongPress: () => switch (item) {
                       MediaReleaseNotification item => showSheet(
@@ -251,8 +263,11 @@ class _NotificationItem extends StatelessWidget {
                       MediaReleaseNotification item => context.push(
                           Routes.media(item.mediaId, item.imageUrl),
                         ),
-                      MediaChangeNotification() ||
-                      MediaDeletionNotification() =>
+                      MediaChangeNotification _ ||
+                      MediaDeletionNotification _ ||
+                      MediaSubmissionUpdateNotification _ ||
+                      CharacterSubmissionUpdateNotification _ ||
+                      StaffSubmissionUpdateNotification _ =>
                         showDialog(
                           context: context,
                           builder: (context) => _NotificationDialog(item),
@@ -374,6 +389,10 @@ class _NotificationDialog extends StatelessWidget {
                     MediaDeletionNotification item => [
                         const SizedBox(height: Theming.offset),
                         HtmlContent(item.reason),
+                      ],
+                    SubmissionUpdateNotification item => [
+                        const SizedBox(height: Theming.offset),
+                        Text(item.notes),
                       ],
                     _ => const [],
                   },

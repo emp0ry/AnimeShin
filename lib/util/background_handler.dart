@@ -268,6 +268,21 @@ void _fetch() => Workmanager().executeTask((_, __) async {
               'Deleted Media',
               Routes.notifications,
             ),
+          NotificationType.mediaSubmissionUpdate => _show(
+              notification,
+              'Media Submission Update',
+              Routes.notifications,
+            ),
+          NotificationType.characterSubmissionUpdate => _show(
+              notification,
+              'Character Submission Update',
+              Routes.notifications,
+            ),
+          NotificationType.staffSubmissionUpdate => _show(
+              notification,
+              'Staff Submission Update',
+              Routes.notifications,
+            ),
         });
       }
 

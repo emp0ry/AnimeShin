@@ -831,6 +831,31 @@ abstract class GqlQuery {
             deletedMediaTitle
             createdAt
           }
+          ... on MediaSubmissionUpdateNotification {
+            id
+            type
+            status
+            notes
+            submittedTitle
+            media {id type title {userPreferred} coverImage {extraLarge large medium}}
+            createdAt
+          }
+          ... on CharacterSubmissionUpdateNotification {
+            id
+            type
+            status
+            notes
+            character {id name {userPreferred} image {large medium}}
+            createdAt
+          }
+          ... on StaffSubmissionUpdateNotification {
+            id
+            type
+            status
+            notes
+            staff {id name {userPreferred} image {large medium}}
+            createdAt
+          }
           ... on AiringNotification {
             id
             type

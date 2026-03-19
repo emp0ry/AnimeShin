@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 enum FormFactor {
@@ -202,6 +203,10 @@ class Theming extends ThemeExtension<Theming> {
         ),
         tooltipTheme: TooltipThemeData(
           padding: paddingAll,
+          // Work around noisy Windows AXTree update errors in desktop builds.
+          // Tooltips remain visible; only tooltip semantics are excluded.
+          excludeFromSemantics:
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
           textStyle: TextStyle(color: scheme.onSurfaceVariant),
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest,

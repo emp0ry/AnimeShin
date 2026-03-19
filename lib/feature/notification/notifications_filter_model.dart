@@ -44,6 +44,9 @@ enum NotificationsFilter {
             'MEDIA_DATA_CHANGE',
             'MEDIA_MERGE',
             'MEDIA_DELETION',
+            'MEDIA_SUBMISSION_UPDATE',
+            'CHARACTER_SUBMISSION_UPDATE',
+            'STAFF_SUBMISSION_UPDATE',
           ],
       };
 }

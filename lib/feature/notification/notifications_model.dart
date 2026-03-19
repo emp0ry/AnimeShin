@@ -20,7 +20,13 @@ enum NotificationType {
   relatedMediaAddition('Related media additions', 'RELATED_MEDIA_ADDITION'),
   mediaDataChange('Media changes', 'MEDIA_DATA_CHANGE'),
   mediaMerge('Media merges', 'MEDIA_MERGE'),
-  mediaDeletion('Media deletions', 'MEDIA_DELETION');
+  mediaDeletion('Media deletions', 'MEDIA_DELETION'),
+  mediaSubmissionUpdate('Media submission updates', 'MEDIA_SUBMISSION_UPDATE'),
+  staffSubmissionUpdate('Staff submission updates', 'STAFF_SUBMISSION_UPDATE'),
+  characterSubmissionUpdate(
+    'Character submission updates',
+    'CHARACTER_SUBMISSION_UPDATE',
+  );
 
   const NotificationType(this.label, this.value);
 
@@ -71,6 +77,12 @@ sealed class SiteNotification {
       NotificationType.mediaMerge =>
         MediaChangeNotification(map, type, imageQuality),
       NotificationType.mediaDeletion => MediaDeletionNotification(map, type),
+      NotificationType.mediaSubmissionUpdate =>
+        MediaSubmissionUpdateNotification(map, imageQuality),
+      NotificationType.characterSubmissionUpdate =>
+        CharacterSubmissionUpdateNotification(map, imageQuality),
+      NotificationType.staffSubmissionUpdate =>
+        StaffSubmissionUpdateNotification(map, imageQuality),
     };
   }
 
@@ -366,4 +378,100 @@ class MediaDeletionNotification extends SiteNotification {
       );
 
   final String reason;
+}
+
+sealed class SubmissionUpdateNotification extends SiteNotification {
+  SubmissionUpdateNotification._({
+    required super.map,
+    required super.type,
+    required super.imageUrl,
+    required super.texts,
+    required this.itemId,
+  }) : notes = map['notes']?.toString() ?? '';
+
+  final int? itemId;
+  final String notes;
+}
+
+class MediaSubmissionUpdateNotification extends SubmissionUpdateNotification {
+  MediaSubmissionUpdateNotification._({
+    required super.map,
+    required super.type,
+    required super.imageUrl,
+    required super.texts,
+    required super.itemId,
+  }) : super._();
+
+  factory MediaSubmissionUpdateNotification(
+    Map<String, dynamic> map,
+    ImageQuality imageQuality,
+  ) =>
+      MediaSubmissionUpdateNotification._(
+        map: map,
+        type: NotificationType.mediaSubmissionUpdate,
+        imageUrl: map['media']?['coverImage']?[imageQuality.value],
+        texts: [
+          map['submittedTitle']?.toString() ??
+              map['media']?['title']?['userPreferred']?.toString() ??
+              '?',
+          ' - submission is ',
+          map['status']?.toString() ?? '?',
+        ],
+        itemId: map['media']?['id'] is int ? map['media']['id'] as int : null,
+      );
+}
+
+class CharacterSubmissionUpdateNotification
+    extends SubmissionUpdateNotification {
+  CharacterSubmissionUpdateNotification._({
+    required super.map,
+    required super.type,
+    required super.imageUrl,
+    required super.texts,
+    required super.itemId,
+  }) : super._();
+
+  factory CharacterSubmissionUpdateNotification(
+    Map<String, dynamic> map,
+    ImageQuality imageQuality,
+  ) =>
+      CharacterSubmissionUpdateNotification._(
+        map: map,
+        type: NotificationType.characterSubmissionUpdate,
+        imageUrl: map['character']?['image']?[imageQuality.personValue],
+        texts: [
+          map['character']?['name']?['userPreferred']?.toString() ?? '?',
+          ' - submission is ',
+          map['status']?.toString() ?? '?',
+        ],
+        itemId: map['character']?['id'] is int
+            ? map['character']['id'] as int
+            : null,
+      );
+}
+
+class StaffSubmissionUpdateNotification extends SubmissionUpdateNotification {
+  StaffSubmissionUpdateNotification._({
+    required super.map,
+    required super.type,
+    required super.imageUrl,
+    required super.texts,
+    required super.itemId,
+  }) : super._();
+
+  factory StaffSubmissionUpdateNotification(
+    Map<String, dynamic> map,
+    ImageQuality imageQuality,
+  ) =>
+      StaffSubmissionUpdateNotification._(
+        map: map,
+        type: NotificationType.staffSubmissionUpdate,
+        imageUrl: map['staff']?['image']?[imageQuality.personValue],
+        texts: [
+          map['staff']?['name']?['userPreferred']?.toString() ?? '?',
+          ' - submission is ',
+          map['status']?.toString() ?? '?',
+        ],
+        itemId: map['staff']?['id'] is int ? map['staff']['id'] as int : null,
+      );
 }

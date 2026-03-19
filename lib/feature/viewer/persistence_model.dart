@@ -393,6 +393,12 @@ enum ImageQuality {
 
   final String label;
   final String value;
+
+  // Character and staff images don't have an extraLarge variant.
+  String get personValue => switch (this) {
+        ImageQuality.veryHigh => ImageQuality.high.value,
+        _ => value,
+      };
 }
 
 enum ButtonOrientation { auto, left, right }
