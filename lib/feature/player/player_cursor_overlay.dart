@@ -19,11 +19,17 @@ class PlayerCursorAutoHideOverlay extends StatefulWidget {
     this.idle = const Duration(seconds: 3),
     this.forceVisible = false,
     this.controller,
+    this.onPointerActivity,
+    this.onPointerEnter,
+    this.onPointerExit,
   });
 
   final Duration idle;
   final bool forceVisible;
   final CursorAutoHideController? controller;
+  final VoidCallback? onPointerActivity;
+  final VoidCallback? onPointerEnter;
+  final VoidCallback? onPointerExit;
 
   @override
   State<PlayerCursorAutoHideOverlay> createState() =>
@@ -99,12 +105,31 @@ class _PlayerCursorAutoHideOverlayState
   Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerHover: (_) => _bump(),
-      onPointerMove: (_) => _bump(),
-      onPointerDown: (_) => _bump(),
-      onPointerSignal: (_) => _bump(),
+      onPointerHover: (_) {
+        _bump();
+        widget.onPointerActivity?.call();
+      },
+      onPointerMove: (_) {
+        _bump();
+        widget.onPointerActivity?.call();
+      },
+      onPointerDown: (_) {
+        _bump();
+        widget.onPointerActivity?.call();
+      },
+      onPointerSignal: (_) {
+        _bump();
+        widget.onPointerActivity?.call();
+      },
       child: MouseRegion(
         opaque: false,
+        onEnter: (_) {
+          _bump();
+          widget.onPointerEnter?.call();
+        },
+        onExit: (_) {
+          widget.onPointerExit?.call();
+        },
         cursor: (widget.forceVisible || _visible)
             ? SystemMouseCursors.basic
             : SystemMouseCursors.none,

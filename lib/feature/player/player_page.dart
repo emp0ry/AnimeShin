@@ -3,6 +3,7 @@ import 'package:animeshin/feature/collection/collection_models.dart';
 import 'package:animeshin/feature/collection/collection_provider.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -88,6 +89,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   late final Player _player;
   late final VideoController _video;
+  VideoState? _mediaKitVideoState;
 
   // Fullscreen helpers (media_kit's internal fullscreen needs a controls subtree context).
   BuildContext? _controlsCtxNormal;
@@ -130,6 +132,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _qualityReopenTimer; // <- re-enable quality reaction after initial load
   Timer? _audioHealthTimer;
   Timer? _seekQueueTimer;
+  Timer? _mobileFullscreenReentryTimer;
+  int _mobileFullscreenReentryAttempts = 0;
 
   // Quality
   String? _chosenUrl; // stores the ORIGINAL remote stream URL
@@ -224,6 +228,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
+  bool get _lockMobileMediaKitFullscreen => _isMobile;
+
+  bool get _shouldStartMediaKitFullscreen =>
+      widget.startFullscreen || _lockMobileMediaKitFullscreen;
+
   // Lifecycle guard flags
   bool _isDisposed = false;
 
@@ -240,6 +249,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   final ValueNotifier<bool> _cursorForceVisible = ValueNotifier<bool>(false);
 
   bool _uiVisible = true;
+  final ValueNotifier<bool> _uiVisibleNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<int> _controlsOverlayRevision = ValueNotifier<int>(0);
 
   // Mirrors effective progress; updated locally after successful persist
   int? _knownProgress;
@@ -545,6 +556,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               idle: PlayerTuning.cursorIdleHide,
               forceVisible: force,
               controller: _cursorHideController,
+              onPointerActivity: _handlePlayerPointerActivity,
+              onPointerEnter: _handlePlayerPointerActivity,
+              onPointerExit: _handlePlayerPointerExit,
             );
           },
         ),
@@ -665,20 +679,87 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     });
   }
 
-  void _bumpUiVisibility() {
-    if (_uiVisible == false) {
-      _uiVisible = true;
-      _safeSetState(() {});
-    }
+  void _setUiVisibility(bool visible) {
+    if (_uiVisible == visible) return;
+    _uiVisible = visible;
+    _uiVisibleNotifier.value = visible;
+    _safeSetState(() {});
+  }
 
+  void _bumpUiVisibility() {
+    _setUiVisibility(true);
     _uiHideTimer?.cancel();
     _uiHideTimer = Timer(PlayerTuning.cursorIdleHide, () {
       if (!mounted || _navigatingAway) return;
-      if (_uiVisible) {
-        _uiVisible = false;
-        _safeSetState(() {});
-      }
+      _setUiVisibility(false);
     });
+  }
+
+  void _hideUiVisibility() {
+    _uiHideTimer?.cancel();
+    _setUiVisibility(false);
+  }
+
+  void _handlePlayerPointerActivity() {
+    _bumpUiVisibility();
+    if (_isDesktop) _cursorHideController.kick();
+  }
+
+  void _handlePlayerPointerExit() {
+    if (_isDesktop) _hideUiVisibility();
+  }
+
+  void _handleControlsPointerMove(PointerMoveEvent event) {
+    if (event.kind == PointerDeviceKind.mouse) {
+      _handlePlayerPointerActivity();
+    }
+  }
+
+  void _handleControlsPointerHover(PointerHoverEvent event) {
+    if (event.kind == PointerDeviceKind.mouse) {
+      _handlePlayerPointerActivity();
+    }
+  }
+
+  void _handleControlsPointerEnter(PointerEnterEvent event) {
+    if (event.kind == PointerDeviceKind.mouse) {
+      _handlePlayerPointerActivity();
+    }
+  }
+
+  void _handleControlsPointerExit(PointerExitEvent event) {
+    if (event.kind == PointerDeviceKind.mouse) {
+      _handlePlayerPointerExit();
+    }
+  }
+
+  void _handleControlsPointerDown(
+    BuildContext controlsContext,
+    PointerDownEvent event,
+  ) {
+    final isTouch = event.kind == PointerDeviceKind.touch ||
+        event.kind == PointerDeviceKind.stylus ||
+        event.kind == PointerDeviceKind.invertedStylus;
+    final mediaQuery = MediaQuery.maybeOf(controlsContext);
+    final topPadding = mediaQuery?.padding.top ?? 0.0;
+    final bottomPadding = mediaQuery?.padding.bottom ?? 0.0;
+    final isInAppBar = event.localPosition.dy <= topPadding + kToolbarHeight;
+    final renderObject = controlsContext.findRenderObject();
+    final height = renderObject is RenderBox ? renderObject.size.height : null;
+    final isInBottomControls = height != null &&
+        event.localPosition.dy >=
+            height - bottomPadding - PlayerTuning.playerUiProtectedBottomArea;
+
+    if (_isMobile &&
+        isTouch &&
+        _uiVisible &&
+        !isInAppBar &&
+        !isInBottomControls) {
+      _hideUiVisibility();
+      return;
+    }
+
+    _handlePlayerPointerActivity();
   }
 
   void _hideCursorInstant() {
@@ -692,6 +773,128 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     if (normal != null && normal.mounted) return normal;
     if (!preferFullscreen && full != null && full.mounted) return full;
     return null;
+  }
+
+  Future<void> _enterMediaKitFullscreenFrom(
+    BuildContext? ctx, {
+    VideoState? state,
+    required String reason,
+  }) async {
+    if (!mounted || _navigatingAway) return;
+    if ((ctx == null || !ctx.mounted) && (state == null || !state.mounted)) {
+      return;
+    }
+
+    final videoState = state ?? _mediaKitVideoState;
+
+    var alreadyFullscreen = false;
+    try {
+      alreadyFullscreen = videoState?.isFullscreen() ?? false;
+    } catch (_) {}
+    if (!alreadyFullscreen && ctx != null && ctx.mounted) {
+      try {
+        alreadyFullscreen = isFullscreen(ctx);
+      } catch (_) {}
+    }
+    if (alreadyFullscreen) {
+      _wasFullscreen = true;
+      if (!_nativeFsActive) {
+        await _enterNativeFullscreen();
+      }
+      return;
+    }
+
+    try {
+      if (videoState != null && videoState.mounted) {
+        await videoState.enterFullscreen();
+      } else if (ctx != null && ctx.mounted) {
+        await enterFullscreen(ctx);
+      } else {
+        return;
+      }
+      _wasFullscreen = true;
+      await Future.delayed(PlayerTuning.nativeFullscreenDelay);
+      if (!mounted || _navigatingAway) return;
+      if (!_nativeFsActive) {
+        await _enterNativeFullscreen();
+      }
+      _insertCursorOverlayIfNeeded();
+      _cursorHideController.kick();
+      _log('entered fullscreen ($reason)');
+    } catch (e) {
+      _log('enter fullscreen failed ($reason): $e');
+    } finally {
+      if (_lockMobileMediaKitFullscreen &&
+          !_navigatingAway &&
+          !_hasMediaKitFullscreenContext()) {
+        _scheduleMobileFullscreenReentry();
+      }
+    }
+  }
+
+  bool _hasMediaKitFullscreenContext() {
+    final videoState = _mediaKitVideoState;
+    if (videoState != null && videoState.mounted) {
+      try {
+        if (videoState.isFullscreen()) return true;
+      } catch (_) {}
+    }
+
+    for (final ctx in [_controlsCtxFullscreen, _controlsCtxNormal]) {
+      if (ctx == null || !ctx.mounted) continue;
+      try {
+        if (isFullscreen(ctx)) return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  void _cancelMobileFullscreenReentry() {
+    _mobileFullscreenReentryTimer?.cancel();
+    _mobileFullscreenReentryTimer = null;
+    _mobileFullscreenReentryAttempts = 0;
+  }
+
+  void _scheduleMobileFullscreenReentry() {
+    if (!_lockMobileMediaKitFullscreen || _navigatingAway) return;
+    if (_hasMediaKitFullscreenContext()) {
+      _cancelMobileFullscreenReentry();
+      return;
+    }
+    if (_mobileFullscreenReentryAttempts >=
+        PlayerTuning.mobileFullscreenReentryMaxAttempts) {
+      _log('mobile fullscreen reentry gave up');
+      return;
+    }
+
+    _mobileFullscreenReentryTimer?.cancel();
+    _mobileFullscreenReentryTimer = Timer(
+      PlayerTuning.mobileFullscreenReentryDelay,
+      () {
+        if (!mounted || _navigatingAway) return;
+        if (_hasMediaKitFullscreenContext()) {
+          _cancelMobileFullscreenReentry();
+          return;
+        }
+
+        _mobileFullscreenReentryAttempts++;
+        final ctx = _activeControlsCtx(preferFullscreen: false);
+        final videoState = _mediaKitVideoState;
+        if ((ctx == null || !ctx.mounted) &&
+            (videoState == null || !videoState.mounted)) {
+          _scheduleMobileFullscreenReentry();
+          return;
+        }
+
+        unawaited(
+          _enterMediaKitFullscreenFrom(
+            ctx,
+            state: videoState,
+            reason: 'mobile_lock_reentry',
+          ).whenComplete(_scheduleMobileFullscreenReentry),
+        );
+      },
+    );
   }
 
   Map<ShortcutActivator, VoidCallback> _desktopKeyboardShortcuts() {
@@ -805,6 +1008,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   void _safeSetState(VoidCallback fn) {
     if (!mounted || _navigatingAway) return;
     setState(fn);
+    _controlsOverlayRevision.value++;
   }
 
   void _detachListeners() {
@@ -835,6 +1039,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     _audioHealthTimer = null;
     _seekQueueTimer?.cancel();
     _seekQueueTimer = null;
+    _cancelMobileFullscreenReentry();
     _completeSeekCompleter(_pendingSeekCompleter);
     _pendingSeekCompleter = null;
     _seekCoordinator.reset();
@@ -862,9 +1067,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           await windowManager.setFullScreen(true);
         }
         _nativeFsActive = true;
-      } else if (!_isIOS) {
-        // Do not touch SystemChrome on iOS; native VC handles overlays there.
-        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      } else if (_isMobile) {
+        await Future.wait([
+          SystemChrome.setEnabledSystemUIMode(
+            SystemUiMode.immersiveSticky,
+            overlays: const <SystemUiOverlay>[],
+          ),
+          SystemChrome.setPreferredOrientations(
+            const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ],
+          ),
+        ]);
         _nativeFsActive = true;
       }
     } catch (_) {
@@ -883,9 +1098,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           await windowManager.setFullScreen(false);
         }
         _nativeFsActive = false;
-      } else if (!_isIOS) {
-        // Do not touch SystemChrome on iOS; native VC handles overlays there.
-        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      } else if (_isMobile) {
+        await Future.wait([
+          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+          SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]),
+        ]);
         _nativeFsActive = false;
       }
     } catch (_) {
@@ -1926,12 +2143,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     } catch (_) {}
 
     // Break reference to now-deactivated controls subtree.
+    _mediaKitVideoState = null;
     _controlsCtxNormal = null;
     _removeFullscreenBannerOverlayIfAny();
     _controlsCtxFullscreen = null;
 
     _removeCursorOverlayIfAny();
+    unawaited(_exitNativeFullscreen());
     _cursorForceVisible.dispose();
+    _uiVisibleNotifier.dispose();
+    _controlsOverlayRevision.dispose();
 
     super.dispose();
   }
@@ -3019,10 +3240,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       'subtitleUrl': normalizedSubtitle,
       'headers': widget.args.httpHeaders,
       // Pass skip ranges so native player can auto-skip as well.
-      'openingStart': widget.args.openingStart?.toDouble(),
-      'openingEnd': widget.args.openingEnd?.toDouble(),
-      'endingStart': widget.args.endingStart?.toDouble(),
-      'endingEnd': widget.args.endingEnd?.toDouble(),
+      'autoSkipOpening': _autoSkipOpening,
+      'autoSkipEnding': _autoSkipEnding,
+      'openingStart':
+          _autoSkipOpening ? widget.args.openingStart?.toDouble() : null,
+      'openingEnd': _autoSkipOpening ? widget.args.openingEnd?.toDouble() : null,
+      'endingStart':
+          _autoSkipEnding ? widget.args.endingStart?.toDouble() : null,
+      'endingEnd': _autoSkipEnding ? widget.args.endingEnd?.toDouble() : null,
       'wasPlaying': wasPlaying,
     };
 
@@ -3033,12 +3258,13 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     } on PlatformException catch (e) {
       _iosNativeActive = false;
       _log('iOS native player failed: ${e.code}: ${e.message}');
-      final ctx = _controlsCtxNormal;
-      if (ctx != null && ctx.mounted && !_wasFullscreen) {
-        try {
-          await enterFullscreen(ctx);
-          _wasFullscreen = true;
-        } catch (_) {}
+      final ctx = _activeControlsCtx(preferFullscreen: false);
+      if (ctx != null && ctx.mounted) {
+        await _enterMediaKitFullscreenFrom(
+          ctx,
+          state: _mediaKitVideoState,
+          reason: 'ios_native_present_fail',
+        );
       }
       if (wasPlaying && _alive) {
         await _playTracked(reason: 'ios_native_present_fail_resume');
@@ -3132,6 +3358,53 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       _endingSkipped = true;
     }
     _lastSkipKind = null;
+  }
+
+  Future<void> _closePlayerFromAppBar() async {
+    if (!mounted || _navigatingAway) return;
+
+    _navigatingAway = true;
+    _hideCursorInstant();
+    _autoSkipBlockedUntil = null;
+
+    final fsCtx = _controlsCtxFullscreen;
+    if (fsCtx != null && fsCtx.mounted) {
+      try {
+        await exitFullscreen(fsCtx);
+      } catch (_) {}
+    }
+    _wasFullscreen = false;
+    _removeFullscreenBannerOverlayIfAny();
+    _controlsCtxFullscreen = null;
+    await _exitNativeFullscreen();
+    _removeCursorOverlayIfAny();
+
+    _detachListeners();
+    await _flushDesktopVolumeToPrefs(reason: 'appbar_close');
+
+    if (!_isDisposed) {
+      try {
+        await _player.stop();
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (!navigator.mounted) return;
+
+    var reachedPlayerRoute = false;
+    navigator.popUntil((route) {
+      final isPlayerRoute = route.settings.name == 'player';
+      if (isPlayerRoute) reachedPlayerRoute = true;
+      return isPlayerRoute;
+    });
+
+    if (!navigator.mounted) return;
+    if (reachedPlayerRoute && navigator.canPop()) {
+      navigator.pop();
+    } else {
+      await navigator.maybePop();
+    }
   }
 
   Future<bool> _closePlayerAfterAutoNextFailure() async {
@@ -3484,14 +3757,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  void _openSeekStepDialog() {
+  void _openSeekStepDialog(BuildContext dialogContext) {
     // Popup menu closes after tap; open dialog on next frame.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
+      if (!mounted || !dialogContext.mounted) return;
 
       const options = <int>[2, 5, 10, 15, 30, 60];
       final selected = await showDialog<int>(
-        context: context,
+        context: dialogContext,
         builder: (ctx) {
           return SimpleDialog(
             title: const Text('Seek step'),
@@ -3527,108 +3800,112 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   @override
   Widget build(BuildContext context) {
-    final actions = buildPlayerAppBarActions(
-      context: context,
-      isIOS: _isIOS,
-      onOpenIOSPlayer: _presentIOSNativePlayer,
-      currentQuality: _currentQuality,
-      speed: _speed,
-      seekStepSeconds: _seekStepSeconds,
-      autoSkipOpening: _autoSkipOpening,
-      autoSkipEnding: _autoSkipEnding,
-      autoNextEpisode: _autoNextEpisode,
-      autoProgress: _autoProgress,
-      subtitlesEnabled: _subtitlesEnabled,
-      onSelectQuality: (q) async {
-        _currentQuality = q;
-        _safeSetState(() {});
-        unawaited(
-            ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
-        _suppressPrefQualityReopen = true;
-        try {
-          await _changeQuality(q);
-        } finally {
-          _suppressPrefQualityReopen = false;
-        }
-      },
-      onSelectSpeed: (r) async {
-        unawaited(ref.read(playerPrefsProvider.notifier).setSpeed(r));
-        if (_alive) {
-          try {
-            await _player.setRate(r);
-          } catch (_) {}
-        }
-      },
-      onOpenSeekStep: _openSeekStepDialog,
-      onToggleAutoSkipOpening: () {
-        _autoSkipOpening = !_autoSkipOpening;
-        unawaited(
-          ref
-              .read(playerPrefsProvider.notifier)
-              .setAutoSkipOpening(_autoSkipOpening),
-        );
-        _safeSetState(() {});
-      },
-      onToggleAutoSkipEnding: () {
-        _autoSkipEnding = !_autoSkipEnding;
-        unawaited(
-          ref
-              .read(playerPrefsProvider.notifier)
-              .setAutoSkipEnding(_autoSkipEnding),
-        );
-        _safeSetState(() {});
-      },
-      onToggleAutoNextEpisode: () {
-        _autoNextEpisode = !_autoNextEpisode;
-        unawaited(
-          ref
-              .read(playerPrefsProvider.notifier)
-              .setAutoNextEpisode(_autoNextEpisode),
-        );
-        _safeSetState(() {});
-      },
-      onToggleAutoProgress: () {
-        _autoProgress = !_autoProgress;
-        unawaited(
-          ref.read(playerPrefsProvider.notifier).setAutoProgress(_autoProgress),
-        );
-        _safeSetState(() {});
-      },
-      onToggleSubtitles: () {
-        _subtitlesEnabled = !_subtitlesEnabled;
-        unawaited(
-          ref
-              .read(playerPrefsProvider.notifier)
-              .setSubtitlesEnabled(_subtitlesEnabled),
-        );
-        if (_subtitlesEnabled) {
-          unawaited(_setMpv('secondary-sid', 'no'));
-          unawaited(_setMpv('secondary-sub-visibility', 'no'));
-          unawaited(_setMpv('sub-visibility', 'yes'));
-          unawaited(_applyExternalSubtitleIfAny(force: true));
-        } else {
-          unawaited(_setMpv('secondary-sid', 'no'));
-          unawaited(_setMpv('secondary-sub-visibility', 'no'));
-          unawaited(_setMpv('sub-visibility', 'no'));
-          unawaited(_setMpv('sid', 'no'));
-        }
-        _safeSetState(() {});
-      },
-      onOpenSubtitleStyle: () {
-        // Popups call onTap before the menu fully closes; schedule to next frame.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+    List<Widget> buildActions(BuildContext actionContext) {
+      return buildPlayerAppBarActions(
+        context: actionContext,
+        isIOS: _isIOS,
+        onOpenIOSPlayer: _presentIOSNativePlayer,
+        currentQuality: _currentQuality,
+        speed: _speed,
+        seekStepSeconds: _seekStepSeconds,
+        autoSkipOpening: _autoSkipOpening,
+        autoSkipEnding: _autoSkipEnding,
+        autoNextEpisode: _autoNextEpisode,
+        autoProgress: _autoProgress,
+        subtitlesEnabled: _subtitlesEnabled,
+        onSelectQuality: (q) async {
+          _currentQuality = q;
+          _safeSetState(() {});
           unawaited(
-            showSubtitleStyleDialog(
-              context: context,
-              ref: ref,
-              isDesktop: _isDesktop,
-            ),
+              ref.read(playerPrefsProvider.notifier).setPreferredQuality(q));
+          _suppressPrefQualityReopen = true;
+          try {
+            await _changeQuality(q);
+          } finally {
+            _suppressPrefQualityReopen = false;
+          }
+        },
+        onSelectSpeed: (r) async {
+          unawaited(ref.read(playerPrefsProvider.notifier).setSpeed(r));
+          if (_alive) {
+            try {
+              await _player.setRate(r);
+            } catch (_) {}
+          }
+        },
+        onOpenSeekStep: () => _openSeekStepDialog(actionContext),
+        onToggleAutoSkipOpening: () {
+          _autoSkipOpening = !_autoSkipOpening;
+          unawaited(
+            ref
+                .read(playerPrefsProvider.notifier)
+                .setAutoSkipOpening(_autoSkipOpening),
           );
-        });
-      },
-      animeVoice: widget.animeVoice,
-    );
+          _safeSetState(() {});
+        },
+        onToggleAutoSkipEnding: () {
+          _autoSkipEnding = !_autoSkipEnding;
+          unawaited(
+            ref
+                .read(playerPrefsProvider.notifier)
+                .setAutoSkipEnding(_autoSkipEnding),
+          );
+          _safeSetState(() {});
+        },
+        onToggleAutoNextEpisode: () {
+          _autoNextEpisode = !_autoNextEpisode;
+          unawaited(
+            ref
+                .read(playerPrefsProvider.notifier)
+                .setAutoNextEpisode(_autoNextEpisode),
+          );
+          _safeSetState(() {});
+        },
+        onToggleAutoProgress: () {
+          _autoProgress = !_autoProgress;
+          unawaited(
+            ref
+                .read(playerPrefsProvider.notifier)
+                .setAutoProgress(_autoProgress),
+          );
+          _safeSetState(() {});
+        },
+        onToggleSubtitles: () {
+          _subtitlesEnabled = !_subtitlesEnabled;
+          unawaited(
+            ref
+                .read(playerPrefsProvider.notifier)
+                .setSubtitlesEnabled(_subtitlesEnabled),
+          );
+          if (_subtitlesEnabled) {
+            unawaited(_setMpv('secondary-sid', 'no'));
+            unawaited(_setMpv('secondary-sub-visibility', 'no'));
+            unawaited(_setMpv('sub-visibility', 'yes'));
+            unawaited(_applyExternalSubtitleIfAny(force: true));
+          } else {
+            unawaited(_setMpv('secondary-sid', 'no'));
+            unawaited(_setMpv('secondary-sub-visibility', 'no'));
+            unawaited(_setMpv('sub-visibility', 'no'));
+            unawaited(_setMpv('sid', 'no'));
+          }
+          _safeSetState(() {});
+        },
+        onOpenSubtitleStyle: () {
+          // Popups call onTap before the menu fully closes; schedule to next frame.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || !actionContext.mounted) return;
+            unawaited(
+              showSubtitleStyleDialog(
+                context: actionContext,
+                ref: ref,
+                isDesktop: _isDesktop,
+              ),
+            );
+          });
+        },
+        animeVoice: widget.animeVoice,
+      );
+    }
 
     final banner = (_bannerVisible && !_isFullscreenBannerHostActive())
         ? _buildBannerWidget()
@@ -3649,6 +3926,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
                   idle: PlayerTuning.cursorIdleHide,
                   forceVisible: force,
                   controller: _cursorHideController,
+                  onPointerActivity: _handlePlayerPointerActivity,
+                  onPointerEnter: _handlePlayerPointerActivity,
+                  onPointerExit: _handlePlayerPointerExit,
                 );
               },
             ),
@@ -3657,41 +3937,63 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       );
     }
 
-    Widget buildPlayerStack() {
-      final overlayAppBar = Positioned(
+    Widget buildOverlayAppBar() {
+      return Positioned(
         left: 0,
         right: 0,
         top: 0,
-        child: IgnorePointer(
-          ignoring: !_uiVisible,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            opacity: _uiVisible ? 1.0 : 0.0,
-            child: Material(
-              color: Colors.black.withValues(alpha: 0.6),
-              child: SafeArea(
-                bottom: false,
-                child: SizedBox(
-                  height: kToolbarHeight,
-                  child: AppBar(
-                    // title: Text(widget.args.title),
-                    title: Text('Episode ${widget.args.ordinal}'),
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    centerTitle: false,
-                    titleSpacing: 0,
-                    actions: actions,
-                    elevation: 0,
-                    scrolledUnderElevation: 0,
-                    primary: false,
+        child: ValueListenableBuilder<int>(
+          valueListenable: _controlsOverlayRevision,
+          builder: (actionContext, __, ___) {
+            final actions = buildActions(actionContext);
+            return ValueListenableBuilder<bool>(
+              valueListenable: _uiVisibleNotifier,
+              builder: (_, visible, __) {
+                return IgnorePointer(
+                  ignoring: !visible,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    opacity: visible ? 1.0 : 0.0,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.6),
+                      child: SafeArea(
+                        bottom: false,
+                        child: SizedBox(
+                          height: kToolbarHeight,
+                          child: AppBar(
+                            leading: IconButton(
+                              tooltip: 'Back',
+                              icon: const BackButtonIcon(),
+                              onPressed: () {
+                                unawaited(_closePlayerFromAppBar());
+                              },
+                            ),
+                            automaticallyImplyLeading: false,
+                            title: Text('Episode ${widget.args.ordinal}'),
+                            backgroundColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            centerTitle: false,
+                            titleSpacing: 0,
+                            actions: actions,
+                            elevation: 0,
+                            scrolledUnderElevation: 0,
+                            primary: false,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
-          ),
+                );
+              },
+            );
+          },
         ),
       );
+    }
+
+    Widget buildPlayerStack() {
+      final overlayAppBar = buildOverlayAppBar();
 
       Widget videoWidget = Video(
         controller: _video,
@@ -3702,9 +4004,25 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         ),
         controls: (state) => ControlsCtxBridge(
           state: state,
-          onReady: (ctx) {
+          overlay: overlayAppBar,
+          onPointerDown: _handleControlsPointerDown,
+          onPointerMove: _handleControlsPointerMove,
+          onPointerHover: _handleControlsPointerHover,
+          onPointerEnter: _handleControlsPointerEnter,
+          onPointerExit: _handleControlsPointerExit,
+          onReady: (ctx, videoState) {
             if (_navigatingAway) return;
-            if (isFullscreen(ctx)) {
+            _mediaKitVideoState = videoState;
+
+            var fullscreen = false;
+            try {
+              fullscreen = videoState.isFullscreen();
+            } catch (_) {
+              try {
+                fullscreen = isFullscreen(ctx);
+              } catch (_) {}
+            }
+            if (fullscreen) {
               _controlsCtxFullscreen = ctx;
             } else {
               _controlsCtxNormal = ctx;
@@ -3713,39 +4031,26 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
             _log(
                 'controls onReady; startFullscreen=${widget.startFullscreen}, handled=$_startFsHandled');
 
-            // Start in fullscreen (lib) only for non-iOS platforms.
-            if (widget.startFullscreen && !_startFsHandled && !_isIOS) {
+            if (_shouldStartMediaKitFullscreen && !_startFsHandled) {
               _startFsHandled = true;
               WidgetsBinding.instance.endOfFrame.then((_) async {
                 if (!mounted || _navigatingAway) return;
                 final c = _controlsCtxNormal ?? ctx;
                 if (!c.mounted) return;
-
-                if (!isFullscreen(c)) {
-                  try {
-                    await enterFullscreen(c); // lib fullscreen
-                    _wasFullscreen = true;
-                    // Wait briefly for texture cleanup before native fullscreen
-                    await Future.delayed(PlayerTuning.nativeFullscreenDelay);
-                    if (!mounted || _navigatingAway) return;
-                    if (!_nativeFsActive) {
-                      await _enterNativeFullscreen();
-                    }
-                    _insertCursorOverlayIfNeeded();
-                    _cursorHideController.kick();
-                    // await _enterNativeFullscreen(); // request native overlays (non-iOS)
-                    _log('entered fullscreen on new page');
-                  } catch (_) {}
-                }
+                await _enterMediaKitFullscreenFrom(
+                  c,
+                  state: videoState,
+                  reason: 'initial_controls_ready',
+                );
               });
             }
           },
         ),
         onEnterFullscreen: () async {
-          if (_isIOS) return;
           _lastFullscreenTransitionAt = DateTime.now();
           _lastFullscreenTransitionType = 'enter';
           _log('onEnterFullscreen() fired (lib)');
+          _cancelMobileFullscreenReentry();
           _wasFullscreen = true;
           if (!mounted || _navigatingAway) return;
 
@@ -3764,13 +4069,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           _log('native fullscreen requested from onEnterFullscreen()');
         },
         onExitFullscreen: () async {
-          if (_isIOS) return;
           _lastFullscreenTransitionAt = DateTime.now();
           _lastFullscreenTransitionType = 'exit';
           _log('onExitFullscreen() fired (lib)');
-          _wasFullscreen = false;
           _removeFullscreenBannerOverlayIfAny();
           _controlsCtxFullscreen = null;
+          if (_lockMobileMediaKitFullscreen && !_navigatingAway) {
+            _wasFullscreen = true;
+            _scheduleMobileFullscreenReentry();
+            _log('mobile fullscreen exit blocked; reentry scheduled');
+            return;
+          }
+
+          _wasFullscreen = false;
           if (!mounted || _navigatingAway) return;
           if (_nativeFsActive) {
             await _exitNativeFullscreen();
@@ -3782,6 +4093,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           _log('native fullscreen exit requested from onExitFullscreen()');
         },
       );
+
+      if (_isMobile) {
+        videoWidget = MaterialVideoControlsTheme(
+          normal: const MaterialVideoControlsThemeData(
+            bottomButtonBar: [
+              MaterialPositionIndicator(),
+              Spacer(),
+            ],
+          ),
+          fullscreen: const MaterialVideoControlsThemeData(
+            bottomButtonBar: [
+              MaterialPositionIndicator(),
+              Spacer(),
+            ],
+          ),
+          child: videoWidget,
+        );
+      }
 
       if (_isDesktop) {
         final shortcuts = _desktopKeyboardShortcuts();
@@ -3802,7 +4131,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           // Use a tiny bridge to get a context INSIDE the controls subtree.
           videoWidget,
           banner,
-          overlayAppBar,
         ],
       );
     }
@@ -3823,6 +4151,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
           } catch (_) {}
         }
 
+        _wasFullscreen = false;
+        _removeFullscreenBannerOverlayIfAny();
+        _controlsCtxFullscreen = null;
+        await _exitNativeFullscreen();
+        _removeCursorOverlayIfAny();
+
         if (didPop) return;
         if (!mounted || !navigator.mounted) return;
 
@@ -3831,19 +4165,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Padding(
-          padding: _isMobile && !_wasFullscreen
+          padding: _isMobile && !_wasFullscreen && !_lockMobileMediaKitFullscreen
               ? const EdgeInsets.only(bottom: 56, left: 24, right: 24)
               : EdgeInsets.zero,
-          child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) {
-              _bumpUiVisibility();
-            },
-            onPointerMove: (_) => _bumpUiVisibility(),
-            onPointerHover: (_) => _bumpUiVisibility(),
-            child: wrapDesktopCursorHider(
-              buildPlayerStack(),
-            ),
+          child: wrapDesktopCursorHider(
+            buildPlayerStack(),
           ),
         ),
       ),

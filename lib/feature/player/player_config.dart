@@ -100,6 +100,10 @@ class PlayerTuning {
 
   // Fullscreen/native timing
   static const Duration nativeFullscreenDelay = Duration(milliseconds: 150);
+  static const Duration mobileFullscreenReentryDelay =
+      Duration(milliseconds: 250);
+  static const int mobileFullscreenReentryMaxAttempts = 12;
+  static const double playerUiProtectedBottomArea = 96.0;
 
   // Auto-next module resolution timeout
   static const Duration autoNextResolveTimeout = Duration(seconds: 15);
