@@ -4111,24 +4111,29 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
       if (_isMobile) {
         videoWidget = MaterialVideoControlsTheme(
-          normal: const MaterialVideoControlsThemeData(
-            bottomButtonBarMargin: EdgeInsets.only(
+          normal: kDefaultMaterialVideoControlsThemeData.copyWith(
+            bottomButtonBarMargin: const EdgeInsets.only(
               left: 16.0,
               right: 8.0,
               bottom: 24.0,
             ),
-            bottomButtonBar: [
+            bottomButtonBar: const [
               MaterialPositionIndicator(),
               Spacer(),
             ],
           ),
-          fullscreen: const MaterialVideoControlsThemeData(
-            bottomButtonBarMargin: EdgeInsets.only(
+          fullscreen: kDefaultMaterialVideoControlsThemeDataFullscreen.copyWith(
+            bottomButtonBarMargin: const EdgeInsets.only(
               left: 16.0,
               right: 8.0,
-              bottom: 28.0,
+              bottom: 42.0,
             ),
-            bottomButtonBar: [
+            seekBarMargin: const EdgeInsets.only(
+              left: 16.0,
+              right: 16.0,
+              bottom: 42.0,
+            ),
+            bottomButtonBar: const [
               MaterialPositionIndicator(),
               Spacer(),
             ],
