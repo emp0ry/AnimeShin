@@ -739,7 +739,55 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     BuildContext controlsContext,
     PointerDownEvent event,
   ) {
+    final isTouch = event.kind == PointerDeviceKind.touch ||
+        event.kind == PointerDeviceKind.stylus ||
+        event.kind == PointerDeviceKind.invertedStylus;
+
+    if (_isMobile && isTouch && _uiVisible) {
+      final protectedTap =
+          _isProtectedMobileControlsTap(controlsContext, event.localPosition);
+      if (!protectedTap) {
+        _hideUiVisibility();
+        return;
+      }
+    }
+
     _handlePlayerPointerActivity();
+  }
+
+  bool _isProtectedMobileControlsTap(
+    BuildContext controlsContext,
+    Offset localPosition,
+  ) {
+    final mediaQuery = MediaQuery.maybeOf(controlsContext);
+    final topPadding = mediaQuery?.padding.top ?? 0.0;
+    final bottomPadding = mediaQuery?.padding.bottom ?? 0.0;
+
+    if (localPosition.dy <= topPadding + kToolbarHeight) {
+      return true;
+    }
+
+    final renderObject = controlsContext.findRenderObject();
+    if (renderObject is! RenderBox) return false;
+
+    final size = renderObject.size;
+    if (localPosition.dy >=
+        size.height -
+            bottomPadding -
+            PlayerTuning.playerUiProtectedBottomArea) {
+      return true;
+    }
+
+    final centerHalfWidth =
+        (size.width < PlayerTuning.playerUiProtectedCenterAreaWidth
+                ? size.width
+                : PlayerTuning.playerUiProtectedCenterAreaWidth) /
+            2;
+    final centerHalfHeight =
+        PlayerTuning.playerUiProtectedCenterAreaHeight / 2;
+    final dx = (localPosition.dx - size.width / 2).abs();
+    final dy = (localPosition.dy - size.height / 2).abs();
+    return dx <= centerHalfWidth && dy <= centerHalfHeight;
   }
 
   Future<void> _invokeMobileFullscreen(String method) async {
@@ -1083,12 +1131,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         }
         _nativeFsActive = true;
       } else if (_isMobile) {
-        await SystemChrome.setPreferredOrientations(
-          const [
-            DeviceOrientation.landscapeLeft,
-            DeviceOrientation.landscapeRight,
-          ],
-        );
         await SystemChrome.setEnabledSystemUIMode(
           SystemUiMode.manual,
           overlays: const <SystemUiOverlay>[],
@@ -1116,7 +1158,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       } else if (_isMobile) {
         await _invokeMobileFullscreen('exit');
         await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-        await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
         _nativeFsActive = false;
       }
     } catch (_) {

@@ -104,6 +104,8 @@ class PlayerTuning {
       Duration(milliseconds: 250);
   static const int mobileFullscreenReentryMaxAttempts = 12;
   static const double playerUiProtectedBottomArea = 96.0;
+  static const double playerUiProtectedCenterAreaWidth = 104.0;
+  static const double playerUiProtectedCenterAreaHeight = 104.0;
 
   // Auto-next module resolution timeout
   static const Duration autoNextResolveTimeout = Duration(seconds: 15);
