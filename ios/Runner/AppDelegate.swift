@@ -97,6 +97,27 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
+    let mobileFullscreenChannel = FlutterMethodChannel(
+      name: "mobile_fullscreen",
+      binaryMessenger: controller.binaryMessenger
+    )
+    mobileFullscreenChannel.setMethodCallHandler { (call, result) in
+      switch call.method {
+      case "enter":
+        UIApplication.shared.setStatusBarHidden(true, with: .fade)
+        controller.setNeedsStatusBarAppearanceUpdate()
+        controller.setNeedsUpdateOfHomeIndicatorAutoHidden()
+        result(nil)
+      case "exit":
+        UIApplication.shared.setStatusBarHidden(false, with: .fade)
+        controller.setNeedsStatusBarAppearanceUpdate()
+        controller.setNeedsUpdateOfHomeIndicatorAutoHidden()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     let channel = FlutterMethodChannel(
       name: "native_ios_player",
       binaryMessenger: controller.binaryMessenger

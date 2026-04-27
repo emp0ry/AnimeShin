@@ -84,6 +84,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
 
   static const MethodChannel _iosNativePlayer =
       MethodChannel('native_ios_player');
+  static const MethodChannel _mobileFullscreen =
+      MethodChannel('mobile_fullscreen');
 
   // --- Media -------------------------------------------------------------------
 
@@ -737,29 +739,42 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
     BuildContext controlsContext,
     PointerDownEvent event,
   ) {
-    final isTouch = event.kind == PointerDeviceKind.touch ||
-        event.kind == PointerDeviceKind.stylus ||
-        event.kind == PointerDeviceKind.invertedStylus;
-    final mediaQuery = MediaQuery.maybeOf(controlsContext);
-    final topPadding = mediaQuery?.padding.top ?? 0.0;
-    final bottomPadding = mediaQuery?.padding.bottom ?? 0.0;
-    final isInAppBar = event.localPosition.dy <= topPadding + kToolbarHeight;
-    final renderObject = controlsContext.findRenderObject();
-    final height = renderObject is RenderBox ? renderObject.size.height : null;
-    final isInBottomControls = height != null &&
-        event.localPosition.dy >=
-            height - bottomPadding - PlayerTuning.playerUiProtectedBottomArea;
-
-    if (_isMobile &&
-        isTouch &&
-        _uiVisible &&
-        !isInAppBar &&
-        !isInBottomControls) {
-      _hideUiVisibility();
-      return;
-    }
-
     _handlePlayerPointerActivity();
+  }
+
+  Future<void> _invokeMobileFullscreen(String method) async {
+    try {
+      await _mobileFullscreen.invokeMethod<void>(method);
+    } on MissingPluginException {
+      // Older platform builds can ignore the native fullscreen helper.
+    } catch (e) {
+      _log('mobile fullscreen channel "$method" failed: $e');
+    }
+  }
+
+  Future<void> _reapplyMobileNativeFullscreen({required String reason}) async {
+    if (!_isMobile || !_nativeFsActive || _navigatingAway) return;
+    await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: const <SystemUiOverlay>[],
+    );
+    await _invokeMobileFullscreen('enter');
+    _log('reapplied native mobile fullscreen ($reason)');
+  }
+
+  void _scheduleMobileNativeFullscreenReapply() {
+    if (!_isMobile) return;
+    for (final delay in const [
+      Duration(milliseconds: 250),
+      Duration(milliseconds: 900),
+    ]) {
+      unawaited(Future<void>.delayed(delay, () async {
+        if (!mounted || !_nativeFsActive || _navigatingAway) return;
+        await _reapplyMobileNativeFullscreen(
+          reason: 'delayed_${delay.inMilliseconds}ms',
+        );
+      }));
+    }
   }
 
   void _hideCursorInstant() {
@@ -1068,19 +1083,19 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         }
         _nativeFsActive = true;
       } else if (_isMobile) {
-        await Future.wait([
-          SystemChrome.setEnabledSystemUIMode(
-            SystemUiMode.immersiveSticky,
-            overlays: const <SystemUiOverlay>[],
-          ),
-          SystemChrome.setPreferredOrientations(
-            const [
-              DeviceOrientation.landscapeLeft,
-              DeviceOrientation.landscapeRight,
-            ],
-          ),
-        ]);
+        await SystemChrome.setPreferredOrientations(
+          const [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ],
+        );
+        await SystemChrome.setEnabledSystemUIMode(
+          SystemUiMode.manual,
+          overlays: const <SystemUiOverlay>[],
+        );
+        await _invokeMobileFullscreen('enter');
         _nativeFsActive = true;
+        _scheduleMobileNativeFullscreenReapply();
       }
     } catch (_) {
     } finally {
@@ -1099,10 +1114,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
         }
         _nativeFsActive = false;
       } else if (_isMobile) {
-        await Future.wait([
-          SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
-          SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]),
-        ]);
+        await _invokeMobileFullscreen('exit');
+        await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
         _nativeFsActive = false;
       }
     } catch (_) {
@@ -2102,6 +2116,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
+    if (_nativeFsActive && _isMobile && !_navigatingAway) {
+      unawaited(_reapplyMobileNativeFullscreen(reason: 'app_resumed'));
+    }
     if (!_alive || !PlayerTuning.audioDropWatchEnabled) return;
     unawaited(_checkAudioHealth(
       reason: 'app_resumed',
@@ -4095,12 +4112,22 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
       if (_isMobile) {
         videoWidget = MaterialVideoControlsTheme(
           normal: const MaterialVideoControlsThemeData(
+            bottomButtonBarMargin: EdgeInsets.only(
+              left: 16.0,
+              right: 8.0,
+              bottom: 24.0,
+            ),
             bottomButtonBar: [
               MaterialPositionIndicator(),
               Spacer(),
             ],
           ),
           fullscreen: const MaterialVideoControlsThemeData(
+            bottomButtonBarMargin: EdgeInsets.only(
+              left: 16.0,
+              right: 8.0,
+              bottom: 28.0,
+            ),
             bottomButtonBar: [
               MaterialPositionIndicator(),
               Spacer(),
