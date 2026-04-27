@@ -295,7 +295,7 @@ jobs:
           zip -r "AnimeShin-ios-v${VERSION}.ipa" Payload
 
       - name: Build macOS (release)
-        run: flutter build macos --release
+        run: flutter build macos --release --flavor Runner
 
       - name: Package DMG (drag & drop)
         shell: bash
