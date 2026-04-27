@@ -33,15 +33,27 @@ class ControlsCtxBridge extends StatefulWidget {
 class _ControlsCtxBridgeState extends State<ControlsCtxBridge> {
   bool _notified = false;
 
+  void _notifyReady() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onReady(context, widget.state);
+    });
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_notified) {
       _notified = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        widget.onReady(context, widget.state);
-      });
+      _notifyReady();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ControlsCtxBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.state, widget.state)) {
+      _notifyReady();
     }
   }
 

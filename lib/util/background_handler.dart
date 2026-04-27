@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:animeshin/feature/viewer/persistence_model.dart';
 import 'package:animeshin/feature/viewer/persistence_provider.dart';
@@ -13,6 +14,7 @@ import 'package:workmanager/workmanager.dart';
 import 'package:animeshin/platform/platform_flags.dart';
 
 final _notificationPlugin = FlutterLocalNotificationsPlugin();
+Future<void>? _notificationPermissionRequest;
 
 class BackgroundHandler {
   BackgroundHandler._();
@@ -69,26 +71,53 @@ class BackgroundHandler {
   /// Requests a notifications permission, if not already granted.
   static Future<void> requestPermissionForNotifications() async {
     if (!notificationsSupported) return;
+    final inFlight = _notificationPermissionRequest;
+    if (inFlight != null) return inFlight;
+
+    final request = _requestPermissionForNotifications();
+    _notificationPermissionRequest = request;
+    try {
+      await request;
+    } finally {
+      if (identical(_notificationPermissionRequest, request)) {
+        _notificationPermissionRequest = null;
+      }
+    }
+  }
+
+  static Future<void> _requestPermissionForNotifications() async {
     if (Platform.isAndroid) {
       final android = _notificationPlugin
           .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       if (android == null) return;
       if (await android.areNotificationsEnabled() ?? false) return;
-      await android.requestNotificationsPermission();
+      try {
+        await android.requestNotificationsPermission();
+      } on PlatformException catch (e) {
+        if (e.code != 'permissionRequestInProgress') rethrow;
+      }
       return;
     }
 
     if (Platform.isIOS) {
       final ios = _notificationPlugin
           .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-      await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      try {
+        await ios?.requestPermissions(alert: true, badge: true, sound: true);
+      } on PlatformException catch (e) {
+        if (e.code != 'permissionRequestInProgress') rethrow;
+      }
       return;
     }
 
     if (Platform.isMacOS) {
       final mac = _notificationPlugin
           .resolvePlatformSpecificImplementation<MacOSFlutterLocalNotificationsPlugin>();
-      await mac?.requestPermissions(alert: true, badge: true, sound: true);
+      try {
+        await mac?.requestPermissions(alert: true, badge: true, sound: true);
+      } on PlatformException catch (e) {
+        if (e.code != 'permissionRequestInProgress') rethrow;
+      }
       return;
     }
   }

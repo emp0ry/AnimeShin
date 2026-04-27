@@ -4035,10 +4035,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage>
               _startFsHandled = true;
               WidgetsBinding.instance.endOfFrame.then((_) async {
                 if (!mounted || _navigatingAway) return;
-                final c = _controlsCtxNormal ?? ctx;
-                if (!c.mounted) return;
                 await _enterMediaKitFullscreenFrom(
-                  c,
+                  null,
                   state: videoState,
                   reason: 'initial_controls_ready',
                 );

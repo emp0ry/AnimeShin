@@ -119,12 +119,12 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
       let subtitlesEnabled = (args["subtitlesEnabled"] as? Bool) ?? true
       let subtitleUrlStr = (args["subtitleUrl"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
       let headers = args["headers"] as? [String: String]
-      let autoSkipOpening = (args["autoSkipOpening"] as? Bool) ?? false
-      let autoSkipEnding = (args["autoSkipEnding"] as? Bool) ?? false
       let openingStart = args["openingStart"] as? Double
       let openingEnd   = args["openingEnd"]   as? Double
       let endingStart  = args["endingStart"]  as? Double
       let endingEnd    = args["endingEnd"]    as? Double
+      let autoSkipOpening = (args["autoSkipOpening"] as? Bool) ?? (openingStart != nil && openingEnd != nil)
+      let autoSkipEnding = (args["autoSkipEnding"] as? Bool) ?? (endingStart != nil && endingEnd != nil)
       let wasPlaying   = (args["wasPlaying"] as? Bool) ?? true
 
       // Build assets with optional headers (required for some module streams).
@@ -218,11 +218,11 @@ class ReportingAVPlayerViewController: AVPlayerViewController {
           }
         }
 
-        if autoSkipOpening, let s = openingStart, let e = openingEnd, !didSkipOpening, sec >= s && sec <= s + 5.0 {
+        if autoSkipOpening, let s = openingStart, let e = openingEnd, !didSkipOpening, sec >= s && sec < e {
           didSkipOpening = true
           seekAndResume(to: e)
         }
-        if autoSkipEnding, let s = endingStart, let e = endingEnd, !didSkipEnding, sec >= s && sec <= s + 5.0 {
+        if autoSkipEnding, let s = endingStart, let e = endingEnd, !didSkipEnding, sec >= s && sec < e {
           didSkipEnding = true
           seekAndResume(to: e)
         }
