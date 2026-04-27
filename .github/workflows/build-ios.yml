@@ -23,6 +23,17 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Prepare iOS no-codesign config
+        shell: bash
+        run: |
+          {
+            echo ""
+            echo "CODE_SIGN_ENTITLEMENTS="
+            echo "DEVELOPMENT_TEAM="
+            echo "PROVISIONING_PROFILE_SPECIFIER="
+            echo "CODE_SIGN_STYLE=Manual"
+          } >> ios/Flutter/Release.xcconfig
+
       - name: Build iOS
         run: flutter build ios --no-codesign
 

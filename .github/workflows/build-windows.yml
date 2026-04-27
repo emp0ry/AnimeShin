@@ -34,6 +34,7 @@ jobs:
             ($_ -split ':')[1].Trim().Split(' ')[0]
           } | Select-Object -First 1)
           if (-not $v) { throw "Version not found in pubspec.yaml" }
+          $v = $v.Split('+')[0]
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Create ZIP from Release folder contents

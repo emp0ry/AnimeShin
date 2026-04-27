@@ -1,4 +1,4 @@
-name: Build Android APK (dev flavor)
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -29,8 +29,8 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build APK (release, flavor=dev)
-        run: flutter build apk --release --flavor dev
+      - name: Build APK (release)
+        run: flutter build apk --release
 
       - name: Read version from pubspec.yaml
         id: ver
