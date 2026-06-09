@@ -34,6 +34,9 @@ Thank you to everyone who used AnimeShin! ❤️
   <a href="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all-no-linux.yml">
     <img src="https://github.com/emp0ry/AnimeShin/actions/workflows/build-all-no-linux.yml/badge.svg" alt="Build (bundle)">
   </a>
+  <a href="https://www.buymeacoffee.com/emp0ry">
+    <img alt="Buy Me a Coffee" src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-emp0ry-FFDD00?logo=buymeacoffee&logoColor=111827">
+  </a>
   <a href="https://img.shields.io/github/downloads/emp0ry/AnimeShin/total?color=ff6d00&label=Total%20Downloads">
     <img src="https://img.shields.io/github/downloads/emp0ry/AnimeShin/total?color=ff6d00&label=Total%20Downloads" alt="Total Downloads">
   </a>
