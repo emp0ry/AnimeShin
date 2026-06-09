@@ -12,7 +12,7 @@ A newer and significantly improved version, **MiruShin**, is now available and i
 
 **GitHub:** https://github.com/emp0ry/MiruShin
 
-Thank you to everyone who used and contributed to AnimeShin! ❤️
+Thank you to everyone who used AnimeShin! ❤️
 
 ---
 
