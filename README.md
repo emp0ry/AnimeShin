@@ -1,3 +1,19 @@
+# ⚠️ This Project Has Moved
+
+This project is no longer actively maintained.
+
+A newer and significantly improved version, **MiruShin**, is now available and includes a redesigned Flutter architecture, modular features, real Sora module support, cross-platform playback, and a much more complete AniList experience.
+
+> **MiruShin** takes the familiar feel of AnimeShin and pushes it further with a cleaner Flutter architecture, a modular feature layout, real Sora module support, cross-platform playback, and deeper AniList profile flows.
+>
+> It can switch between TMDB-driven discovery and AniList-driven catalog views, then carry that context into your library, watch flow, and player experience from a single codebase.
+
+## 🚀 MiruShin Repository
+
+**GitHub:** https://github.com/emp0ry/MiruShin
+
+Thank you to everyone who used and contributed to AnimeShin! ❤️
+
 <p align="center">
   <img src="https://github.com/emp0ry/AnimeShin/blob/main/assets/icons/about.png?raw=true" width="160" alt="AnimeShin Logo">
 </p>
