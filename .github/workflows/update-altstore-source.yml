@@ -28,14 +28,9 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python3 .github/scripts/gen-altstore-source.py docs/source.json
 
-      - name: Commit if changed
+      - name: Commit generated source
         run: |
           set -euo pipefail
-
-          if git diff --quiet -- docs/source.json; then
-            echo "docs/source.json unchanged; nothing to commit."
-            exit 0
-          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
