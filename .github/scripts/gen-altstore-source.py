@@ -17,7 +17,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-
+from datetime import datetime, timezone
 
 DEFAULT_REPO = "emp0ry/AnimeShin"
 RAW_BRANCH = "main"
@@ -236,6 +236,7 @@ def build_source(repo: str, releases: list[dict]) -> dict:
         "featuredApps": [APP["bundleIdentifier"]],
         "apps": [app],
         "news": [],
+        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
 
 
