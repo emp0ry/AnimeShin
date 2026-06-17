@@ -1,1 +1,303 @@
-
+{
+  "name": "AnimeShin",
+  "identifier": "com.emp0ry.animeshin.source",
+  "subtitle": "A modern, unofficial AniList companion application.",
+  "description": "Official AltStore / SideStore / Feather / LiveContainer source for AnimeShin - track anime & manga, manage your library.",
+  "iconURL": "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/icons/about.png",
+  "website": "https://github.com/emp0ry/AnimeShin",
+  "tintColor": "8b5cf6",
+  "featuredApps": [
+    "com.emp0ry.animeshin"
+  ],
+  "apps": [
+    {
+      "name": "AnimeShin",
+      "bundleIdentifier": "com.emp0ry.animeshin",
+      "developerName": "emp0ry",
+      "subtitle": "A modern, unofficial AniList companion application.",
+      "localizedDescription": "A modern, unofficial AniList companion application. Track anime & manga, manage your library, and optionally open media using user-configured extensions.",
+      "iconURL": "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/icons/about.png",
+      "tintColor": "8b5cf6",
+      "category": "entertainment",
+      "screenshots": [
+        "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/screenshots/1.PNG",
+        "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/screenshots/2.PNG",
+        "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/screenshots/3.PNG"
+      ],
+      "screenshotURLs": [
+        "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/screenshots/1.PNG",
+        "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/screenshots/2.PNG",
+        "https://raw.githubusercontent.com/emp0ry/AnimeShin/main/assets/screenshots/3.PNG"
+      ],
+      "versions": [
+        {
+          "version": "1.6.1",
+          "date": "2026-04-27",
+          "localizedDescription": "- Fixed MacOS build.\n- Improved mobile video fullscreen on Android and iOS.\n- Player now opens in real fullscreen mode with fullscreen gestures.\n- Swipe seek and fullscreen player controls work again.\n- Android system bars are hidden better during playback.\n- Player no longer forces landscape rotation.\n- Player appbar now works in fullscreen.\n- Tap video to hide the appbar.\n- Tap the video again to show the appbar.\n- Tapping play/pause, seek bar, or appbar buttons will not accidentally hide the appbar.\n- Moved the progress bar a little higher from the bottom edge.\n- Fixed OP/ED skipping on iOS.\n- Fixed OP/ED not skipping when it is enabled.\n- Fixed OP/ED skipping when it is disabled.\n- Fixed Android release build/flavor issue.\n- Fixed Android duplicate `MainActivity` build error.\n- Fixed notification permission crash on startup.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.6.1/AnimeShin-ios-v1.6.1.ipa",
+          "size": 17673009,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.6.0",
+          "date": "2026-04-27",
+          "localizedDescription": "- Improved mobile video fullscreen on Android and iOS.\n- Player now opens in real fullscreen mode with fullscreen gestures.\n- Swipe seek and fullscreen player controls work again.\n- Android system bars are hidden better during playback.\n- Player no longer forces landscape rotation.\n- Player appbar now works in fullscreen.\n- Tap video to hide the appbar.\n- Tap the video again to show the appbar.\n- Tapping play/pause, seek bar, or appbar buttons will not accidentally hide the appbar.\n- Moved the progress bar a little higher from the bottom edge.\n- Fixed OP/ED skipping on iOS.\n- Fixed OP/ED not skipping when it is enabled.\n- Fixed OP/ED skipping when it is disabled.\n- Fixed Android release build/flavor issue.\n- Fixed Android duplicate `MainActivity` build error.\n- Fixed notification permission crash on startup.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.6.0/AnimeShin-ios-v1.6.0.ipa",
+          "size": 17673005,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.5.1",
+          "date": "2026-03-19",
+          "localizedDescription": "- Added support for new notification types related to submission updates.\n- Updated notification models, filters, and views to handle and display submission update notifications.\n- Enhanced background handler and GraphQL utilities for new notification types.\n- Fixed random time jumps after long pause/resume.\n- Improved stream stability when frequently seeking forward/back.\n- Better protection against “unreturnable skipped moments” without restarting player.\n- Kept fast loading speed from recent updates.\n- Added clearer debug traces for faster issue diagnosis.\n- No auto-reopen workaround behavior added.\n- Restored fast stream loading speed.\n- Re-enabled keep-alive for better performance.\n- Kept segment safety fixes (retry, timeout, short-read checks).\n- Added idle-only connection refresh after long pause (stability guard).\n- Fixed rare stream skips after long pause/seek.\n- Improved HLS playback stability (better segment handling).\n- Better internal diagnostics to track playback issues faster.\n- Safer decoder/network behavior to reduce random jumps.\n- Collection filters are now saved per list page, and the filtering logic has been fixed\n- Added search via Russian titles\n- Manga reading support (Beta)",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.5.1/AnimeShin-ios-v1.5.1.ipa",
+          "size": 17659512,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.5.0",
+          "date": "2026-03-18",
+          "localizedDescription": "- Fixed a crash when opening anime/manga pages caused by unexpected/null enum values in user settings.\n- Improved robustness of settings parsing, unknown or missing types from the API are now safely ignored.\n- Added a regression test to ensure future settings changes won’t break page loading.\n- Fixed random time jumps after long pause/resume.\n- Improved stream stability when frequently seeking forward/back.\n- Better protection against “unreturnable skipped moments” without restarting player.\n- Kept fast loading speed from recent updates.\n- Added clearer debug traces for faster issue diagnosis.\n- No auto-reopen workaround behavior added.\n- Restored fast stream loading speed.\n- Re-enabled keep-alive for better performance.\n- Kept segment safety fixes (retry, timeout, short-read checks).\n- Added idle-only connection refresh after long pause (stability guard).\n- Fixed rare stream skips after long pause/seek.\n- Improved HLS playback stability (better segment handling).\n- Better internal diagnostics to track playback issues faster.\n- Safer decoder/network behavior to reduce random jumps.\n- Collection filters are now saved per list page, and the filtering logic has been fixed\n- Added search via Russian titles\n- Manga reading support (Beta)",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.5.0/AnimeShin-ios-v1.5.0.ipa",
+          "size": 17653564,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.11",
+          "date": "2026-02-24",
+          "localizedDescription": "- Fixed random time jumps after long pause/resume.\n- Improved stream stability when frequently seeking forward/back.\n- Better protection against “unreturnable skipped moments” without restarting player.\n- Kept fast loading speed from recent updates.\n- Added clearer debug traces for faster issue diagnosis.\n- No auto-reopen workaround behavior added.\n- Restored fast stream loading speed.\n- Re-enabled keep-alive for better performance.\n- Kept segment safety fixes (retry, timeout, short-read checks).\n- Added idle-only connection refresh after long pause (stability guard).\n- Fixed rare stream skips after long pause/seek.\n- Improved HLS playback stability (better segment handling).\n- Better internal diagnostics to track playback issues faster.\n- Safer decoder/network behavior to reduce random jumps.\n- Collection filters are now saved per list page, and the filtering logic has been fixed\n- Added search via Russian titles\n- Manga reading support (Beta)",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.11/AnimeShin-ios-v1.4.11.ipa",
+          "size": 17655267,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.8",
+          "date": "2026-02-23",
+          "localizedDescription": "- Restored fast stream loading speed.\n- Re-enabled keep-alive for better performance.\n- Kept segment safety fixes (retry, timeout, short-read checks).\n- Added idle-only connection refresh after long pause (stability guard).\n- Fixed rare stream skips after long pause/seek.\n- Improved HLS playback stability (better segment handling).\n- Better internal diagnostics to track playback issues faster.\n- Safer decoder/network behavior to reduce random jumps.\n- Collection filters are now saved per list page, and the filtering logic has been fixed\n- Added search via Russian titles\n- Manga reading support (Beta)",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.8/AnimeShin-ios-v1.4.8.ipa",
+          "size": 17644129,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.7",
+          "date": "2026-02-21",
+          "localizedDescription": "- Fixed rare stream skips after long pause/seek.\n- Improved HLS playback stability (better segment handling).\n- Better internal diagnostics to track playback issues faster.\n- Safer decoder/network behavior to reduce random jumps.\n- Collection filters are now saved per list page, and the filtering logic has been fixed\n- Added search via Russian titles\n- Manga reading support (Beta)",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.7/AnimeShin-ios-v1.4.7.ipa",
+          "size": 17643986,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.6",
+          "date": "2026-02-21",
+          "localizedDescription": "- Collection filters are now saved per list page, and the filtering logic has been fixed\n- Added search via Russian titles\n- Manga reading support (Beta)",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.6/AnimeShin-ios-v1.4.6.ipa",
+          "size": 17628769,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.5",
+          "date": "2026-02-19",
+          "localizedDescription": "- Player pop-up notifications are now working on fullscreen mode\n- Add voiceover loading state management and snackbar feedback\n- Fix a bug related to multiple players opening\n- Collection list now updates immediately when you:\n  - change progress\n  - change status\n  - add/remove anime or manga\n- Auto-next now closes the player when there is no next episode.\n- Auto-next now also closes the player if next-episode loading fails.\n- When closing after the last episode, the app now exits fullscreen first, then returns to the watch list page.\n- Player close behavior is more reliable from fullscreen and overlay states.\n- Smarter refresh of collection lists.\n- Smarter player stream routing: local proxy is now used for HLS, while direct streams (like `.mp4`) open directly.  \n- Added one-time playback fallback retry between local proxy and direct modes to reduce module watch failures.  \n- HLS settle timeout logic now runs only for HLS/proxy playback, avoiding unnecessary waits on direct files.  \n- Added stream transport policy tests (HLS/direct/unknown classification + proxy/fallback behavior).  \n- Module watch flow now passes and validates `mediaId` for playback resume correctness.  \n- Desktop startup now enforces single-instance lock and handles window settings lock conflicts safely.  \n- Removed Feed from Home navigation and Home Tab defaults (Settings > Defaults > Home Tab).  \n- Added Feed button to the user profile button row and reordered buttons to: Activities, Favourites, Feed, Social, Statistics, Reviews.  \n- Home navigation updated: `Discover` and `Feed` positions were swapped.\n- New installs now open on `Discover` by default.\n- Discover cards now show a secondary Russian/Shikimori title when `Display Russian Titles` is enabled.\n- Discover search got a smart fallback: if AniList returns no results on first page, Shikimori title variants are tried automatically.\n- Russian title toggle now applies to already opened Discover results without needing manual refresh.\n- Stability and performance improvements for Discover async updates and title enrichment.\n- Faster startup module handling: extension index now loads immediately from local data without blocking on remote refresh\n- Improved module playback reliability: module streams now start via proxy by default for better HLS/header compatibility (including iOS)\n- Smarter voiceover flow: voiceover detection and first stream probe are combined to avoid duplicate heavy parsing\n- Better slow-source resilience: stream extraction now uses longer, safer timeouts with optional per-module overrides\n- Reduced repeated module work: runtime, executor, search, and settings now share one module loader instance\n- More stable startup updates: remote extension refresh runs in background with per-module timeout and safe loopback skipping\n- Settings consistency improvements: module mutations now properly invalidate shared index/cache state\n- Added regression coverage for loader refresh behavior, remote refresh timeout handling, and voiceover probe logic\n- The Seek steps function now works correctly in fullscreen mode\n- Code fix and improvement\n  - Manga reading support\n  - Faster module loading at startup\n  - Better stream playback duration detection\n  - Improved search using Russian titles\n  - Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.5/AnimeShin-ios-v1.4.5.ipa",
+          "size": 17624895,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.4",
+          "date": "2026-02-19",
+          "localizedDescription": "- Collection list now updates immediately when you:\n  - change progress\n  - change status\n  - add/remove anime or manga\n- Auto-next now closes the player when there is no next episode.\n- Auto-next now also closes the player if next-episode loading fails.\n- When closing after the last episode, the app now exits fullscreen first, then returns to the watch list page.\n- Player close behavior is more reliable from fullscreen and overlay states.\n- Smarter refresh of collection lists.\n- Smarter player stream routing: local proxy is now used for HLS, while direct streams (like `.mp4`) open directly.  \n- Added one-time playback fallback retry between local proxy and direct modes to reduce module watch failures.  \n- HLS settle timeout logic now runs only for HLS/proxy playback, avoiding unnecessary waits on direct files.  \n- Added stream transport policy tests (HLS/direct/unknown classification + proxy/fallback behavior).  \n- Module watch flow now passes and validates `mediaId` for playback resume correctness.  \n- Desktop startup now enforces single-instance lock and handles window settings lock conflicts safely.  \n- Removed Feed from Home navigation and Home Tab defaults (Settings > Defaults > Home Tab).  \n- Added Feed button to the user profile button row and reordered buttons to: Activities, Favourites, Feed, Social, Statistics, Reviews.  \n- Home navigation updated: `Discover` and `Feed` positions were swapped.\n- New installs now open on `Discover` by default.\n- Discover cards now show a secondary Russian/Shikimori title when `Display Russian Titles` is enabled.\n- Discover search got a smart fallback: if AniList returns no results on first page, Shikimori title variants are tried automatically.\n- Russian title toggle now applies to already opened Discover results without needing manual refresh.\n- Stability and performance improvements for Discover async updates and title enrichment.\n- Faster startup module handling: extension index now loads immediately from local data without blocking on remote refresh\n- Improved module playback reliability: module streams now start via proxy by default for better HLS/header compatibility (including iOS)\n- Smarter voiceover flow: voiceover detection and first stream probe are combined to avoid duplicate heavy parsing\n- Better slow-source resilience: stream extraction now uses longer, safer timeouts with optional per-module overrides\n- Reduced repeated module work: runtime, executor, search, and settings now share one module loader instance\n- More stable startup updates: remote extension refresh runs in background with per-module timeout and safe loopback skipping\n- Settings consistency improvements: module mutations now properly invalidate shared index/cache state\n- Added regression coverage for loader refresh behavior, remote refresh timeout handling, and voiceover probe logic\n- The Seek steps function now works correctly in fullscreen mode\n- Code fix and improvement\n  - Manga reading support\n  - Faster module loading at startup\n  - Better stream playback duration detection\n  - Improved search using Russian titles\n  - Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.4/AnimeShin-ios-v1.4.4.ipa",
+          "size": 17636185,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.3",
+          "date": "2026-02-18",
+          "localizedDescription": "- Smarter player stream routing: local proxy is now used for HLS, while direct streams (like `.mp4`) open directly.  \n- Added one-time playback fallback retry between local proxy and direct modes to reduce module watch failures.  \n- HLS settle timeout logic now runs only for HLS/proxy playback, avoiding unnecessary waits on direct files.  \n- Added stream transport policy tests (HLS/direct/unknown classification + proxy/fallback behavior).  \n- Module watch flow now passes and validates `mediaId` for playback resume correctness.  \n- Desktop startup now enforces single-instance lock and handles window settings lock conflicts safely.  \n- Removed Feed from Home navigation and Home Tab defaults (Settings > Defaults > Home Tab).  \n- Added Feed button to the user profile button row and reordered buttons to: Activities, Favourites, Feed, Social, Statistics, Reviews.  \n- Home navigation updated: `Discover` and `Feed` positions were swapped.\n- New installs now open on `Discover` by default.\n- Discover cards now show a secondary Russian/Shikimori title when `Display Russian Titles` is enabled.\n- Discover search got a smart fallback: if AniList returns no results on first page, Shikimori title variants are tried automatically.\n- Russian title toggle now applies to already opened Discover results without needing manual refresh.\n- Stability and performance improvements for Discover async updates and title enrichment.\n- Faster startup module handling: extension index now loads immediately from local data without blocking on remote refresh\n- Improved module playback reliability: module streams now start via proxy by default for better HLS/header compatibility (including iOS)\n- Smarter voiceover flow: voiceover detection and first stream probe are combined to avoid duplicate heavy parsing\n- Better slow-source resilience: stream extraction now uses longer, safer timeouts with optional per-module overrides\n- Reduced repeated module work: runtime, executor, search, and settings now share one module loader instance\n- More stable startup updates: remote extension refresh runs in background with per-module timeout and safe loopback skipping\n- Settings consistency improvements: module mutations now properly invalidate shared index/cache state\n- Added regression coverage for loader refresh behavior, remote refresh timeout handling, and voiceover probe logic\n- The Seek steps function now works correctly in fullscreen mode\n- Code fix and improvement\n• Manga reading support\n• Faster module loading at startup\n• Better stream playback duration detection\n• Improved search using Russian titles\n• Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.3/AnimeShin-ios-v1.4.3.ipa",
+          "size": 17638557,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.2",
+          "date": "2026-02-18",
+          "localizedDescription": "- Removed Feed from Home navigation and Home Tab defaults (Settings > Defaults > Home Tab).  \n- Added Feed button to the user profile button row and reordered buttons to: Activities, Favourites, Feed, Social, Statistics, Reviews.  \n- Home navigation updated: `Discover` and `Feed` positions were swapped.\n- New installs now open on `Discover` by default.\n- Discover cards now show a secondary Russian/Shikimori title when `Display Russian Titles` is enabled.\n- Discover search got a smart fallback: if AniList returns no results on first page, Shikimori title variants are tried automatically.\n- Russian title toggle now applies to already opened Discover results without needing manual refresh.\n- Stability and performance improvements for Discover async updates and title enrichment.\n- Faster startup module handling: extension index now loads immediately from local data without blocking on remote refresh\n- Improved module playback reliability: module streams now start via proxy by default for better HLS/header compatibility (including iOS)\n- Smarter voiceover flow: voiceover detection and first stream probe are combined to avoid duplicate heavy parsing\n- Better slow-source resilience: stream extraction now uses longer, safer timeouts with optional per-module overrides\n- Reduced repeated module work: runtime, executor, search, and settings now share one module loader instance\n- More stable startup updates: remote extension refresh runs in background with per-module timeout and safe loopback skipping\n- Settings consistency improvements: module mutations now properly invalidate shared index/cache state\n- Added regression coverage for loader refresh behavior, remote refresh timeout handling, and voiceover probe logic\n- The Seek steps function now works correctly in fullscreen mode\n- Code fix and improvement\n• Manga reading support\n• Faster module loading at startup\n• Better stream playback duration detection\n• Improved search using Russian titles\n• Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.2/AnimeShin-ios-v1.4.2.ipa",
+          "size": 17628648,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.1",
+          "date": "2026-02-17",
+          "localizedDescription": "- Home navigation updated: `Discover` and `Feed` positions were swapped.\n- New installs now open on `Discover` by default.\n- Discover cards now show a secondary Russian/Shikimori title when `Display Russian Titles` is enabled.\n- Discover search got a smart fallback: if AniList returns no results on first page, Shikimori title variants are tried automatically.\n- Russian title toggle now applies to already opened Discover results without needing manual refresh.\n- Stability and performance improvements for Discover async updates and title enrichment.\n- Faster startup module handling: extension index now loads immediately from local data without blocking on remote refresh\n- Improved module playback reliability: module streams now start via proxy by default for better HLS/header compatibility (including iOS)\n- Smarter voiceover flow: voiceover detection and first stream probe are combined to avoid duplicate heavy parsing\n- Better slow-source resilience: stream extraction now uses longer, safer timeouts with optional per-module overrides\n- Reduced repeated module work: runtime, executor, search, and settings now share one module loader instance\n- More stable startup updates: remote extension refresh runs in background with per-module timeout and safe loopback skipping\n- Settings consistency improvements: module mutations now properly invalidate shared index/cache state\n- Added regression coverage for loader refresh behavior, remote refresh timeout handling, and voiceover probe logic\n- The Seek steps function now works correctly in fullscreen mode\n- Code fix and improvement\n• Manga reading support\n• Faster module loading at startup\n• Better stream playback duration detection\n• Improved search using Russian titles\n• Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.1/AnimeShin-ios-v1.4.1.ipa",
+          "size": 17628860,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.4.0",
+          "date": "2026-02-17",
+          "localizedDescription": "A modern unofficial AniList client for tracking, notifications and optional community streaming extensions.\n\n⚠️ The app itself does NOT include any built-in streaming services.\nContent depends on user-installed extensions.\n\nPlatforms:\nWindows • macOS • Android • iOS (sideload)\n\n## What's new\n- Faster startup module handling: extension index now loads immediately from local data without blocking on remote refresh\n- Improved module playback reliability: module streams now start via proxy by default for better HLS/header compatibility (including iOS)\n- Smarter voiceover flow: voiceover detection and first stream probe are combined to avoid duplicate heavy parsing\n- Better slow-source resilience: stream extraction now uses longer, safer timeouts with optional per-module overrides\n- Reduced repeated module work: runtime, executor, search, and settings now share one module loader instance\n- More stable startup updates: remote extension refresh runs in background with per-module timeout and safe loopback skipping\n- Settings consistency improvements: module mutations now properly invalidate shared index/cache state\n- Added regression coverage for loader refresh behavior, remote refresh timeout handling, and voiceover probe logic\n- The Seek steps function now works correctly in fullscreen mode\n- Code fix and improvement\n• Manga reading support\n• Faster module loading at startup\n• Better stream playback duration detection\n• Improved search using Russian titles\n• Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.4.0/AnimeShin-ios-v1.4.0.ipa",
+          "size": 17624108,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.3.4",
+          "date": "2026-02-16",
+          "localizedDescription": "A modern unofficial AniList client for tracking, notifications and optional community streaming extensions.\n\n⚠️ The app itself does NOT include any built-in streaming services.\nContent depends on user-installed extensions.\n\nPlatforms:\nWindows • macOS • Android • iOS (sideload)\n\n## What's new\n- The ***Seek steps*** function now works correctly in fullscreen mode\n- Code fix and improvement\n• Manga reading support\n• Faster module loading at startup\n• Better stream playback duration detection\n• Improved search using Russian titles\n• Stability improvements on Windows",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.3.4/AnimeShin-ios-v1.3.4.ipa",
+          "size": 17623632,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.3.2",
+          "date": "2026-02-15",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Crash**: Maybe fix the crash on Windows.\n- **Updater**: Auto update of modules at app start.\n- **Proxy**: Proxing some streams to fix the issue with duration.\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.3.2/AnimeShin-ios-v1.3.2.ipa",
+          "size": 17623438,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.3.1",
+          "date": "2026-02-14",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Updater**: Auto update of modules at app start.\n- **Proxy**: Proxing some streams to fix the issue with duration.\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.3.1/AnimeShin-ios-v1.3.1.ipa",
+          "size": 17622753,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.3.0",
+          "date": "2026-02-14",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Updater**: Auto update of modules at app start.\n- **Proxy**: Proxing some streams to fix the issue with duration.\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.3.0/AnimeShin-ios-v1.3.0.ipa",
+          "size": 17621740,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.9",
+          "date": "2026-02-13",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Fix**: delayed auto next episode.\n- **Fix**: watch/read pages and anime/manga detail header now reflect progress immediately after auto-progress.\n- **Player**: Refactor playback settling logic to eliminate position fallback and improve stability\n- **Bug fix**: Resolved an infinite stream loading issue, and improved episode position restore logic.\n- **UI**: Add horizontal scroll buttons on `_ChipSelector` for Desktop.\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.9/AnimeShin-ios-v1.2.9.ipa",
+          "size": 17612669,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.8",
+          "date": "2026-02-13",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Fix**: watch/read pages and anime/manga detail header now reflect progress immediately after auto-progress.\n- **Player**: Refactor playback settling logic to eliminate position fallback and improve stability\n- **Bug fix**: Resolved an infinite stream loading issue, and improved episode position restore logic.\n- **UI**: Add horizontal scroll buttons on `_ChipSelector` for Desktop.\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.8/AnimeShin-ios-v1.2.8.ipa",
+          "size": 17612726,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.7",
+          "date": "2026-02-12",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Player**: Refactor playback settling logic to eliminate position fallback and improve stability\n- **Bug fix**: Resolved an infinite stream loading issue, and improved episode position restore logic.\n- **UI**: Add horizontal scroll buttons on `_ChipSelector` for Desktop.\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.7/AnimeShin-ios-v1.2.7.ipa",
+          "size": 17611064,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.6",
+          "date": "2026-02-12",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **UI**: Add horizontal scroll buttons on `_ChipSelector` for Desktop\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.6/AnimeShin-ios-v1.2.6.ipa",
+          "size": 17615893,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.5",
+          "date": "2026-02-12",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **UI**: Add horizontal scroll buttons on `_ChipSelector` for Desktop\n- **Manga support**: Now you can read manga with Sora-compatible modules.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.5/AnimeShin-ios-v1.2.5.ipa",
+          "size": 17608008,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.4",
+          "date": "2026-02-12",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Bug Fixes**: Module loading logic now works stably. Modules Export/Import button now works on the mobile version of the app.\n- **Fullscreen**: Now, auto next episode is working properly for fullscreen mode.\n- **Improved Player**: Now, the top elements are above the player.\n- **Removed**: Removed swipe to previous page from player.\n- **Manga support**: Now you can read manga with Sora compatible modules.\n- **Fixed iOS Player**: Now you can watch with the native iOS Player.\n- **Improvements**: Improved voiceover choosing menu logic.\n- **Updates**: Updated all Flutter libs.\n- **Module filtering**: Watch shows only anime modules; Read shows only manga modules.\n- **UI polish**: Watch/Read buttons use solid icons, white text, and refined spacing.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.4/AnimeShin-ios-v1.2.4.ipa",
+          "size": 17608910,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.3",
+          "date": "2026-02-10",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Fullscreen**: Now, auto next episode is working properly for fullscreen mode.\n- **Improved Player**: Now, the top elements are above the player.\n- **Removed**: Removed swipe to previous page from player.\n- **Manga support**: Now you can read manga with Sora compatible modules.\n- **Fixed iOS Player**: Now you can watch with the native iOS Player.\n- **Improvements**: Improved voiceover choosing menu logic.\n- **Updates**: Updated all Flutter libs.\n- **Module filtering**: Watch shows only anime modules; Read shows only manga modules.\n- **UI polish**: Watch/Read buttons use solid icons, white text, and refined spacing.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.3/AnimeShin-ios-v1.2.3.ipa",
+          "size": 17529453,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.2",
+          "date": "2026-02-10",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Improved Player**: Now, the top elements are above the player.\n- **Removed**: Removed swipe to previous page from player.\n- **Manga support**: Now you can read manga with Sora compatible modules.\n- **Fixed iOS Player**: Now you can watch with the native iOS Player.\n- **Improvements**: Improved voiceover choosing menu logic.\n- **Updates**: Updated all Flutter libs.\n- **Module filtering**: Watch shows only anime modules; Read shows only manga modules.\n- **UI polish**: Watch/Read buttons use solid icons, white text, and refined spacing.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.2/AnimeShin-ios-v1.2.2.ipa",
+          "size": 17527613,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.1",
+          "date": "2026-02-10",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Improved Player**: Now, the top elements are above the player.\n- **Removed**: Removed swipe to previous page from player.\n- **Manga support**: Now you can read manga with Sora compatible modules.\n- **Fixed iOS Player**: Now you can watch with the native iOS Player.\n- **Improvements**: Improved voiceover choosing menu logic.\n- **Updates**: Updated all Flutter libs.\n- **Module filtering**: Watch shows only anime modules; Read shows only manga modules.\n- **UI polish**: Watch/Read buttons use solid icons, white text, and refined spacing.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.\n- \n## Highlights\n- **AniList sync**: track anime & manga, update progress quickly.\n- **Russian titles & search**: Russian titles from Shikimori + search by RU titles in your library.\n- **Watch (Sora sources)**: watch episodes using community sources.\n- **Swipe-based progress**: swipe covers to update episode/chapter progress.\n- **Notes & scores**: rate entries and attach personal notes.\n- **Notifications**: new episode aired alerts.\n- **Secure authentication**: OAuth-based login with AniList.\n\n## Install\n### Android\n- Download the APK for your device/ABI and install it.\n- If Android blocks installation, enable “Install unknown apps” for your browser/file manager.\n\n### Windows\n- Download and unzip the Windows build.\n- Run `AnimeShin.exe`.\n\n### iOS\n- Use [SideStore ](https://sidestore.io/) & [LiveContainer ](https://github.com/LiveContainer/LiveContainer) (recommended)\n\n### macOS\n- Download the macOS build (`.dmg`) and move `AnimeShin.app` to **Applications**.\n- If macOS blocks opening the app:\n  - Right-click `AnimeShin.app` → **Open** → **Open**, or\n  - Go to **System Settings → Privacy & Security** → **Open Anyway**.\n- If the app is still blocked due to quarantine (advanced, Terminal):\n  - `xattr -dr com.apple.quarantine /Applications/AnimeShin.app`\n\n## Notes\n- This is an **unofficial** client. AniList, Shikimori, and community sources are third-party services.\n- Settings and data are stored locally on-device.\n\n## Known issues / preview caveats\n- Community sources availability depends on the configured Sora-compatible sources.\n- 2 subtitles on iOS.\n\n## Credits\n- Inspiration: [Otraku](https://github.com/lotusprey/otraku)\n- Source ecosystem inspiration: [Sora](https://github.com/cranci1)\n- Russian titles & metadata: [Shikimori](https://shikimori.one/)\n\n## Privacy\nSee PRIVACY_POLICY.md.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.1/AnimeShin-ios-v1.2.1.ipa",
+          "size": 17411068,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.2.0",
+          "date": "2026-02-09",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Manga support**: Now you can read manga with Sora compatible modules.\n- **Fixed iOS Player**: Now you can watch with the native iOS Player.\n- **Improvements**: Improved voiceover choosing menu logic.\n- **Updates**: Updated all Flutter libs.\n- **Module filtering**: Watch shows only anime modules; Read shows only manga modules.\n- **UI polish**: Watch/Read buttons use solid icons, white text, and refined spacing.\n- **Sora compatibility**: Accepts `scriptURL`/`iconURL` key casing in module JSON.\n- \n## Highlights\n- **AniList sync**: track anime & manga, update progress quickly.\n- **Russian titles & search**: Russian titles from Shikimori + search by RU titles in your library.\n- **Watch (Sora sources)**: watch episodes using community sources.\n- **Swipe-based progress**: swipe covers to update episode/chapter progress.\n- **Notes & scores**: rate entries and attach personal notes.\n- **Notifications**: new episode aired alerts.\n- **Secure authentication**: OAuth-based login with AniList.\n\n## Install\n### Android\n- Download the APK for your device/ABI and install it.\n- If Android blocks installation, enable “Install unknown apps” for your browser/file manager.\n\n### Windows\n- Download and unzip the Windows build.\n- Run `AnimeShin.exe`.\n\n### iOS\n- Use [SideStore ](https://sidestore.io/) & [LiveContainer ](https://github.com/LiveContainer/LiveContainer) (recommended)\n\n### macOS\n- Download the macOS build (`.dmg`) and move `AnimeShin.app` to **Applications**.\n- If macOS blocks opening the app:\n  - Right-click `AnimeShin.app` → **Open** → **Open**, or\n  - Go to **System Settings → Privacy & Security** → **Open Anyway**.\n- If the app is still blocked due to quarantine (advanced, Terminal):\n  - `xattr -dr com.apple.quarantine /Applications/AnimeShin.app`\n\n## Notes\n- This is an **unofficial** client. AniList, Shikimori, and community sources are third-party services.\n- Settings and data are stored locally on-device.\n\n## Known issues / preview caveats\n- Community sources availability depends on the configured Sora-compatible sources.\n- 2 subtitles on iOS.\n- Player visuals on mobile are not that good.\n\n## Credits\n- Inspiration: [Otraku](https://github.com/lotusprey/otraku)\n- Source ecosystem inspiration: [Sora](https://github.com/cranci1)\n- Russian titles & metadata: [Shikimori](https://shikimori.one/)\n\n## Privacy\nSee PRIVACY_POLICY.md.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.2.0/AnimeShin-ios-v1.2.0.ipa",
+          "size": 17408297,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.1.0",
+          "date": "2026-02-09",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Module filtering**: Watch shows only anime modules; Read shows only manga modules.\n- **UI polish**: Watch/Read buttons use solid icons, white text, and refined spacing.\n- **Sora compatibility**: accepts `scriptURL`/`iconURL` key casing in module JSON.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.1.0/AnimeShin-ios-v1.1.0.ipa",
+          "size": 17392897,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.0.2",
+          "date": "2026-02-04",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Shikimori Export**: added favorite for export.\n- **Modules settings**: adjust padding for bottom navigation bar.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.0.2/AnimeShin-v1.0.2.ipa",
+          "size": 17385991,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.0.1",
+          "date": "2025-12-21",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).\n\n## ✨ What’s New\n- **Modules settings**: adjust padding for bottom navigation bar.",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.0.1/AnimeShin-ios-v1.0.1.ipa",
+          "size": 17384316,
+          "minOSVersion": "13.0"
+        },
+        {
+          "version": "1.0.0",
+          "date": "2025-12-21",
+          "localizedDescription": "A modern, unofficial AniList client with Russian titles and community sources (Sora-compatible).",
+          "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.0.0/AnimeShin-ios-v1.0.0.ipa",
+          "size": 17384003,
+          "minOSVersion": "13.0"
+        }
+      ],
+      "version": "1.6.1",
+      "versionDate": "2026-04-27",
+      "versionDescription": "- Fixed MacOS build.\n- Improved mobile video fullscreen on Android and iOS.\n- Player now opens in real fullscreen mode with fullscreen gestures.\n- Swipe seek and fullscreen player controls work again.\n- Android system bars are hidden better during playback.\n- Player no longer forces landscape rotation.\n- Player appbar now works in fullscreen.\n- Tap video to hide the appbar.\n- Tap the video again to show the appbar.\n- Tapping play/pause, seek bar, or appbar buttons will not accidentally hide the appbar.\n- Moved the progress bar a little higher from the bottom edge.\n- Fixed OP/ED skipping on iOS.\n- Fixed OP/ED not skipping when it is enabled.\n- Fixed OP/ED skipping when it is disabled.\n- Fixed Android release build/flavor issue.\n- Fixed Android duplicate `MainActivity` build error.\n- Fixed notification permission crash on startup.",
+      "downloadURL": "https://github.com/emp0ry/AnimeShin/releases/download/v1.6.1/AnimeShin-ios-v1.6.1.ipa",
+      "size": 17673009,
+      "minOSVersion": "13.0",
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": []
+      }
+    }
+  ],
+  "news": []
+}
