@@ -2,7 +2,7 @@ name: Update AltStore Source
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "6 6 * * *"
   workflow_dispatch:
 
 permissions:
